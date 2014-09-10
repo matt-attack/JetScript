@@ -8,7 +8,9 @@ void PrefixExpression::Compile(CompilerContext* context)
 	context->UnaryOperation(this->_operator);
 	if (dynamic_cast<BlockExpression*>(this->Parent) == 0)
 		context->Duplicate();
-	context->Store(dynamic_cast<NameExpression*>(right)->GetName());
+	if (dynamic_cast<IStorableExpression*>(this->right))
+		dynamic_cast<IStorableExpression*>(this->right)->CompileStore(context);
+	//context->Store(dynamic_cast<NameExpression*>(right)->GetName());
 }
 
 void PostfixExpression::Compile(CompilerContext* context)
@@ -17,18 +19,29 @@ void PostfixExpression::Compile(CompilerContext* context)
 	if (dynamic_cast<BlockExpression*>(this->Parent) == 0)
 		context->Duplicate();
 	context->UnaryOperation(this->_operator);
-	context->Store(dynamic_cast<NameExpression*>(left)->GetName());
+	if (dynamic_cast<IStorableExpression*>(this->left))
+		dynamic_cast<IStorableExpression*>(this->left)->CompileStore(context);
+	//context->Store(dynamic_cast<NameExpression*>(left)->GetName());
 }
 
 void SwapExpression::Compile(CompilerContext* context)
 {
-	std::string name2 = dynamic_cast<NameExpression*>(right)->GetName();
-	context->Load(name2);
-	context->Load(name);
-	context->Store(name2);
+	//std::string name2 = dynamic_cast<NameExpression*>(right)->GetName();
+	right->Compile(context);
+	//context->Load(name2);
+	left->Compile(context);
+	//context->Load(name);
+	//context->Store(name2);
+	if (dynamic_cast<IStorableExpression*>(this->right))
+		dynamic_cast<IStorableExpression*>(this->right)->CompileStore(context);
+
 	if (dynamic_cast<BlockExpression*>(this->Parent) == 0)
 		context->Duplicate();
-	context->Store(name);
+
+	if (dynamic_cast<IStorableExpression*>(this->left))
+		dynamic_cast<IStorableExpression*>(this->left)->CompileStore(context);
+
+	//context->Store(name);
 }
 
 void AssignExpression::Compile(CompilerContext* context)
@@ -38,7 +51,8 @@ void AssignExpression::Compile(CompilerContext* context)
 	if (dynamic_cast<BlockExpression*>(this->Parent) == 0)
 		context->Duplicate();//if my parent is not block expression, we need the result, so push it
 
-	context->Store(name);
+	if (dynamic_cast<IStorableExpression*>(this->left))
+		dynamic_cast<IStorableExpression*>(this->left)->CompileStore(context);
 }
 
 void CallExpression::Compile(CompilerContext* context)
@@ -50,6 +64,7 @@ void CallExpression::Compile(CompilerContext* context)
 	if (dynamic_cast<NameExpression*>(left) == 0)
 		throw ParserException("dummy", 555, "Error: Cannot call an expression that is not a name");
 
+	//todo add ecall
 	context->Call(dynamic_cast<NameExpression*>(left)->GetName(), args->size());
 
 	//pop off return value if we dont need it
@@ -59,7 +74,7 @@ void CallExpression::Compile(CompilerContext* context)
 
 void OperatorAssignExpression::Compile(CompilerContext* context)
 {
-	context->Load(name);
+	left->Compile(context);//context->Load(name);
 	this->right->Compile(context);
 	context->BinaryOperation(t.getType());
 
@@ -67,7 +82,9 @@ void OperatorAssignExpression::Compile(CompilerContext* context)
 	if (dynamic_cast<BlockExpression*>(this->Parent) == 0)
 		context->Duplicate();//if my parent is not block expression, we need the result, so push it
 
-	context->Store(name);
+	if (dynamic_cast<IStorableExpression*>(this->left))
+		dynamic_cast<IStorableExpression*>(this->left)->CompileStore(context);
+	//context->Store(name);
 }
 
 void FunctionExpression::Compile(CompilerContext* context)
@@ -86,7 +103,10 @@ void FunctionExpression::Compile(CompilerContext* context)
 
 	//if last instruction was a return, dont insert another one
 	if (dynamic_cast<ReturnExpression*>(block->statements->at(block->statements->size()-1)) == 0)
+	{
+		function->Number(-555555);//return nil
 		function->Return();
+	}
 
 	context->FinalizeFunction(function);
 	//vm will pop off locals when it removes the call stack

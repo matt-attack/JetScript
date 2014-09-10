@@ -28,6 +28,8 @@ public:
 
 	T Pop()
 	{
+		if (_size == 0)
+			printf("fail");
 		return mem[--_size];
 	}
 

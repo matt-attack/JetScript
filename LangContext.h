@@ -34,6 +34,11 @@ static enum InstructionType
 	Store,
 	Load,
 
+	//these all work on the last value in the stack
+	EStore,
+	ELoad,
+	ECall,
+
 	Call,
 	Return
 };
@@ -236,6 +241,7 @@ class LangContext
 
 	//need to go through and find all labels/functions/variables
 	std::map<std::string, unsigned int> labels;
+	std::map<std::string, unsigned int> functions;
 	std::map<std::string, unsigned int> variables;//mapping from string to location in vars array
 
 	//actual data being worked on
@@ -289,6 +295,8 @@ public:
 
 		std::string out = compiler.Compile(result);
 
+		delete result;
+
 		QueryPerformanceCounter( (LARGE_INTEGER *)&end );
 
 		INT64 diff = end - start;
@@ -340,8 +348,8 @@ public:
 
 				//it is function
 				name[strlen(name)-1] = 0;
-				if (labels.find(name) == labels.end())
-					labels[name] = labelposition;
+				if (functions.find(name) == functions.end())
+					functions[name] = labelposition;
 				else
 				{
 					printf("ERROR: Duplicate Function Label Name: %s\n", name);
@@ -439,7 +447,9 @@ public:
 			else if (strcmp(instruction, "LdStr") == 0)
 			{
 				std::string str;
-				const char* tmp = code+strlen(instruction)+3;
+				const char* tmp = code+strlen(instruction)+2;
+				if (*code == '\n')
+					tmp++;
 				const char* tmp2 = tmp;
 				while(*tmp2!= '\'') str+= *(tmp2++);
 				char* otmp = new char[str.length()+1];
@@ -493,7 +503,7 @@ public:
 				char name[50];
 				sscanf(code, "%s %s", instruction, name);
 				name[strlen(name)-1] = 0;
-				in.value = labels[name];
+				in.value = functions[name];
 				in.instruction = InstructionType::LoadFunction;
 			}
 			else if (strcmp(instruction, "Call") == 0)
@@ -554,7 +564,12 @@ public:
 
 		printf("Took %lf seconds to assemble\n\n", dt);
 
-		return this->Execute(0);//run the static code
+		this->callstack.Push(123456789);
+		Value temp =  this->Execute(0);//run the static code
+		if (this->callstack.size() > 0)
+			this->callstack.Pop();
+
+		return temp;
 	};
 
 	//executes a function in the VM context
@@ -593,8 +608,18 @@ public:
 		{
 			this->stack.Push(args[i]);
 		}
-		return this->Execute(iptr);
+		callstack.Push(123456789);//bad value to get it to return;
+		Value temp = this->Execute(iptr);
+		if (callstack.size() > 0)
+			callstack.Pop();
+		return temp;
 	};
+
+	//these are to be used to return values from native functions
+	void Return(Value val)
+	{
+		this->stack.Push(val);
+	}
 
 private:
 	Value Execute(int iptr)
@@ -603,7 +628,6 @@ private:
 		QueryPerformanceFrequency( (LARGE_INTEGER *)&rate );
 		QueryPerformanceCounter( (LARGE_INTEGER *)&start );
 
-		callstack.Push(iptr);//bad value to get it to return;
 		try
 		{
 			int max = ins.size();
@@ -781,11 +805,12 @@ private:
 							callstack.Push(iptr);
 							callstack.Push(123456789);
 							//to return something, push it to the stack
+							int s = stack.size();
 							(*vars[(int)in.value].func)(this,tmp,args);
 
 							callstack.QuickPop(2);
-
-							stack.Push(Value(0));//dummy return value
+							if (stack.size() == s)//we didnt return anything
+								stack.Push(Value(0));//dummy return value
 							//delete[] tmp;
 						}
 						else
@@ -856,7 +881,8 @@ private:
 			}
 		}
 
-		callstack.Pop();
+		if (callstack.size() > 0)
+			callstack.Pop();
 
 		QueryPerformanceCounter( (LARGE_INTEGER *)&end );
 
@@ -896,7 +922,7 @@ private:
 			auto top = this->callstack.Pop();
 			int greatest = 0;
 			std::string fun;
-			for (auto ii: this->labels)
+			for (auto ii: this->functions)
 			{
 				//ok, need to find which label pos I am most greatest than or equal to
 				if (top >= ii.second && ii.second > greatest)

@@ -1,3 +1,8 @@
+print("swap test should be 1 2");
+a = 2;
+b = 1;
+a <> b;
+print(a,b);
 for (i = 0; i < 1000; i++)
 {
 	if (i%3 == 0)
@@ -6,7 +11,7 @@ for (i = 0; i < 1000; i++)
 		ans = ans + i;
 }
 //return ans;
-
+//p();
 test = 6;
 myglobal = 3.1415926535895;
 print("hi I am global code");
@@ -24,9 +29,9 @@ fun hi()
 	t1 = 7;
 	t1 += 7;
 	
-	-[[t2 = 6;
+	t2 = 6;
 	t2 -= 3;
-	t2 -= 7;]]-
+	t2 -= 7;
 	
 	t3 = 6;
 	t3 *= 2;

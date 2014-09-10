@@ -36,7 +36,13 @@ public:
 	};
 };
 
-class NameExpression: public Expression
+class IStorableExpression
+{
+public:
+	virtual void CompileStore(CompilerContext* context) = 0;
+};
+
+class NameExpression: public Expression, public IStorableExpression
 {
 	std::string name;
 public:
@@ -59,6 +65,11 @@ public:
 	{
 		//add load variable instruction
 		context->Load(name);
+	}
+
+	void CompileStore(CompilerContext* context)
+	{
+		context->Store(name);
 	}
 };
 
@@ -114,13 +125,12 @@ public:
 
 class AssignExpression: public Expression
 {
-	std::string name;
-
+	Expression* left;
 	Expression* right;
 public:
-	AssignExpression(std::string name, Expression* r)
+	AssignExpression(Expression* l, Expression* r)
 	{
-		this->name = name;
+		this->left = l;
 		this->right = r;
 	}
 
@@ -128,16 +138,18 @@ public:
 	{
 		this->Parent = parent;
 		right->SetParent(this);
+		left->SetParent(this);
 	}
 
 	~AssignExpression()
 	{
 		delete this->right;
+		delete this->left;
 	}
 
 	void print()
 	{
-		printf("(%s = ", name.c_str());
+		printf("(%s = ", "expr");//name.c_str());
 		right->print();
 		printf(")\n");
 	}
@@ -157,15 +169,15 @@ public:
 
 class OperatorAssignExpression: public Expression
 {
-	std::string name;
+	Expression* left;
 
 	Token t;
 	Expression* right;
 public:
-	OperatorAssignExpression(Token token, std::string name, Expression* r)
+	OperatorAssignExpression(Token token, Expression* l, Expression* r)
 	{
 		this->t = token;
-		this->name = name;
+		this->left = l;
 		this->right = r;
 	}
 
@@ -173,16 +185,20 @@ public:
 	{
 		this->Parent = parent;
 		right->SetParent(this);
+		left->SetParent(this);
 	}
 
 	~OperatorAssignExpression()
 	{
 		delete this->right;
+		delete this->left;
 	}
 
 	void print()
 	{
-		printf("(%s %s ", t.getText().c_str(), name.c_str());
+		printf("(%s ", t.getText().c_str());
+		left->print();
+		printf(" ");
 		right->print();
 		printf(")\n");
 	}
@@ -202,29 +218,31 @@ public:
 
 class SwapExpression: public Expression
 {
-	std::string name;
+	Expression* left;
 
 	Expression* right;
 public:
-	SwapExpression(std::string name, Expression* r)
+	SwapExpression(Expression* l, Expression* r)
 	{
-		this->name = name;
+		this->left = l;
 		this->right = r;
 	}
 
 	~SwapExpression()
 	{
 		delete this->right;
+		delete this->left;
 	}
 
 	virtual void SetParent(Expression* parent)
 	{
 		this->Parent = parent;
 		right->SetParent(this);
+		left->SetParent(this);
 	}
 	void print()
 	{
-		printf("(%s swap ", name.c_str());
+		printf("(%s swap ", "idk");//name.c_str());
 		right->print();
 		printf(")\n");
 	}
@@ -442,6 +460,12 @@ public:
 		this->block = block;
 	}
 
+	~WhileExpression()
+	{
+		delete condition;
+		delete block;
+	}
+
 	virtual void SetParent(Expression* parent)
 	{
 		this->Parent = parent;
@@ -481,6 +505,14 @@ public:
 		this->block = block;
 		this->incr = incr;
 		this->initial = init;
+	}
+
+	~ForExpression()
+	{
+		delete this->condition;
+		delete this->block;
+		delete this->incr;
+		delete this->initial;
 	}
 
 	virtual void SetParent(Expression* parent)
@@ -691,9 +723,14 @@ class ReturnExpression: public Expression
 {
 	Expression* right;
 public:
-	ReturnExpression(Token token, Expression* right)//, Expression* cond, ScopeExpression* block)
+	ReturnExpression(Token token, Expression* right)
 	{
 		this->right = right;
+	}
+
+	~ReturnExpression()
+	{
+		delete this->right;
 	}
 
 	virtual void SetParent(Expression* parent)
@@ -720,13 +757,10 @@ public:
 	void Compile(CompilerContext* context)
 	{
 		if (right)
-		{
 			right->Compile(context);
-		}
 		else
-		{
 			context->Number(-555555);//bad value to prevent use
-		}
+
 		//todo, remove this so it doenst clog up stack
 		context->Return();
 	}

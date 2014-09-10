@@ -45,23 +45,21 @@ Expression* AssignParselet::parse(Parser* parser, Expression* left, Token token)
 {
 	Expression* right = parser->parseExpression(/*assignment prcedence -1 */);
 
-	if (dynamic_cast<NameExpression*>(left) == 0)
+	if (dynamic_cast<IStorableExpression*>(left) == 0)
 	{
 		std::string str = "AssignParselet: Left hand side must be a storable location!";
-		throw ParserException(token.filename, token.line, str);//printf("Consume: TokenType not as expected!\n");
 
-		return 0;
+		throw ParserException(token.filename, token.line, str);//printf("Consume: TokenType not as expected!\n");
 	}
 
-	std::string name = dynamic_cast<NameExpression*>(left)->GetName();
-	return new AssignExpression(name, right);
+	return new AssignExpression(left, right);
 }
 
 Expression* OperatorAssignParselet::parse(Parser* parser, Expression* left, Token token)
 {
 	Expression* right = parser->parseExpression(/*assignment prcedence -1 */);
 
-	if (dynamic_cast<NameExpression*>(left) == 0)
+	if (dynamic_cast<IStorableExpression*>(left) == 0)
 	{
 		std::string str = "OperatorAssignParselet: Left hand side must be a storable location!";
 		throw ParserException(token.filename, token.line, str);//printf("Consume: TokenType not as expected!\n");
@@ -69,33 +67,27 @@ Expression* OperatorAssignParselet::parse(Parser* parser, Expression* left, Toke
 		return 0;
 	}
 
-	std::string name = dynamic_cast<NameExpression*>(left)->GetName();
-	return new OperatorAssignExpression(token, name, right);
+	return new OperatorAssignExpression(token, left, right);
 }
 
 Expression* SwapParselet::parse(Parser* parser, Expression* left, Token token)
 {
 	Expression* right = parser->parseExpression(/*assignment prcedence -1 */);
 
-	if (dynamic_cast<NameExpression*>(left) == 0)
+	if (dynamic_cast<IStorableExpression*>(left) == 0)
 	{
 		std::string str = "SwapParselet: Left hand side must be a storable location!";
 		throw ParserException(token.filename, token.line, str);//printf("Consume: TokenType not as expected!\n");
-		printf("left hand side must be a name\n");
-		return 0;
 	}
 
-	if (dynamic_cast<NameExpression*>(right) == 0)
+	if (dynamic_cast<IStorableExpression*>(right) == 0)
 	{
 		std::string str = "SwapParselet: Right hand side must be a storable location!";
 		throw ParserException(token.filename, token.line, str);//printf("Consume: TokenType not as expected!\n");
-
-		printf("right hand side must be a name\n");
-		return 0;
 	}
 
-	std::string name = dynamic_cast<NameExpression*>(left)->GetName();
-	return new SwapExpression(name, right);
+	//std::string name = dynamic_cast<NameExpression*>(left)->GetName();
+	return new SwapExpression(left, right);
 }
 
 Expression* PrefixOperatorParselet::parse(Parser* parser, Token token)
