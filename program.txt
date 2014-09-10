@@ -1,0 +1,152 @@
+for (i = 0; i < 1000; i++)
+{
+	if (i%3 == 0)
+		ans = ans + i;
+	else if (i%5 == 0)
+		ans = ans + i;
+}
+//return ans;
+
+test = 6;
+myglobal = 3.1415926535895;
+print("hi I am global code");
+
+fun argtest(a1, a2, a3)
+{
+	print(a1," ", a2, " ", a3);
+}
+
+fun hi()
+{
+	//p();
+	//p();
+	print("Testing += and -=...");
+	t1 = 7;
+	t1 += 7;
+	
+	-[[t2 = 6;
+	t2 -= 3;
+	t2 -= 7;]]-
+	
+	t3 = 6;
+	t3 *= 2;
+	
+	t4 = 9;
+	t4 /= 3;
+	print(t1," ",t2," ",t3, " ", t4);
+	
+	
+	argtest(1,2,3);
+	a = 5;
+	b = 6;
+	postfixtest = a++ * b++;
+	print("Should be ", 30, " was ", postfixtest);
+	fun test(a)
+	{
+		print("this should only be said once: test function worked ", a);
+	}
+	test(1);
+	
+	//hi = 1;
+	ore++;
+	//return 7;
+	for (i = 0; i < 22; i++)
+	{
+		if ( looptest < 20)
+			looptest++;
+		else
+			looptest2++;
+		looptest3++;
+	}
+	return 7;
+}
+
+fun main()
+{
+	print("Wut");
+	hi();
+	return 7;
+	strtest = "apple" + " pie" + " is " + "tasty";
+	strtest++;
+	print(strtest);
+	//p = 6;
+	hi();
+	apple = "testo;wanfkodsfsa";
+	-[[problem 3]]-
+	-[[while (n1 < 1000)
+	{
+		while (n2 < 1000)
+		{
+			ispalin(n1*n2);
+			n2++;
+		}
+		n2 = 0;
+		n1++;
+	}
+	return;]]-
+	-[[problem 2]]-
+	sum = 2;
+	fib2 = 2;
+	fib = 1;
+	-[[while (fib2 < 4000000)
+	{
+		fib <> fib2;
+		temp = fib+fib2;
+		fib2 <> temp;
+
+		if (fib2%2 == 0)
+		{
+			if (fib2 < 4000000)
+			{
+				print(fib2);
+				sum = sum + fib2;
+			}
+		}
+	}]]-
+	//return sum;
+	-[[problem 1]]-
+	sum = 0;
+	num = 0;
+	while (num - 1000)
+	{
+		if ((num%3) == 0)
+			sum = sum + num;
+		else if ((num%5) == 0)
+			sum = sum + num;
+		num++;
+	}
+	//return;
+	print(5,7,8);
+	//hi();
+	apple = 2;
+	ta2 = 6;
+	tb2 = 2;
+	-[[ta2 = tb2 = apple;]]-
+	-[[apple = ta2 = tb2;]]-
+	pie = ta2 <> tb2;
+	his = print;
+	his();
+	found = 0;
+	number = 1;
+	while (number < 500)
+	{
+		//hi();
+		count = 0;
+		a = 1;
+		while (number-a+1)
+		{
+			if (number%a == 0)
+				count++;
+			++a;
+		}
+		if (count-2 == 0)
+			found++;
+		number++;
+	}
+	print("Found: ", found, " primes!");
+	return found;
+}
+
+main();
+print("hi");
+return "hello";
