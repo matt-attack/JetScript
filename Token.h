@@ -33,6 +33,9 @@ enum TokenType
 	LeftBrace,
 	RightBrace,
 
+	LeftBracket,
+	RightBracket,
+
 	While,
 	If,
 	ElseIf,
@@ -41,6 +44,7 @@ enum TokenType
 	Comma,
 	Function,
 	For,
+	Local,
 
 	Swap,
 

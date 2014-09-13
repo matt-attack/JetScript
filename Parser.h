@@ -63,6 +63,10 @@ public:
 		operators["{"] = TokenType::LeftBrace;
 		operators["}"] = TokenType::RightBrace;
 
+		//array stuff
+		operators["["] = TokenType::LeftBracket;
+		operators["]"] = TokenType::RightBracket;
+
 		operators[";"] = TokenType::Semicolon;
 		operators[","] = TokenType::Comma;
 
@@ -100,6 +104,7 @@ public:
 		keywords["fun"] = TokenType::Function;
 		keywords["return"] = TokenType::Ret;
 		keywords["for"] = TokenType::For;
+		keywords["local"] = TokenType::Local;
 
 		for (auto ii = operators.begin(); ii != operators.end(); ii++)
 		{
@@ -145,7 +150,6 @@ public:
 					{
 						if (n.type == TokenType::EOF)
 						{
-							//error
 							throw ParserException(n.filename, n.line, "Missing end to comment block starting at:");
 						}
 						n = this->Next();
@@ -155,7 +159,7 @@ public:
 				else if (operators[str] == TokenType::String)
 				{
 					//Token n;
-					int start = index;// - 1;
+					int start = index;
 					while (index < text.length())
 					{
 						if (text.at(index) == '"')
@@ -208,9 +212,6 @@ public:
 			else
 			{
 				//character to ignore like whitespace
-				//char c = this->PeekChar();
-				//if (c != ' ' && c != '\t' && c != '\n')
-				//throw ParserException("test",this->linenumber, "Unknown Character:");
 			}
 		}
 		return Token("test", linenumber, TokenType::EOF, "");
@@ -256,10 +257,7 @@ public:
 class NameParselet: public PrefixParselet
 {
 public:
-	Expression* parse(Parser* parser, Token token)
-	{
-		return new NameExpression(token.getText());
-	}
+	Expression* parse(Parser* parser, Token token);
 };
 
 class NumberParselet: public PrefixParselet
@@ -269,6 +267,12 @@ public:
 	{
 		return new NumberExpression(::atof(token.getText().c_str()));
 	}
+};
+
+class ArrayParselet: public PrefixParselet
+{
+public:
+	Expression* parse(Parser* parser, Token token);
 };
 
 class StringParselet: public PrefixParselet
@@ -318,19 +322,7 @@ public:
 class AssignParselet: public InfixParselet
 {
 public:
-	Expression* AssignParselet::parse(Parser* parser, Expression* left, Token token);
-	/*{
-	Expression* right = parser->parseExpression(assignment prcedence -1 );
-
-	if (dynamic_cast<NameExpression*>(left) == 0)
-	{
-	printf("left hand side must be a name\n");
-	return 0;
-	}
-
-	std::string name = dynamic_cast<NameExpression*>(left)->GetName();
-	return new AssignExpression(name, right);
-	}*/
+	Expression* parse(Parser* parser, Expression* left, Token token);
 
 	int getPrecedence()
 	{
@@ -342,19 +334,7 @@ class OperatorAssignParselet: public InfixParselet
 {
 public:
 
-	Expression* OperatorAssignParselet::parse(Parser* parser, Expression* left, Token token);
-	/*{
-	Expression* right = parser->parseExpression(assignment prcedence -1 );
-
-	if (dynamic_cast<NameExpression*>(left) == 0)
-	{
-	printf("left hand side must be a name\n");
-	return 0;
-	}
-
-	std::string name = dynamic_cast<NameExpression*>(left)->GetName();
-	return new AssignExpression(name, right);
-	}*/
+	Expression* parse(Parser* parser, Expression* left, Token token);
 
 	int getPrecedence()
 	{
@@ -428,15 +408,22 @@ public:
 	}
 };
 
+class IndexParselet: public InfixParselet
+{
+public:
+	Expression* parse(Parser* parser, Expression* left, Token token);
+
+	int getPrecedence()
+	{
+		return 9;
+	}
+};
+
 class CallParselet: public InfixParselet
 {
 public:
 
 	Expression* parse(Parser* parser, Expression* left, Token token);
-	/*{
-	Expression* right = parser->parseExpression(precedence - (isRight ? 1 : 0));
-	return new PostfixExpression(left, token.getType());//::atof(token.getText().c_str()));
-	}*/
 
 	int getPrecedence()
 	{
@@ -528,6 +515,17 @@ public:
 	Expression* parse(Parser* parser, Token token);
 };
 
+class LocalParselet: public StatementParselet
+{
+public:
+	LocalParselet()
+	{
+		this->TrailingSemicolon = false;
+	}
+
+	Expression* parse(Parser* parser, Token token);
+};
+
 
 
 /*public class Precedence {
@@ -560,6 +558,9 @@ public:
 		this->Register(TokenType::LeftParen, new GroupParselet());
 
 		this->Register(TokenType::Swap, new SwapParselet());
+
+		this->Register(TokenType::LeftBracket, new ArrayParselet());
+		this->Register(TokenType::LeftBracket, new IndexParselet());//postfix
 
 		//operator assign
 		this->Register(TokenType::AddAssign, new OperatorAssignParselet());
@@ -597,6 +598,7 @@ public:
 		this->Register(TokenType::Function, new FunctionParselet());
 		this->Register(TokenType::Ret, new ReturnParselet());
 		this->Register(TokenType::For, new ForParselet());
+		this->Register(TokenType::Local, new LocalParselet());
 	}
 
 	Expression* parseExpression(int precedence = 0)

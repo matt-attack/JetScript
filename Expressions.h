@@ -64,13 +64,100 @@ public:
 	void Compile(CompilerContext* context)
 	{
 		//add load variable instruction
+		//todo make me detect if this is a local or not
 		context->Load(name);
 	}
 
 	void CompileStore(CompilerContext* context)
 	{
+		//todo make me detect if this is a local or not
 		context->Store(name);
 	}
+};
+
+class IndexExpression: public Expression, public IStorableExpression
+{
+	Expression* left, *index;
+public:
+	IndexExpression(Expression* left, Expression* index)//std::string name)
+	{
+		this->left = left;
+		this->index = index;
+	}
+
+	~IndexExpression()
+	{
+		delete left;
+		delete index;
+	}
+
+	void print()
+	{
+		printf("[");
+		index->print();
+		printf("]");
+	}
+
+	void Compile(CompilerContext* context)
+	{
+		//add load variable instruction
+		left->Compile(context);
+		index->Compile(context);
+		context->LoadIndex();
+	}
+
+	void CompileStore(CompilerContext* context)
+	{
+		left->Compile(context);
+		index->Compile(context);
+		context->StoreIndex();
+	}
+};
+
+class ArrayExpression: public Expression
+{
+	Token _name;
+	Expression* _right;
+public:
+	ArrayExpression(Token name, Expression* right)
+	{
+		this->_name = name;
+		this->_right = right;
+	}
+
+	void print()
+	{
+		printf(_name.getText().c_str());
+	}
+
+	void Compile(CompilerContext* context)
+	{
+		context->NewArray();
+	}
+};
+
+class LocalExpression: public Expression
+{
+	Token _name;
+	Expression* _right;
+public:
+	LocalExpression(Token name, Expression* right)
+	{
+		this->_name = name;
+		this->_right = right;
+	}
+
+	std::string GetName()
+	{
+		return this->_name.getText();
+	}
+
+	void print()
+	{
+		printf(_name.getText().c_str());
+	}
+
+	void Compile(CompilerContext* context);
 };
 
 class NumberExpression: public Expression
@@ -248,18 +335,6 @@ public:
 	}
 
 	void Compile(CompilerContext* context);
-	/*{
-	std::string name2 = dynamic_cast<NameExpression*>(right)->GetName();
-	context->Load(name2);
-	context->Load(name);
-	context->Store(name2);
-	if (dynamic_cast<BlockExpression*>(this->Parent) == 0)
-	context->Duplicate();
-	context->Store(name);
-	//this->right->Compile(context);
-	//if (dynamic_cast<BlockExpression*>(this->Parent) == 0)
-	//context->Duplicate();
-	}*/
 };
 
 class PrefixExpression: public Expression
@@ -425,17 +500,16 @@ public:
 
 	void Compile(CompilerContext* context)
 	{
-		//push scope
 		for (auto ii: *statements)
 			ii->Compile(context);
-
-		//pop stack
 	}
 };
 
 class ScopeExpression: public BlockExpression
 {
 public:
+	//add a list of local variables here mayhaps?
+
 	ScopeExpression(BlockExpression* r)
 	{
 		this->statements = r->statements;
@@ -444,8 +518,12 @@ public:
 	void Compile(CompilerContext* context)
 	{
 		//push scope
+		context->PushScope();
+
 		BlockExpression::Compile(context);
+
 		//pop scope
+		context->PopScope();
 	}
 };
 

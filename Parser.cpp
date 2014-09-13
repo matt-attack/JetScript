@@ -41,6 +41,21 @@ char* Operator(TokenType t)
 	return "";
 }
 
+Expression* NameParselet::parse(Parser* parser, Token token)
+{
+	if (parser->LookAhead().getType() == TokenType::LeftBracket)
+	{
+		//array index
+		parser->Consume();
+		Expression* index = parser->parseExpression();
+		parser->Consume(TokenType::RightBracket);
+
+		return new IndexExpression(new NameExpression(token.getText()), index);
+	}
+	else
+		return new NameExpression(token.getText());
+}
+
 Expression* AssignParselet::parse(Parser* parser, Expression* left, Token token)
 {
 	Expression* right = parser->parseExpression(/*assignment prcedence -1 */);
@@ -251,18 +266,37 @@ Expression* ReturnParselet::parse(Parser* parser, Token token)
 	Expression* right = 0;
 	if (parser->Match(TokenType::Semicolon) == false)
 		right = parser->ParseStatement(false);
-	//auto arguments = new std::vector<Expression*>;
-
-	/*if (!parser->MatchAndConsume(TokenType::RightParen))
-	{
-	do
-	{
-	arguments->push_back(parser->ParseStatement(false));
-	}
-	while( parser->MatchAndConsume(TokenType::Comma));
-
-	parser->Consume(TokenType::RightParen);
-	}*/
 
 	return new ReturnExpression(token, right);//CallExpression(token, left, arguments);
+}
+
+Expression* LocalParselet::parse(Parser* parser, Token token)
+{
+	Token name = parser->Consume(TokenType::Name);
+
+	parser->Consume(TokenType::Assign);//its possible this wont be here and it may just be a mentioning, but no assignment
+
+	//todo code me
+	Expression* right = parser->parseExpression(/*assignment prcedence -1 */);
+
+	parser->Consume(TokenType::Semicolon);
+	//do stuff with this and store and what not
+	//need to add this variable to this's block expression
+
+	return new LocalExpression(name, right);
+}
+
+Expression* ArrayParselet::parse(Parser* parser, Token token)
+{
+	parser->Consume(TokenType::RightBracket);
+	return new ArrayExpression(token, 0);
+}
+
+Expression* IndexParselet::parse(Parser* parser, Expression* left, Token token)
+{
+	//parser->Consume();
+	Expression* index = parser->parseExpression();
+	parser->Consume(TokenType::RightBracket);
+
+	return new IndexExpression(left, index);//::atof(token.getText().c_str()));
 }

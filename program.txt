@@ -1,15 +1,42 @@
+test22 = [];
+//test22[5+2] = 6;
+test22[23] = [];
+test22[23][0] = "hello";
+test22[23][1] = [];
+test22[23][1][0] = "test";
+local hi = 7;
+hi = 2;
+for (local x = 0; x < 22; x++)
+{
+	test22[x] = x*2;
+}
+test22[80] = 5;
+test22[80]++;
+fun fibo(n)
+{
+	if (n < 2)
+		return n;
+	else
+		return fibo(n-1)+fibo(n-2);
+}
+print("Fibonacci of 10: ", fibo(10));
+//return;
+
 print("swap test should be 1 2");
-a = 2;
+local a = 2;
 b = 1;
 a <> b;
 print(a,b);
-for (i = 0; i < 1000; i++)
+test = 7;
+for (local i = 0; i < 1000; i++)
 {
+	local test = 5+i;
 	if (i%3 == 0)
 		ans = ans + i;
 	else if (i%5 == 0)
 		ans = ans + i;
 }
+test = 5;
 //return ans;
 //p();
 test = 6;
@@ -26,17 +53,17 @@ fun hi()
 	//p();
 	//p();
 	print("Testing += and -=...");
-	t1 = 7;
+	local t1 = 7;
 	t1 += 7;
 	
-	t2 = 6;
+	local t2 = 6;
 	t2 -= 3;
 	t2 -= 7;
 	
-	t3 = 6;
+	local t3 = 6;
 	t3 *= 2;
 	
-	t4 = 9;
+	local t4 = 9;
 	t4 /= 3;
 	print(t1," ",t2," ",t3, " ", t4);
 	
@@ -44,7 +71,7 @@ fun hi()
 	argtest(1,2,3);
 	a = 5;
 	b = 6;
-	postfixtest = a++ * b++;
+	local postfixtest = a++ * b++;
 	print("Should be ", 30, " was ", postfixtest);
 	fun test(a)
 	{
@@ -71,7 +98,7 @@ fun main()
 	print("Wut");
 	hi();
 	return 7;
-	strtest = "apple" + " pie" + " is " + "tasty";
+	local strtest = "apple" + " pie" + " is " + "tasty";
 	strtest++;
 	print(strtest);
 	//p = 6;

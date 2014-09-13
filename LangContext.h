@@ -3,6 +3,7 @@
 
 #include <functional>
 #include <string>
+#include <map>
 
 static enum InstructionType
 {
@@ -31,8 +32,20 @@ static enum InstructionType
 	JumpTrue,
 	JumpFalse,
 
+	NewArray,
+	NewObject,
+
 	Store,
 	Load,
+	//local vars
+	LStore,
+	LLoad,
+
+	Close,//closes a range of locals
+
+	//index functions
+	LoadAt,
+	StoreAt,
 
 	//these all work on the last value in the stack
 	EStore,
@@ -67,11 +80,12 @@ struct Instruction
 enum class ValueType
 {
 	Number = 0,
-	String,
-	Object,
+	String,//add more
+	Object,//todo
+	Array,//todo
 	Function,
 	NativeFunction,
-	Userdata,
+	Userdata,//kinda todo
 };
 
 class LangContext;
@@ -87,9 +101,10 @@ struct Value
 			unsigned int len;
 			char* data;
 		} string;
+		std::map<int,Value>* _array;
 		void* object;//used for userdata
-		unsigned int ptr;
-		std::function<void(LangContext*,Value*,int)>* func;
+		unsigned int ptr;//used for functions, points to code
+		std::function<void(LangContext*,Value*,int)>* func;//native func
 	};
 
 	Value()
@@ -106,6 +121,12 @@ struct Value
 		char* news = new char[string.len];
 		strcpy(news, str);
 		string.data = news;
+	}
+
+	Value(std::map<int, Value>* arr)
+	{
+		type = ValueType::Array;
+		this->_array = arr;
 	}
 
 	Value(double val)
@@ -150,6 +171,19 @@ struct Value
 			return "[Function "+std::to_string(this->ptr)+"]"; 
 		case ValueType::NativeFunction:
 			return "[NativeFunction "+std::to_string((unsigned int)this->func)+"]";
+		case ValueType::Array:
+			{
+				std::string str = "{\n";
+				for (auto ii: *this->_array)
+				{
+					str += "\t";
+					str += std::to_string(ii.first);
+					str += " = ";
+					str += ii.second.ToString() + "\n";
+				}
+				str += "}";
+				return str;
+			}
 		}
 	}
 
@@ -193,10 +227,12 @@ struct Value
 		return Value(0);
 	};
 
-	//Value operator() (/*args*/)
-	//{
-	//cant really do anything in here
-	//};
+	Value operator[] (int index)
+	{
+		if (this->type == ValueType::Array)
+			return (*this->_array)[index];
+		//cant really do anything in here
+	};
 
 	Value operator-( const Value &other )
 	{
@@ -243,20 +279,30 @@ class LangContext
 	std::map<std::string, unsigned int> labels;
 	std::map<std::string, unsigned int> functions;
 	std::map<std::string, unsigned int> variables;//mapping from string to location in vars array
-
+	
 	//actual data being worked on
 	std::vector<Instruction> ins;
 	std::vector<Value> vars;//where they are actually stored
-
+	std::vector<std::map<int, Value>*> arrays;
+	
 	int labelposition;
 
 	CompilerContext compiler;
+
 public:
 	LangContext()
 	{
 		this->labelposition = 0;
-		stack = VMStack<Value>(500000);	
+		stack = VMStack<Value>(500000);
+		//maybe use a register like system for locals
+		//locals = new std::vector<Value>();
 	};
+
+	~LangContext()
+	{
+		for (auto ii: this->arrays)
+			delete ii;
+	}
 
 	//allows assignment and reading of variables stored
 	Value& operator[](const char* id)
@@ -310,6 +356,28 @@ public:
 		return nout;
 	}
 
+	class StackFrame
+	{
+	public:
+		Value locals[20];//20 max for now
+
+		Value Get(unsigned int id, unsigned int depth)
+		{
+			if (depth == 0)
+				return this->locals[id];
+			else
+				return (this-depth)->locals[id];
+		}
+
+		void Set(Value v, unsigned int id, unsigned int depth)
+		{
+			if (depth == 0)
+				this->locals[id] = v;
+			else
+				(this-depth)->locals[id] = v;
+		}
+	};
+
 	//puts compiled code into the VM and runs any globals
 	Value Assemble(const char* code)//takes in assembly code for execution
 	{
@@ -330,7 +398,11 @@ public:
 			double value;
 			sscanf(code, "%s %s", instruction, name);
 
-			if (instruction[strlen(instruction)-1] == ':')//its a label
+			if (instruction[0] == '.')
+			{
+				//comment/debug info
+			}
+			else if (instruction[strlen(instruction)-1] == ':')//its a label
 			{
 				//just label
 				instruction[strlen(instruction)-1] = 0;
@@ -378,6 +450,7 @@ public:
 						vars.push_back(0);
 					}
 				}
+
 				//printf("Ins: %s at %d\n", instruction, labelposition);
 				labelposition++;
 			}
@@ -406,6 +479,13 @@ public:
 				instruction[strlen(instruction)-1] = 0;
 			}
 			else if (instruction[strlen(instruction)-1] == ':')
+			{
+				while(*code != ';' && *code != ':') {code++;}
+				code++;
+				continue;
+			}
+
+			if (instruction[0] == '.')//am I a comment?
 			{
 				while(*code != ';' && *code != ':') {code++;}
 				code++;
@@ -444,6 +524,14 @@ public:
 				in.instruction = InstructionType::Gt;
 			else if (strcmp(instruction, "Pop") == 0)
 				in.instruction = InstructionType::Pop;
+			else if (strcmp(instruction, "ECall") == 0)
+				in.instruction = InstructionType::ECall;
+			else if (strcmp(instruction, "LoadAt") == 0)
+				in.instruction = InstructionType::LoadAt;
+			else if (strcmp(instruction, "StoreAt") == 0)
+				in.instruction = InstructionType::StoreAt;
+			else if (strcmp(instruction, "NewArray") == 0)
+				in.instruction = InstructionType::NewArray;
 			else if (strcmp(instruction, "LdStr") == 0)
 			{
 				std::string str;
@@ -498,6 +586,24 @@ public:
 				in.value = variables[name];
 				in.instruction = InstructionType::Load;
 			}
+			else if (strcmp(instruction, "LStore") == 0)
+			{
+				int index, depth;
+				sscanf(code, "%s %d %d", instruction, &index, &depth);
+
+				in.value = index;
+				in.value2 = depth;
+				in.instruction = InstructionType::LStore;
+			}
+			else if (strcmp(instruction, "LLoad") == 0)
+			{
+				int index, depth;
+				sscanf(code, "%s %d %d", instruction, &index, &depth);
+
+				in.value = index;
+				in.value2 = depth;
+				in.instruction = InstructionType::LLoad;
+			}
 			else if (strcmp(instruction, "LdFn") == 0)
 			{
 				char name[50];
@@ -511,7 +617,6 @@ public:
 				char name[50]; unsigned int args = 0;
 				sscanf(code, "%s %s %d", instruction, name, &args);
 				name[strlen(name)] = 0;
-				//in.value = variables[name];//labels[name];
 				//insert variable with function location
 				//check for native functions
 				if (variables.find(name) == variables.end())
@@ -519,16 +624,11 @@ public:
 					//add it
 					variables[name] = variables.size();
 					vars.push_back(0);
-
-					//vars[variables[name]] = Value(labels[name], true);
-					//in.value = variables[name];
-					//in.value2 = args;
 				}
 				else if (vars[variables[name]].type != ValueType::Function && vars[variables[name]].type != ValueType::NativeFunction)
 				{
-					printf("Warning: Function name used as a variable name: %s\n", name);
+					//printf("Warning: Function name used as a variable name: %s\n", name);
 				}
-				//vars[variables[name]] = Value(labels[name], true);
 				in.value = variables[name];
 				in.value2 = args;
 
@@ -627,6 +727,9 @@ private:
 		INT64 start, rate, end;
 		QueryPerformanceFrequency( (LARGE_INTEGER *)&rate );
 		QueryPerformanceCounter( (LARGE_INTEGER *)&start );
+
+		StackFrame frames[40];//max call depth
+		int fptr = 0;
 
 		try
 		{
@@ -770,6 +873,16 @@ private:
 						//iptr = (int)in.value-1;
 						break;
 					}
+				case InstructionType::LLoad:
+					{
+						stack.Push(frames[fptr].Get(in.value, in.value2));
+						break;
+					}
+				case InstructionType::LStore:
+					{
+						frames[fptr].Set(stack.Pop(), in.value, in.value2);
+						break;
+					}
 				case (int)InstructionType::LoadFunction:
 					{
 						stack.Push(Value((unsigned int)in.value, true));
@@ -787,9 +900,12 @@ private:
 						if (vars[(int)in.value].type == ValueType::Function)
 						{
 							//store iptr on call stack
+							if (fptr > 38)
+								throw RuntimeException("Stack Overflow!");
+
+							fptr++;
 							callstack.Push(iptr);
 							//go to function
-							//lets use labels for now because lazy
 							iptr = (int)vars[(int)in.value].ptr-1;//in.value-1;
 						}
 						else if (vars[(int)in.value].type == ValueType::NativeFunction)
@@ -825,9 +941,33 @@ private:
 									break;
 								}
 							}
-							throw RuntimeException("Cannot call non function type '" + var + "'!!!\n");
+							throw RuntimeException("Cannot call non function type '" + var + "'!!!");
 						}
 
+						break;
+					}
+				case (int)InstructionType::ECall:
+					{
+						Value fun = stack.Pop();
+
+						if (fun.type == ValueType::Function)
+						{
+							if (fptr > 38)
+								throw RuntimeException("Stack Overflow!");
+
+							fptr++;
+							callstack.Push(iptr);
+							//go to function
+							iptr = fun.ptr-1;//in.value-1;
+						}
+						else if (vars[(int)in.value].type == ValueType::NativeFunction)
+						{
+							throw RuntimeException("Not Implemented!!!");
+						}
+						else
+						{
+							throw RuntimeException("Cannot call non function type stack_value!!!");
+						}
 						break;
 					}
 				case (int)InstructionType::Return:
@@ -838,17 +978,53 @@ private:
 						else
 							iptr = callstack.Pop();
 
+						fptr--;
 						break;
 					}
-				case (int)InstructionType::Dup:
+				case InstructionType::Dup:
 					{
 						stack.Push(stack.Peek());
 						break;
 					}
-				case (int)InstructionType::Pop:
+				case InstructionType::Pop:
 					{
 						stack.Pop();
 						break;
+					}
+				case InstructionType::StoreAt:
+					{
+						Value index = stack.Pop();
+						Value loc = stack.Pop();
+						Value val = stack.Pop();	
+
+						if (loc.type == ValueType::Array)
+							(*loc._array)[(int)index] = val;
+						else
+							throw RuntimeException("Could not index a non array value!");
+						//todo, store me
+						break;
+					}
+				case InstructionType::LoadAt:
+					{
+						Value index = stack.Pop();
+						Value loc = stack.Pop();
+						
+						stack.Push(loc[index]);
+						//stack.Push(Value(0));
+						//todo, store me
+						break;
+					}
+				case InstructionType::NewArray:
+					{
+						//todo, track me for garbage collection
+						auto arr = new std::map<int, Value>;
+						this->arrays.push_back(arr);
+						stack.Push(Value(arr));
+						break;
+					}
+				default:
+					{
+						throw RuntimeException("Unimplemented Instruction!");
 					}
 				}
 
@@ -861,6 +1037,14 @@ private:
 
 			//generate call stack
 			this->StackTrace(iptr);
+
+			printf("\nLocals:\n");
+			for (int i = 0; i < 2; i++)
+			{
+				Value v = frames[fptr].locals[i];
+				if (v.type >= ValueType(0))
+					printf("%d = %s\n", i, v.ToString().c_str());
+			}
 
 			printf("\nVariables:\n");
 			for (auto ii: variables)
@@ -891,13 +1075,13 @@ private:
 
 		printf("Took %lf seconds to execute\n\n", dt);
 
-		/*printf("Variables:\n");
+		printf("Variables:\n");
 		for (auto ii: variables)
 		{
-		printf("%s = %s\n", ii.first.c_str(), vars[ii.second].ToString().c_str());
+			printf("%s = %s\n", ii.first.c_str(), vars[ii.second].ToString().c_str());
 		}
 
-		printf("\nLabels:\n");
+		/*printf("\nLabels:\n");
 		for (auto ii: labels)
 		{
 		printf("%s = %d\n", ii.first.c_str(), ii.second);

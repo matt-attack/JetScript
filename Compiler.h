@@ -2,6 +2,7 @@
 
 class BlockExpression;
 #include <string>
+#include <vector>
 #include <map>
 #include "Token.h"
 
@@ -17,12 +18,13 @@ public:
 	{
 		//push instruction that sets the function
 		//todo, may need to have functions in other instruction code sets
-		
+
 		CompilerContext* newfun = new CompilerContext();
 		//insert this into my list of functions
 		newfun->uuid = this->uuid;
 		this->functions[name] = newfun;
 
+		//store the function in the variable
 		this->LoadFunction(name);
 		this->Store(name);
 
@@ -59,10 +61,37 @@ private:
 
 public:
 
+	struct Scope
+	{
+		Scope* previous;
+		Scope* next;
+		int level;
+		std::vector<std::string> localvars;
+	};
+	Scope* scope;
+	void PushScope()
+	{
+		Scope* s = new Scope;
+		this->scope->next = s;
+		s->level = this->scope->level + 1;
+		s->previous = this->scope;
+		s->next = 0;
+		this->scope = s;
+	}
+
+	void PopScope()
+	{
+		if (this->scope && this->scope->previous)
+			this->scope = this->scope->previous;
+	}
+
+	bool RegisterLocal(std::string name);//returns success
+
 	void BinaryOperation(TokenType operation);
 
 	void UnaryOperation(TokenType operation);
 
+	//stack operations
 	void Pop()
 	{
 		output += "Pop;\n";
@@ -73,6 +102,7 @@ public:
 		output += "Dup;\n";
 	}
 
+	//load operations
 	void Number(double value)
 	{
 		char t[50];
@@ -118,17 +148,57 @@ public:
 
 	void Store(std::string variable)
 	{
+		//look up if I am a local or global
+		Scope* ptr = this->scope;
+		while (ptr)
+		{
+			//look for var in locals
+			for (int i = 0; i < ptr->localvars.size(); i++)
+			{
+				if (ptr->localvars[i] == variable)
+				{
+					//printf("We found storing of a local var: %s at level %d\n", variable.c_str(), ptr->level);
+					//exit the loops we found it
+					this->output += ".local " + variable + " " + std::to_string(i) + ";\n";
+					this->output += "LStore " + std::to_string(i) + " " + std::to_string(ptr->level) + ";\n";
+					return;
+				}
+			}
+			if (ptr)
+				ptr = ptr->previous;
+		}
 		this->output += "Store " + variable + ";\n";
 	}
 
 	void StoreLocal(std::string variable)
 	{
-		this->output += "Store " + variable + ";\n";
+		//look up if I am local or global
+		this->Store(variable);
+		//this->output += "Store " + variable + ";\n";
 	}
 
 	//this loads locals and globals atm
 	void Load(std::string variable)
 	{
+		Scope* ptr = this->scope;
+		while (ptr)
+		{
+			//look for var in locals
+			for (int i = 0; i < ptr->localvars.size(); i++)
+			{
+				if (ptr->localvars[i] == variable)
+				{
+					//printf("We found loading of a local var: %s at level %d\n", variable.c_str(), ptr->level);
+					//exit the loops we found it
+					//comment/debug info
+					this->output += ".local " + variable + " " + std::to_string(i) + ";\n";
+					this->output += "LLoad " + std::to_string(i) +" " + std::to_string(ptr->level) + ";\n";
+					return;
+				}
+			}
+			if (ptr)
+				ptr = ptr->previous;
+		}
 		this->output += "Load " + variable + ";\n";
 	}
 
@@ -141,6 +211,26 @@ public:
 	void Call(std::string function, unsigned int args)
 	{
 		this->output += "Call " + function + " " + std::to_string(args) + ";\n";
+	}
+
+	void ECall(unsigned int args)
+	{
+		this->output += "ECall " + std::to_string(args) + ";\n";
+	}
+
+	void LoadIndex()
+	{
+		this->output += "LoadAt;\n";
+	}
+
+	void StoreIndex()
+	{
+		this->output += "StoreAt;\n";
+	}
+
+	void NewArray()
+	{
+		this->output += "NewArray;\n";
 	}
 
 	void Return()

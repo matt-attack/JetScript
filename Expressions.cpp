@@ -61,12 +61,20 @@ void CallExpression::Compile(CompilerContext* context)
 	for (auto i: *args)
 		i->Compile(context);
 
-	if (dynamic_cast<NameExpression*>(left) == 0)
+	if (dynamic_cast<NameExpression*>(left) != 0)
+	{
+		context->Call(dynamic_cast<NameExpression*>(left)->GetName(), args->size());
+	}
+	else if (dynamic_cast<IndexExpression*>(left) != 0)
+	{
+		context->ECall(args->size());
+	}
+	else
+	{
 		throw ParserException("dummy", 555, "Error: Cannot call an expression that is not a name");
-
+	}
 	//todo add ecall
-	context->Call(dynamic_cast<NameExpression*>(left)->GetName(), args->size());
-
+	
 	//pop off return value if we dont need it
 	if (dynamic_cast<BlockExpression*>(this->Parent) != 0)
 		context->Pop();//if my parent is block expression, we dont the result, so pop it
@@ -97,6 +105,7 @@ void FunctionExpression::Compile(CompilerContext* context)
 	for (int i = this->args->size() - 1; i >= 0; i--)//auto ii = this->args->end(); ii != this->args->begin(); ii--)
 	{
 		auto name = dynamic_cast<NameExpression*>((*this->args)[i]);
+		function->RegisterLocal(name->GetName());
 		function->StoreLocal(name->GetName());
 	}
 	block->Compile(function);
@@ -111,3 +120,20 @@ void FunctionExpression::Compile(CompilerContext* context)
 	context->FinalizeFunction(function);
 	//vm will pop off locals when it removes the call stack
 }
+
+void LocalExpression::Compile(CompilerContext* context)
+{
+	//add load variable instruction
+	//todo make me detect if this is a local or not
+	if (this->_right)
+		this->_right->Compile(context);
+
+	//make sure to create identifier
+	if (context->RegisterLocal(_name.getText()) == false)
+		throw ParserException(_name.filename, _name.line, "Duplicate Local Variable '"+_name.getText()+"'");
+
+	//actually store if we have something to store
+	if (this->_right)
+		context->StoreLocal(_name.getText());
+}
+
