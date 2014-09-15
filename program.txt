@@ -1,11 +1,24 @@
+print(tan(3.1415926535895));
+btest = 4 | 5;
+print(btest);
+return;
+
+test77 = fun (x,y)
+{
+	return x+y;
+};
+print(test77(2,2));
 test22 = [];
 //test22[5+2] = 6;
-test22[23] = [];
-test22[23][0] = "hello";
-test22[23][1] = [];
-test22[23][1][0] = "test";
-local hi = 7;
-hi = 2;
+//test22[23] = [];
+//test22[23][0] = "hello";
+//test22[23][1] = [];
+//test22[23][1][0] = "test";
+test23 = test22;
+test22[89] = test77;
+print(test22[89](2,2));
+//local hi = 7;
+//hi = 2;
 for (local x = 0; x < 22; x++)
 {
 	test22[x] = x*2;

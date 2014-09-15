@@ -2,6 +2,8 @@
 #include "Compiler.h"
 #include "Parser.h"
 
+using namespace Jet;
+
 void PrefixExpression::Compile(CompilerContext* context)
 {
 	right->Compile(context);
@@ -65,8 +67,10 @@ void CallExpression::Compile(CompilerContext* context)
 	{
 		context->Call(dynamic_cast<NameExpression*>(left)->GetName(), args->size());
 	}
-	else if (dynamic_cast<IndexExpression*>(left) != 0)
+	else if (dynamic_cast<IStorableExpression*>(left) != 0)
 	{
+		//compile left I guess?
+		left->Compile(context);
 		context->ECall(args->size());
 	}
 	else
@@ -74,7 +78,7 @@ void CallExpression::Compile(CompilerContext* context)
 		throw ParserException("dummy", 555, "Error: Cannot call an expression that is not a name");
 	}
 	//todo add ecall
-	
+
 	//pop off return value if we dont need it
 	if (dynamic_cast<BlockExpression*>(this->Parent) != 0)
 		context->Pop();//if my parent is block expression, we dont the result, so pop it
@@ -98,15 +102,21 @@ void OperatorAssignExpression::Compile(CompilerContext* context)
 void FunctionExpression::Compile(CompilerContext* context)
 {
 	//todo make this push make a new functioncompilecontext
-	CompilerContext* function = context->AddFunction(dynamic_cast<NameExpression*>(name)->GetName());
+	std::string fname;
+	if (name)
+		fname = dynamic_cast<NameExpression*>(name)->GetName();
+	else
+		fname = "_lambda_id_"+context->GetUUID();//todo generate id
+
+	CompilerContext* function = context->AddFunction(fname);
 	//context->Label(dynamic_cast<NameExpression*>(name)->GetName());
-	//todo make these locals
+
 	//ok push locals, in opposite order
 	for (int i = this->args->size() - 1; i >= 0; i--)//auto ii = this->args->end(); ii != this->args->begin(); ii--)
 	{
-		auto name = dynamic_cast<NameExpression*>((*this->args)[i]);
-		function->RegisterLocal(name->GetName());
-		function->StoreLocal(name->GetName());
+		auto aname = dynamic_cast<NameExpression*>((*this->args)[i]);
+		function->RegisterLocal(aname->GetName());
+		function->StoreLocal(aname->GetName());
 	}
 	block->Compile(function);
 
@@ -118,6 +128,11 @@ void FunctionExpression::Compile(CompilerContext* context)
 	}
 
 	context->FinalizeFunction(function);
+
+	//only named functions need to be stored here
+	if (name)
+		context->Store(dynamic_cast<NameExpression*>(name)->GetName());
+
 	//vm will pop off locals when it removes the call stack
 }
 

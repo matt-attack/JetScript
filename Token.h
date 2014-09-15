@@ -3,105 +3,111 @@
 
 #undef EOF
 
-enum TokenType
+namespace Jet
 {
-	Name,
-	Number,
-	String,
-	Assign,
-
-	Minus,
-	Plus,
-	Asterisk,
-	Slash,
-	Modulo,
-
-	AddAssign,
-	SubtractAssign,
-	MultiplyAssign,
-	DivideAssign,
-
-	NotEqual,
-	Equals,
-
-	LessThan,
-	GreaterThan,
-
-	RightParen,
-	LeftParen,
-
-	LeftBrace,
-	RightBrace,
-
-	LeftBracket,
-	RightBracket,
-
-	While,
-	If,
-	ElseIf,
-	Else,
-	Semicolon,
-	Comma,
-	Function,
-	For,
-	Local,
-
-	Swap,
-
-	Ret,
-
-	Increment,
-	Decrement,
-
-	LineComment,
-	CommentBegin,
-	CommentEnd,
-
-	EOF
-};
-
-char* Operator(TokenType t);
-/*{
-if (t == TokenType::Plus)
-return "+";
-else if (t == TokenType::Minus)
-return "-";
-else if (t == TokenType::Asterisk)
-return "*";
-else if (t == TokenType::Slash)
-return "/";
-return "";
-}*/
-
-struct Token
-{
-	TokenType type;
-	std::string text;
-	unsigned int line;
-	std::string filename;
-
-	Token()
+	enum class TokenType
 	{
+		Name,
+		Number,
+		String,
+		Assign,
 
-	}
+		Minus,
+		Plus,
+		Asterisk,
+		Slash,
+		Modulo,
+		Or,
+		And,
 
-	Token(std::string file, unsigned int line, TokenType type, std::string txt)
+
+		AddAssign,
+		SubtractAssign,
+		MultiplyAssign,
+		DivideAssign,
+
+		NotEqual,
+		Equals,
+
+		LessThan,
+		GreaterThan,
+
+		RightParen,
+		LeftParen,
+
+		LeftBrace,
+		RightBrace,
+
+		LeftBracket,
+		RightBracket,
+
+		While,
+		If,
+		ElseIf,
+		Else,
+		Semicolon,
+		Comma,
+		Function,
+		For,
+		Local,
+
+		Swap,
+
+		Ret,
+
+		Increment,
+		Decrement,
+
+		LineComment,
+		CommentBegin,
+		CommentEnd,
+
+		EOF
+	};
+
+	char* Operator(Jet::TokenType t);
+	/*{
+	if (t == TokenType::Plus)
+	return "+";
+	else if (t == TokenType::Minus)
+	return "-";
+	else if (t == TokenType::Asterisk)
+	return "*";
+	else if (t == TokenType::Slash)
+	return "/";
+	return "";
+	}*/
+
+	struct Token
 	{
-		this->type = type;
-		this->text = txt;
-		this->filename = file;
-		this->line = line;
-	}
+		Jet::TokenType type;
+		::std::string text;
+		unsigned int line;
+		::std::string filename;
 
-	TokenType getType()
-	{
-		return type;
-	}
+		Token()
+		{
 
-	std::string getText()
-	{
-		return text;
-	}
-};
+		}
+
+		Token(::std::string file, unsigned int line, TokenType type, ::std::string txt)
+		{
+			this->type = type;
+			this->text = txt;
+			this->filename = file;
+			this->line = line;
+		}
+
+		TokenType getType()
+		{
+			return type;
+		}
+
+		::std::string getText()
+		{
+			return text;
+		}
+	};
+}
 
 #endif

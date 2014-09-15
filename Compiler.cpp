@@ -1,6 +1,7 @@
 #include "Compiler.h"
 #include "Parser.h"
 
+using namespace Jet;
 
 CompilerContext::CompilerContext(void)
 {
@@ -64,6 +65,10 @@ void CompilerContext::BinaryOperation(TokenType operation)
 		output += "Lt;\n";
 	else if (operation == TokenType::GreaterThan)
 		output += "Gt;\n";
+	else if (operation == TokenType::Or)
+		output += "BOR;\n";
+	else if (operation == TokenType::And)
+		output += "BAND;\n";
 }
 
 void CompilerContext::UnaryOperation(TokenType operation)
