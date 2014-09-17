@@ -57,6 +57,9 @@ Parser::Parser(Lexer* l)
 
 	this->Register(TokenType::Swap, new SwapParselet());
 
+	this->Register(TokenType::Dot, new MemberParselet());
+	this->Register(TokenType::LeftBrace, new ObjectParselet());
+
 	//array/index stuffs
 	this->Register(TokenType::LeftBracket, new ArrayParselet());
 	this->Register(TokenType::LeftBracket, new IndexParselet());//postfix
@@ -632,3 +635,39 @@ Expression* IndexParselet::parse(Parser* parser, Expression* left, Token token)
 
 	return new IndexExpression(left, index);//::atof(token.getText().c_str()));
 }
+
+Expression* MemberParselet::parse(Parser* parser, Expression* left, Token token)
+{
+	//this is for const members
+	Expression* member = parser->parseExpression(1);
+	NameExpression* name = dynamic_cast<NameExpression*>(member);
+	if (name == 0)
+		throw ParserException(token.filename, token.line, "Cannot access member name that is not a string");
+	auto ret = new IndexExpression(left, new StringExpression(name->GetName()));
+	delete name;
+
+	return ret;
+}
+
+Expression* ObjectParselet::parse(Parser* parser, Token token)
+{
+	if (parser->LookAhead().getType() == TokenType::RightBrace)
+	{
+		parser->Consume();//take the right brace
+		//we are done, return null object
+		return new ObjectExpression(0);
+	}
+	//parse initial values
+	while(parser->LookAhead().getType() == TokenType::Name)
+	{
+		Token name = parser->Consume();
+		if (parser->MatchAndConsume(TokenType::Comma))
+		{
+			//keep going
+		}
+		else
+			break;//we are done
+	}
+	parser->Consume(TokenType::RightBrace);//end part
+	return new ObjectExpression(0);
+};

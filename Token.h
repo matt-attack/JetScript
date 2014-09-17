@@ -12,6 +12,8 @@ namespace Jet
 		String,
 		Assign,
 
+		Dot,
+
 		Minus,
 		Plus,
 		Asterisk,

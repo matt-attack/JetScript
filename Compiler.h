@@ -242,6 +242,11 @@ namespace Jet
 			this->output += "NewArray;\n";
 		}
 
+		void NewObject()
+		{
+			this->output += "NewObject;\n";
+		}
+
 		void Return()
 		{
 			this->output += "Return;\n";

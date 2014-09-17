@@ -73,6 +73,9 @@ namespace Jet
 			operators["["] = TokenType::LeftBracket;
 			operators["]"] = TokenType::RightBracket;
 
+			//object stuff
+			operators["."] = TokenType::Dot;
+
 			operators[";"] = TokenType::Semicolon;
 			operators[","] = TokenType::Comma;
 
@@ -178,6 +181,12 @@ namespace Jet
 	};
 
 	class ArrayParselet: public PrefixParselet
+	{
+	public:
+		Expression* parse(Parser* parser, Token token);
+	};
+
+	class ObjectParselet: public PrefixParselet
 	{
 	public:
 		Expression* parse(Parser* parser, Token token);
@@ -310,6 +319,17 @@ namespace Jet
 		int getPrecedence()
 		{
 			return 9;
+		}
+	};
+
+	class MemberParselet: public InfixParselet
+	{
+	public:
+		Expression* parse(Parser* parser, Expression* left, Token token);
+
+		int getPrecedence()
+		{
+			return 2;//maybe?
 		}
 	};
 

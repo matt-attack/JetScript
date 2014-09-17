@@ -32,6 +32,7 @@ namespace Jet
 				char* data;
 			} string;
 			std::map<int,Value>* _array;
+			std::map<std::string, Value>* _obj;
 			void* object;//used for userdata
 			unsigned int ptr;//used for functions, points to code
 			std::function<void(JetContext*,Value*,int)>* func;//native func
@@ -51,6 +52,12 @@ namespace Jet
 			char* news = new char[string.len];
 			strcpy(news, str);
 			string.data = news;
+		}
+
+		Value(std::map<std::string, Value>* obj)
+		{
+			this->type = ValueType::Object;
+			this->_obj = obj;
 		}
 
 		Value(std::map<int, Value>* arr)
@@ -103,11 +110,24 @@ namespace Jet
 				return "[NativeFunction "+::std::to_string((unsigned int)this->func)+"]";
 			case ValueType::Array:
 				{
-					std::string str = "{\n";
+					std::string str = "[Array " + std::to_string((int)this->_array)+"] [\n";//"[\n";
 					for (auto ii: *this->_array)
 					{
 						str += "\t";
 						str += ::std::to_string(ii.first);
+						str += " = ";
+						str += ii.second.ToString() + "\n";
+					}
+					str += "]";
+					return str;
+				}
+			case ValueType::Object:
+				{
+					std::string str = "[Object " + std::to_string((int)this->_obj)+"] {\n";
+					for (auto ii: *this->_obj)
+					{
+						str += "\t";
+						str += ii.first;
 						str += " = ";
 						str += ii.second.ToString() + "\n";
 					}
@@ -123,7 +143,7 @@ namespace Jet
 				return (int)value;
 
 			return 0;
-		}
+		};
 
 		operator double()
 		{
@@ -161,8 +181,15 @@ namespace Jet
 		{
 			if (this->type == ValueType::Array)
 				return (*this->_array)[index];
+			else if (this->type == ValueType::Object)
+				return (*this->_obj)[std::to_string(index)];
 			//cant really do anything in here
 		};
+
+		//Value operator[] (std::string index)
+		//{
+		//todo me for objects
+		//};
 
 		Value operator-( const Value &other )
 		{

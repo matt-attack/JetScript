@@ -13,7 +13,6 @@
 
 namespace Jet
 {
-
 	typedef std::function<void(Jet::JetContext*,Jet::Value*,int)> JetFunction;
 #define JetBind(context, fun) std::function<void(Jet::JetContext*,Jet::Value*,int)> temp__bind_##fun = [](Jet::JetContext* context,Jet::Value* args, int numargs) { context->Return(fun(args[0]));}; context[#fun] = &temp__bind_##fun;
 
@@ -107,6 +106,7 @@ namespace Jet
 		::std::vector<Instruction> ins;
 		::std::vector<Value> vars;//where they are actually stored
 		::std::vector<::std::map<int, Value>*> arrays;
+		::std::vector<::std::map<std::string, Value>*> objects;
 
 		int labelposition;
 
@@ -124,6 +124,9 @@ namespace Jet
 		~JetContext()
 		{
 			for (auto ii: this->arrays)
+				delete ii;
+
+			for (auto ii: this->objects)
 				delete ii;
 		}
 
@@ -189,7 +192,6 @@ namespace Jet
 
 				char instruction[40];
 				char name[40];
-				double value;
 				sscanf(code, "%s %s", instruction, name);
 
 				if (instruction[0] == '.')
@@ -326,6 +328,8 @@ namespace Jet
 					in.instruction = InstructionType::StoreAt;
 				else if (strcmp(instruction, "NewArray") == 0)
 					in.instruction = InstructionType::NewArray;
+				else if (strcmp(instruction, "NewObject") == 0)
+					in.instruction = InstructionType::NewObject;
 				else if (strcmp(instruction, "BOR") == 0)
 					in.instruction = InstructionType::BOr;
 				else if (strcmp(instruction, "BAND") == 0)
@@ -594,14 +598,14 @@ namespace Jet
 							stack.Push(one+Value(1));
 							break;
 						}
-					case (int)InstructionType::Decr:
+					case InstructionType::Decr:
 						{
 							Value one = stack.Pop();
 
 							stack.Push(one-Value(1));
 							break;
 						}
-					case (int)InstructionType::Eq:
+					case InstructionType::Eq:
 						{
 							Value one = stack.Pop();
 							Value two = stack.Pop();
@@ -613,7 +617,7 @@ namespace Jet
 
 							break;
 						}
-					case (int)InstructionType::NotEq:
+					case InstructionType::NotEq:
 						{
 							Value one = stack.Pop();
 							Value two = stack.Pop();
@@ -625,7 +629,7 @@ namespace Jet
 
 							break;
 						}
-					case (int)InstructionType::Lt:
+					case InstructionType::Lt:
 						{
 							Value one = stack.Pop();
 							Value two = stack.Pop();
@@ -637,7 +641,7 @@ namespace Jet
 
 							break;
 						}
-					case (int)InstructionType::Gt:
+					case InstructionType::Gt:
 						{
 							Value one = stack.Pop();
 							Value two = stack.Pop();
@@ -649,17 +653,17 @@ namespace Jet
 
 							break;
 						}
-					case (int)InstructionType::LdNum:
+					case InstructionType::LdNum:
 						{
 							stack.Push(in.value);
 							break;
 						}
-					case (int)InstructionType::LdStr:
+					case InstructionType::LdStr:
 						{
 							stack.Push(in.string);
 							break;
 						}
-					case (int)InstructionType::Jump:
+					case InstructionType::Jump:
 						{
 							iptr = (int)in.value-1;
 							break;
@@ -678,7 +682,7 @@ namespace Jet
 								iptr = (int)in.value-1;
 							break;
 						}
-					case (int)InstructionType::Load:
+					case InstructionType::Load:
 						{
 							stack.Push(vars[(int)in.value]);//uh do me
 							//auto temp = stack.top(); stack.pop();
@@ -696,7 +700,7 @@ namespace Jet
 							frames[fptr].Set(stack.Pop(), in.value, in.value2);
 							break;
 						}
-					case (int)InstructionType::LoadFunction:
+					case InstructionType::LoadFunction:
 						{
 							stack.Push(Value((unsigned int)in.value, true));
 							break;
@@ -708,7 +712,7 @@ namespace Jet
 							vars[(int)in.value] = temp;
 							break;
 						}
-					case (int)InstructionType::Call:
+					case InstructionType::Call:
 						{
 							if (vars[(int)in.value].type == ValueType::Function)
 							{
@@ -759,7 +763,7 @@ namespace Jet
 
 							break;
 						}
-					case (int)InstructionType::ECall:
+					case InstructionType::ECall:
 						{
 							Value fun = stack.Pop();
 
@@ -783,7 +787,7 @@ namespace Jet
 							}
 							break;
 						}
-					case (int)InstructionType::Return:
+					case InstructionType::Return:
 						{
 							//get iptr from stack
 							if (callstack.size() == 1)
@@ -812,8 +816,10 @@ namespace Jet
 
 							if (loc.type == ValueType::Array)
 								(*loc._array)[(int)index] = val;
+							else if (loc.type == ValueType::Object)
+								(*loc._obj)[index.ToString()] = val;
 							else
-								throw JetRuntimeException("Could not index a non array value!");
+								throw JetRuntimeException("Could not index a non array/object value!");
 							//todo, store me
 							break;
 						}
@@ -832,6 +838,13 @@ namespace Jet
 							auto arr = new std::map<int, Value>;
 							this->arrays.push_back(arr);
 							stack.Push(Value(arr));
+							break;
+						}
+					case InstructionType::NewObject:
+						{
+							auto obj = new std::map<std::string, Value>;
+							this->objects.push_back(obj);
+							stack.Push(Value(obj));
 							break;
 						}
 					default:
@@ -887,11 +900,11 @@ namespace Jet
 
 			printf("Took %lf seconds to execute\n\n", dt);
 
-			/*printf("Variables:\n");
+			printf("Variables:\n");
 			for (auto ii: variables)
 			{
-			printf("%s = %s\n", ii.first.c_str(), vars[ii.second].ToString().c_str());
-			}*/
+				printf("%s = %s\n", ii.first.c_str(), vars[ii.second].ToString().c_str());
+			}
 
 			/*printf("\nLabels:\n");
 			for (auto ii: labels)

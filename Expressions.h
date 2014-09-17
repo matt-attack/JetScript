@@ -138,6 +138,30 @@ namespace Jet
 		}
 	};
 
+	class ObjectExpression: public Expression
+	{
+		std::vector<Expression*>* inits;
+	public:
+		ObjectExpression(std::vector<Expression*>* initializers)
+		{
+			this->inits = initializers;
+		}
+
+		void print()
+		{
+			//printf(_name.getText().c_str());
+		}
+
+		void Compile(CompilerContext* context)
+		{
+			if (this->inits)
+			{
+				//set these up
+			}
+			context->NewObject();
+		}
+	};
+
 	class LocalExpression: public Expression
 	{
 		Token _name;
