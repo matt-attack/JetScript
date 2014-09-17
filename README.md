@@ -1,12 +1,25 @@
-Jet
+ Jet
+==========
 
 An easy to integrate scripting language written in C++.
 
-General Concepts:
+### Example
+```cpp
+fun fibo(n)
+{
+	if (n < 2)
+		return n;
+	else
+		return fibo(n-1)+fibo(n-2);
+}
+print("Fibonacci of 10: ", fibo(10));
+```
+
+### General Concepts:
 
 Everything is a global variable unless the local keyword is placed before it.
 
-How to use in your program:
+### How to use in your program:
 ```cpp
 #include <JetContext.h>
 
@@ -21,8 +34,7 @@ catch (ParserException e)
 }
 ```
 
-Types
-
+### Types
 - Numbers
 ```cpp
 number = 256;
