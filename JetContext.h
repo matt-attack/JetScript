@@ -39,6 +39,7 @@ namespace Jet
 		Pop,
 
 		LdNum,
+		LdNull,
 		LdStr,
 		LoadFunction,
 
@@ -104,9 +105,9 @@ namespace Jet
 		//actual data being worked on
 		::std::vector<Instruction> ins;
 		::std::vector<Value> vars;//where they are actually stored
+		
+		//garbage collector stuff
 		::std::vector<GCVal<::std::map<int, Value>*>*> arrays;
-		//::std::vector<::std::map<int, Value>*> arrays;
-		//::std::vector<::std::map<std::string, Value>*> objects;
 		::std::vector<GCVal<::std::map<std::string, Value>*>*> objects;
 
 		int labelposition;
@@ -118,8 +119,6 @@ namespace Jet
 		{
 			this->labelposition = 0;
 			stack = VMStack<Value>(500000);
-			//maybe use a register like system for locals
-			//locals = new std::vector<Value>();
 		};
 
 		~JetContext()
@@ -246,7 +245,7 @@ namespace Jet
 						{
 							//add it
 							variables[name] = variables.size();
-							vars.push_back(0);
+							vars.push_back(Value());
 						}
 					}
 					else if (strcmp(instruction, "Load") == 0)
@@ -256,7 +255,7 @@ namespace Jet
 						{
 							//add it
 							variables[name] = variables.size();
-							vars.push_back(0);
+							vars.push_back(Value());
 						}
 					}
 
@@ -347,6 +346,8 @@ namespace Jet
 					in.instruction = InstructionType::BOr;
 				else if (strcmp(instruction, "BAND") == 0)
 					in.instruction = InstructionType::BAnd;
+				else if (strcmp(instruction, "LdNull") == 0)
+					in.instruction = InstructionType::LdNum;
 				else if (strcmp(instruction, "LdStr") == 0)
 				{
 					::std::string str;
@@ -557,56 +558,56 @@ namespace Jet
 					Instruction in = ins[iptr];
 					switch(in.instruction)
 					{
-					case (int)InstructionType::Add:
+					case InstructionType::Add:
 						{
-							Value one = stack.Pop();//stack.top(); stack.pop();
-							Value two = stack.Pop();//stack.top(); stack.pop();
+							Value one = stack.Pop();
+							Value two = stack.Pop();
 							stack.Push(one+two);
 							break;
 						}
-					case (int)InstructionType::Sub:
+					case InstructionType::Sub:
 						{
-							Value one = stack.Pop();//stack.top(); stack.pop();
-							Value two = stack.Pop();//stack.top(); stack.pop();
+							Value one = stack.Pop();
+							Value two = stack.Pop();
 							stack.Push(two-one);
 							break;
 						}
-					case (int)InstructionType::Mul:
+					case InstructionType::Mul:
 						{
-							Value one = stack.Pop();//stack.top(); stack.pop();
-							Value two = stack.Pop();//stack.top(); stack.pop();
+							Value one = stack.Pop();
+							Value two = stack.Pop();
 							stack.Push(one*two);
 							break;
 						}
-					case (int)InstructionType::Div:
+					case InstructionType::Div:
 						{
-							Value one = stack.Pop();//stack.top(); stack.pop();
-							Value two = stack.Pop();//stack.top(); stack.pop();
+							Value one = stack.Pop();
+							Value two = stack.Pop();
 							stack.Push(two/one);
 							break;
 						}
-					case (int)InstructionType::Modulus:
+					case InstructionType::Modulus:
 						{
-							Value one = stack.Pop();//stack.top(); stack.pop();
-							Value two = stack.Pop();//stack.top(); stack.pop();
+							Value one = stack.Pop();
+							Value two = stack.Pop();
 							stack.Push(two%one);
 							break;
 						}
 					case InstructionType::BAnd:
 						{
-							Value one = stack.Pop();//stack.top(); stack.pop();
-							Value two = stack.Pop();//stack.top(); stack.pop();
+							Value one = stack.Pop();
+							Value two = stack.Pop();
 							stack.Push(two&one);
 							break;
 						}
 					case InstructionType::BOr:
 						{
-							Value one = stack.Pop();//stack.top(); stack.pop();
-							Value two = stack.Pop();//stack.top(); stack.pop();
+							Value one = stack.Pop();
+							Value two = stack.Pop();
 							stack.Push(two|one);
 							break;
 						}
-					case (int)InstructionType::Incr:
+					case InstructionType::Incr:
 						{
 							Value one = stack.Pop();
 
@@ -668,6 +669,11 @@ namespace Jet
 
 							break;
 						}
+					case InstructionType::LdNull:
+						{
+							stack.Push(Value());
+							break;
+						}
 					case InstructionType::LdNum:
 						{
 							stack.Push(in.value);
@@ -683,16 +689,16 @@ namespace Jet
 							iptr = (int)in.value-1;
 							break;
 						}
-					case (int)InstructionType::JumpTrue:
+					case InstructionType::JumpTrue:
 						{
-							auto temp = stack.Pop();//stack.top(); stack.pop();
+							auto temp = stack.Pop();
 							if ((int)temp)
 								iptr = (int)in.value-1;
 							break;
 						}
-					case (int)InstructionType::JumpFalse:
+					case InstructionType::JumpFalse:
 						{
-							auto temp = stack.Pop();//stack.top(); stack.pop();
+							auto temp = stack.Pop();
 							if (!(int)temp)
 								iptr = (int)in.value-1;
 							break;
@@ -700,9 +706,7 @@ namespace Jet
 					case InstructionType::Load:
 						{
 							stack.Push(vars[(int)in.value]);//uh do me
-							//auto temp = stack.top(); stack.pop();
-							//if (!(int)temp)
-							//iptr = (int)in.value-1;
+
 							break;
 						}
 					case InstructionType::LLoad:
@@ -720,9 +724,9 @@ namespace Jet
 							stack.Push(Value((unsigned int)in.value, true));
 							break;
 						}
-					case (int)InstructionType::Store:
+					case InstructionType::Store:
 						{
-							auto temp = stack.Pop();//stack.top(); stack.pop();
+							auto temp = stack.Pop();
 							//store me
 							vars[(int)in.value] = temp;
 							break;
@@ -758,7 +762,7 @@ namespace Jet
 
 								callstack.QuickPop(2);
 								if (stack.size() == s)//we didnt return anything
-									stack.Push(Value(0));//dummy return value
+									stack.Push(Value());//return null
 								//delete[] tmp;
 							}
 							else
@@ -835,7 +839,7 @@ namespace Jet
 								(*loc._obj->ptr)[index.ToString()] = val;
 							else
 								throw JetRuntimeException("Could not index a non array/object value!");
-							//todo, store me
+
 							break;
 						}
 					case InstructionType::LoadAt:
@@ -849,9 +853,7 @@ namespace Jet
 								stack.Push((*loc._obj->ptr)[index.ToString()]);
 							else
 								throw JetRuntimeException("Could not index a non array/object value!");
-							//stack.Push(loc[index]);
-							//stack.Push(Value(0));
-							//todo, store me
+
 							break;
 						}
 					case InstructionType::NewArray:
@@ -921,11 +923,11 @@ namespace Jet
 
 			printf("Took %lf seconds to execute\n\n", dt);
 
-			printf("Variables:\n");
+			/*printf("Variables:\n");
 			for (auto ii: variables)
 			{
 				printf("%s = %s\n", ii.first.c_str(), vars[ii.second].ToString().c_str());
-			}
+			}*/
 
 			/*printf("\nLabels:\n");
 			for (auto ii: labels)

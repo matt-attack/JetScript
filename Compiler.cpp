@@ -21,7 +21,6 @@ CompilerContext::CompilerContext(void)
 
 CompilerContext::~CompilerContext(void)
 {
-	//todo, delete other scopes
 	if (this->scope)
 	{
 		auto next = this->scope->next;

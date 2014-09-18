@@ -14,7 +14,7 @@ rec[2] = 0;
 
 test = 0;
 //test[2] = 0;
-return;
+//return;
 print(tan(3.1415926535895));
 btest = 4 | 5;
 print(btest);
@@ -22,7 +22,7 @@ apples = {hi, apple, twenty};
 apples.two = 7;
 apples["hello"] = "testing";
 apples.a7 = 6;
-return;
+//return;
 
 test77 = fun (x,y)
 {

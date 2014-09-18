@@ -42,42 +42,9 @@ const char* JetContext::Compile(const char* code)
 
 void JetContext::RunGC()
 {
-	/*for (auto& ii: this->objects)
-	{
-	if (ii->ptr == 0)
-	continue;
-
-	ii->flag = false;
-	for (auto v: this->vars)
-	{
-	if (v.type == ValueType::Object)
-	{
-	if (v._obj == ii)
-	{
-	ii->flag = true;
-	break;
-	}
-	else
-	{
-	if (v.Contains(ii))
-	{
-	ii->flag = true;
-	break;
-	}
-	}
-	}
-	}
-	if (!ii->flag)
-	{
-	printf("deleted object");
-	delete ii->ptr;
-	ii->ptr = 0;
-	delete ii;
-
-	ii = 0;
-	}
-	}*/
-
+	INT64 start, rate, end;
+	QueryPerformanceFrequency( (LARGE_INTEGER *)&rate );
+	QueryPerformanceCounter( (LARGE_INTEGER *)&start );
 	for (auto& ii: this->objects)
 	{
 		ii->flag = false;
@@ -104,7 +71,7 @@ void JetContext::RunGC()
 	{
 		if (!ii->flag)
 		{
-			printf("deleted object!");
+			//printf("deleted object!");
 			delete ii->ptr;
 			ii->ptr = 0;
 			delete ii;
@@ -116,7 +83,7 @@ void JetContext::RunGC()
 	{
 		if (!ii->flag)
 		{
-			printf("deleted array!");
+			//printf("deleted array!");
 			delete ii->ptr;
 			ii->ptr = 0;
 			delete ii;
@@ -135,38 +102,6 @@ void JetContext::RunGC()
 		}
 	}
 
-	/*for (auto& ii: this->arrays)
-	{
-		ii->flag = false;
-		for (auto v: this->vars)
-		{
-			if (v.type == ValueType::Array)
-			{
-				if (v._array == ii)
-				{
-					ii->flag = true;
-					break;
-				}
-				else
-				{
-					if (v.Contains(ii))
-					{
-						ii->flag = true;
-						break;
-					}
-				}
-			}
-		}
-		if (!ii->flag)
-		{
-			printf("deleted array");
-			delete ii->ptr;
-			ii->ptr = 0;
-			delete ii;
-			ii = 0;
-		}
-	}*/
-
 	//compact array list here
 	auto arrlist = std::move(this->arrays);
 	this->arrays.clear();
@@ -177,4 +112,11 @@ void JetContext::RunGC()
 			this->arrays.push_back(ii);
 		}
 	}
+
+	QueryPerformanceCounter( (LARGE_INTEGER *)&end );
+
+	INT64 diff = end - start;
+	double dt = ((double)diff)/((double)rate);
+
+	printf("Took %lf seconds to collect garbage\n\n", dt);
 }

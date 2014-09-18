@@ -75,7 +75,6 @@ void CallExpression::Compile(CompilerContext* context)
 	{
 		throw ParserException("dummy", 555, "Error: Cannot call an expression that is not a name");
 	}
-	//todo add ecall
 
 	//pop off return value if we dont need it
 	if (dynamic_cast<BlockExpression*>(this->Parent) != 0)
@@ -107,10 +106,9 @@ void FunctionExpression::Compile(CompilerContext* context)
 		fname = "_lambda_id_"+context->GetUUID();//todo generate id
 
 	CompilerContext* function = context->AddFunction(fname);
-	//context->Label(dynamic_cast<NameExpression*>(name)->GetName());
-
+	
 	//ok push locals, in opposite order
-	for (int i = this->args->size() - 1; i >= 0; i--)//auto ii = this->args->end(); ii != this->args->begin(); ii--)
+	for (int i = this->args->size() - 1; i >= 0; i--)
 	{
 		auto aname = dynamic_cast<NameExpression*>((*this->args)[i]);
 		function->RegisterLocal(aname->GetName());
@@ -123,13 +121,13 @@ void FunctionExpression::Compile(CompilerContext* context)
 	{
 		if (dynamic_cast<ReturnExpression*>(block->statements->at(block->statements->size()-1)) == 0)
 		{
-			function->Number(-555555);//return nil
+			function->Null();//return nil
 			function->Return();
 		}
 	}
 	else
 	{
-		function->Number(-555555);//return nil
+		function->Null();//return nil
 		function->Return();
 	}
 

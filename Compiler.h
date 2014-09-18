@@ -111,6 +111,10 @@ namespace Jet
 		}
 
 		//load operations
+		void Null()
+		{
+			this->output += "LdNull;\n";
+		}
 		void Number(double value)
 		{
 			char t[50];
