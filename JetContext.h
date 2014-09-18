@@ -91,7 +91,6 @@ namespace Jet
 		};
 	};
 
-
 	class JetContext
 	{
 		VMStack<Value> stack;
@@ -105,8 +104,10 @@ namespace Jet
 		//actual data being worked on
 		::std::vector<Instruction> ins;
 		::std::vector<Value> vars;//where they are actually stored
-		::std::vector<::std::map<int, Value>*> arrays;
-		::std::vector<::std::map<std::string, Value>*> objects;
+		::std::vector<GCVal<::std::map<int, Value>*>*> arrays;
+		//::std::vector<::std::map<int, Value>*> arrays;
+		//::std::vector<::std::map<std::string, Value>*> objects;
+		::std::vector<GCVal<::std::map<std::string, Value>*>*> objects;
 
 		int labelposition;
 
@@ -124,10 +125,22 @@ namespace Jet
 		~JetContext()
 		{
 			for (auto ii: this->arrays)
+			{
+				delete ii->ptr;
 				delete ii;
+			}
 
 			for (auto ii: this->objects)
+			{
+				delete ii->ptr;
 				delete ii;
+			}
+
+			for (auto ii: this->ins)
+			{
+				if (ii.instruction == InstructionType::LdStr)
+					delete[] ii.string;
+			}
 		}
 
 		//allows assignment and reading of variables stored
@@ -513,6 +526,8 @@ namespace Jet
 			return temp;
 		};
 
+		void RunGC();
+
 		//these are to be used to return values from native functions
 		void Return(Value val)
 		{
@@ -815,9 +830,9 @@ namespace Jet
 							Value val = stack.Pop();	
 
 							if (loc.type == ValueType::Array)
-								(*loc._array)[(int)index] = val;
+								(*loc._array->ptr)[(int)index] = val;
 							else if (loc.type == ValueType::Object)
-								(*loc._obj)[index.ToString()] = val;
+								(*loc._obj->ptr)[index.ToString()] = val;
 							else
 								throw JetRuntimeException("Could not index a non array/object value!");
 							//todo, store me
@@ -828,21 +843,27 @@ namespace Jet
 							Value index = stack.Pop();
 							Value loc = stack.Pop();
 
-							stack.Push(loc[index]);
+							if (loc.type == ValueType::Array)
+								stack.Push((*loc._array->ptr)[(int)index]);
+							else if (loc.type == ValueType::Object)
+								stack.Push((*loc._obj->ptr)[index.ToString()]);
+							else
+								throw JetRuntimeException("Could not index a non array/object value!");
+							//stack.Push(loc[index]);
 							//stack.Push(Value(0));
 							//todo, store me
 							break;
 						}
 					case InstructionType::NewArray:
 						{
-							auto arr = new std::map<int, Value>;
+							auto arr = new GCVal<std::map<int, Value>*>(new std::map<int, Value>);//new std::map<int, Value>;
 							this->arrays.push_back(arr);
 							stack.Push(Value(arr));
 							break;
 						}
 					case InstructionType::NewObject:
 						{
-							auto obj = new std::map<std::string, Value>;
+							auto obj = new GCVal<std::map<std::string, Value>*>(new std::map<std::string, Value>);
 							this->objects.push_back(obj);
 							stack.Push(Value(obj));
 							break;
@@ -863,13 +884,13 @@ namespace Jet
 				//generate call stack
 				this->StackTrace(iptr);
 
-				printf("\nLocals:\n");
+				/*printf("\nLocals:\n");
 				for (int i = 0; i < 2; i++)
 				{
-					Value v = frames[fptr].locals[i];
-					if (v.type >= ValueType(0))
-						printf("%d = %s\n", i, v.ToString().c_str());
-				}
+				Value v = frames[fptr].locals[i];
+				if (v.type >= ValueType(0))
+				printf("%d = %s\n", i, v.ToString().c_str());
+				}*/
 
 				printf("\nVariables:\n");
 				for (auto ii: variables)

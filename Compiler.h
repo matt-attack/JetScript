@@ -1,5 +1,13 @@
 #pragma once
 
+#ifndef DBG_NEW      
+#define DBG_NEW new ( _NORMAL_BLOCK , __FILE__ , __LINE__ )     
+#define new DBG_NEW   
+#endif
+
+#define _CRTDBG_MAP_ALLOC
+#include <crtdbg.h>
+
 #include <string>
 #include <vector>
 #include <map>
@@ -14,8 +22,10 @@ namespace Jet
 
 	public:
 		::std::string output;
-
 		::std::map<::std::string, CompilerContext*> functions;
+
+		CompilerContext(void);
+		~CompilerContext(void);
 
 		CompilerContext* AddFunction(::std::string name)
 		{
@@ -29,13 +39,6 @@ namespace Jet
 
 			//store the function in the variable
 			this->LoadFunction(name);
-			//problem is like this for lambda defintion for test77 = func (x,y) { return x+y; };
-			//Compile Output:
-			//LdFn _lambda_id;
-			//Store _lambda_id;//should not happen
-			//Store test77;
-			//fixme, with lamdas we do not need this store, because the expression before it is storing it
-			//this->Store(name);
 
 			return newfun;
 		};
@@ -44,9 +47,6 @@ namespace Jet
 		{
 			this->uuid += c->uuid + 1;
 		}
-
-		CompilerContext(void);
-		~CompilerContext(void);
 
 		std::string Compile(BlockExpression* expr);
 
@@ -97,7 +97,6 @@ namespace Jet
 		bool RegisterLocal(std::string name);//returns success
 
 		void BinaryOperation(TokenType operation);
-
 		void UnaryOperation(TokenType operation);
 
 		//stack operations

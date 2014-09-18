@@ -1,6 +1,14 @@
 #ifndef _EXPRESSIONS_HEADER
 #define _EXPRESSIONS_HEADER
 
+#ifndef DBG_NEW      
+#define DBG_NEW new ( _NORMAL_BLOCK , __FILE__ , __LINE__ )     
+#define new DBG_NEW   
+#endif
+
+#define _CRTDBG_MAP_ALLOC
+#include <crtdbg.h>
+
 #include <string>
 #include <stdio.h>
 
@@ -125,6 +133,11 @@ namespace Jet
 		{
 			this->_name = name;
 			this->_right = right;
+		}
+
+		~ArrayExpression()
+		{
+			delete this->_right;
 		}
 
 		void print()
@@ -273,16 +286,6 @@ namespace Jet
 		}
 
 		void Compile(CompilerContext* context);
-		/*{
-		this->right->Compile(context);
-		//insert store here
-		if (dynamic_cast<ScopeExpression*>(this->Parent) == 0)
-		context->Duplicate();
-		//if my parent is not block expression, we need the result, so push it
-		//bool 
-		context->Store(name);
-		//context->BinaryOperation(this->_operator);
-		}*/
 	};
 
 	class OperatorAssignExpression: public Expression
@@ -493,10 +496,13 @@ namespace Jet
 
 		~BlockExpression()
 		{
-			for (auto ii: *this->statements)
-				delete ii;
+			if (this->statements)
+			{
+				for (auto ii: *this->statements)
+					delete ii;
 
-			delete this->statements;
+				delete this->statements;
+			}
 		}
 
 		BlockExpression() { };
@@ -523,19 +529,28 @@ namespace Jet
 
 	class ScopeExpression: public BlockExpression
 	{
+		//BlockExpression* block;
 	public:
 		//add a list of local variables here mayhaps?
 
 		ScopeExpression(BlockExpression* r)
 		{
 			this->statements = r->statements;
+			r->statements = 0;
+			delete r;
 		}
+
+		/*~ScopeExpression()
+		{
+			//delete block;
+		}*/
 
 		void Compile(CompilerContext* context)
 		{
 			//push scope
 			context->PushScope();
 
+			//block->Compile(context);
 			BlockExpression::Compile(context);
 
 			//pop scope
@@ -663,6 +678,25 @@ namespace Jet
 		{
 			this->branches = branches;
 			this->Else = elseBranch;
+		}
+
+		~IfExpression()
+		{
+			if (this->Else)
+			{
+				delete this->Else->block;
+				//delete this->Else->condition;
+				delete this->Else;
+			}
+
+			for (auto ii: *this->branches)
+			{
+				delete ii->block;
+				delete ii->condition;
+				delete ii;
+			}
+
+			delete this->branches;
 		}
 
 		virtual void SetParent(Expression* parent)

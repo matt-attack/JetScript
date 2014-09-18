@@ -110,6 +110,18 @@ Parser::Parser(Lexer* l)
 	this->Register(TokenType::Local, new LocalParselet());
 }
 
+Parser::~Parser()
+{
+	for (auto ii: this->mInfixParselets)
+		delete ii.second;
+
+	for (auto ii: this->mPrefixParselets)
+		delete ii.second;
+
+	for (auto ii: this->mStatementParselets)
+		delete ii.second;
+};
+
 Expression* Parser::ParseStatement(bool takeTrailingSemicolon)//call this until out of tokens (hit EOF)
 {
 	Token token = LookAhead();
@@ -529,27 +541,21 @@ Expression* IfParselet::parse(Parser* parser, Token token)
 
 Expression* FunctionParselet::parse(Parser* parser, Token token)
 {
-	auto name = parser->parseExpression();
-	if (dynamic_cast<CallExpression*>(name) == 0)
+	auto name = new NameExpression(parser->Consume(TokenType::Name).getText());
+	auto arguments = new std::vector<Expression*>;
+
+	parser->Consume(TokenType::LeftParen);
+
+	if (!parser->MatchAndConsume(TokenType::RightParen))
 	{
-		printf("ERROR: function expression not formatted correctly!\n");
-		return 0;
+		do
+		{
+			arguments->push_back(parser->ParseStatement(false));
+		}
+		while( parser->MatchAndConsume(TokenType::Comma));
+
+		parser->Consume(TokenType::RightParen);
 	}
-
-	//parser->Consume(TokenType::LeftParen);
-
-	auto arguments = dynamic_cast<CallExpression*>(name)->args;
-	name = dynamic_cast<CallExpression*>(name)->left;
-	/*if (!parser->MatchAndConsume(TokenType::RightParen))
-	{
-	do
-	{
-	arguments->push_back(parser->ParseStatement(false));
-	}
-	while( parser->MatchAndConsume(TokenType::Comma));
-
-	parser->Consume(TokenType::RightParen);
-	}*/
 
 	auto block = new ScopeExpression(parser->parseBlock());
 	return new FunctionExpression(token, name, arguments, block);
@@ -574,6 +580,7 @@ Expression* LambdaParselet::parse(Parser* parser, Token token)
 
 	//if (parser->MatchAndConsume(TokenType::
 	//if we match shorthand notation, dont parse a scope expression, and just parse the rest of this line
+	//leak regarding scope expression somehow
 	auto block = new ScopeExpression(parser->parseBlock());
 	return new FunctionExpression(token, 0, arguments, block);
 }

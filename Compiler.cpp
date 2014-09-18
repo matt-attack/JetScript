@@ -1,3 +1,11 @@
+#ifndef DBG_NEW      
+#define DBG_NEW new ( _NORMAL_BLOCK , __FILE__ , __LINE__ )     
+#define new DBG_NEW   
+#endif
+
+#define _CRTDBG_MAP_ALLOC
+#include <crtdbg.h>
+
 #include "Compiler.h"
 #include "Parser.h"
 
@@ -11,11 +19,26 @@ CompilerContext::CompilerContext(void)
 	this->scope->previous = this->scope->next = 0;
 }
 
-
 CompilerContext::~CompilerContext(void)
 {
 	//todo, delete other scopes
+	if (this->scope)
+	{
+		auto next = this->scope->next;
+		while (next)
+		{
+			auto tmp = next->next;
+			delete next;
+			next = tmp;
+		}
+	}
+	if (this->scope->previous)
+		printf("wat");
 	delete this->scope;
+
+	//delete functions
+	for (auto ii: this->functions)
+		delete ii.second;
 }
 
 std::string CompilerContext::Compile(BlockExpression* expr)

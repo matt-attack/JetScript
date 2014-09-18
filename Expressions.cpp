@@ -12,7 +12,6 @@ void PrefixExpression::Compile(CompilerContext* context)
 		context->Duplicate();
 	if (dynamic_cast<IStorableExpression*>(this->right))
 		dynamic_cast<IStorableExpression*>(this->right)->CompileStore(context);
-	//context->Store(dynamic_cast<NameExpression*>(right)->GetName());
 }
 
 void PostfixExpression::Compile(CompilerContext* context)
@@ -23,7 +22,6 @@ void PostfixExpression::Compile(CompilerContext* context)
 	context->UnaryOperation(this->_operator);
 	if (dynamic_cast<IStorableExpression*>(this->left))
 		dynamic_cast<IStorableExpression*>(this->left)->CompileStore(context);
-	//context->Store(dynamic_cast<NameExpression*>(left)->GetName());
 }
 
 void SwapExpression::Compile(CompilerContext* context)
@@ -121,7 +119,15 @@ void FunctionExpression::Compile(CompilerContext* context)
 	block->Compile(function);
 
 	//if last instruction was a return, dont insert another one
-	if (dynamic_cast<ReturnExpression*>(block->statements->at(block->statements->size()-1)) == 0)
+	if (block->statements->size() > 0)
+	{
+		if (dynamic_cast<ReturnExpression*>(block->statements->at(block->statements->size()-1)) == 0)
+		{
+			function->Number(-555555);//return nil
+			function->Return();
+		}
+	}
+	else
 	{
 		function->Number(-555555);//return nil
 		function->Return();

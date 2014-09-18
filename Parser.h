@@ -2,6 +2,14 @@
 #ifndef _PARSER
 #define _PARSER
 
+#ifndef DBG_NEW      
+#define DBG_NEW new ( _NORMAL_BLOCK , __FILE__ , __LINE__ )     
+#define new DBG_NEW   
+#endif
+
+#define _CRTDBG_MAP_ALLOC
+#include <crtdbg.h>
+
 #include <stdio.h>
 #include <map>
 //#include <list>
@@ -440,6 +448,8 @@ namespace Jet
 		::std::list<Jet::Token> mRead;
 	public:
 		Parser(Lexer* l);
+
+		~Parser();
 
 		Expression* parseExpression(int precedence = 0)
 		{
