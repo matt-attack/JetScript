@@ -22,6 +22,20 @@ apples = {hi, apple, twenty};
 apples.two = 7;
 apples["hello"] = "testing";
 apples.a7 = 6;
+
+
+//gc test code
+cur = {};
+begin = cur;
+for (i = 0; i < 10000; i++)
+{
+	cur.next = {};
+	cur = cur.next;
+}
+//begin = 0;
+//cur = 0;
+
+
 //return;
 
 test77 = fun (x,y)

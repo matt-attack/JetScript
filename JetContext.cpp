@@ -40,6 +40,7 @@ const char* JetContext::Compile(const char* code)
 	return nout;
 }
 
+#include <stack>
 void JetContext::RunGC()
 {
 	INT64 start, rate, end;
@@ -55,15 +56,83 @@ void JetContext::RunGC()
 		ii->flag = false;
 	}
 
+	//mark stack and locals here
+	if (this->stack.size() > 0)
+	{
+		int loc = this->stack.size();
+		for (int i = 0; i < loc; i++)
+		{
+			if (this->stack.mem[i].type == ValueType::Object)
+			{
+				std::stack<Value*> stack;
+				stack.push(&this->stack.mem[i]);
+				while( !stack.empty() ) {
+					auto o = stack.top();
+					stack.pop();
+					if (o->type == ValueType::Object)
+					{
+						o->_obj->flag = true;
+
+						for (auto ii: *o->_obj->ptr)
+							stack.push(&ii.second);
+					}
+					else if (o->type == ValueType::Array)
+					{
+						o->_array->flag = true;
+
+						for (auto ii: *o->_array->ptr)
+							stack.push(&ii.second);
+					}
+				}
+			}
+			else if (this->stack.mem[i].type == ValueType::Array)
+			{
+				std::stack<Value*> stack;
+				stack.push(&this->stack.mem[i]);
+				while( !stack.empty() ) {
+					auto o = stack.top();
+					stack.pop();
+					if (o->type == ValueType::Object)
+					{
+						o->_obj->flag = true;
+
+						for (auto ii: *o->_obj->ptr)
+							stack.push(&ii.second);
+					}
+					else if (o->type == ValueType::Array)
+					{
+						o->_array->flag = true;
+
+						for (auto ii: *o->_array->ptr)
+							stack.push(&ii.second);
+					}
+				}
+			}
+		}
+		printf("there was stack left");
+	}
+
 	for (auto v: this->vars)
 	{
-		if (v.type == ValueType::Object)
-		{
-			v.Mark();
-		}
-		else if (v.type == ValueType::Array)
-		{
-			v.Mark();
+		std::stack<Value*> stack;
+		stack.push(&v);
+		while( !stack.empty() ) {
+			auto o = stack.top();
+			stack.pop();
+			if (o->type == ValueType::Object)
+			{
+				o->_obj->flag = true;
+
+				for (auto ii: *o->_obj->ptr)
+					stack.push(&ii.second);
+			}
+			else if (o->type == ValueType::Array)
+			{
+				o->_array->flag = true;
+
+				for (auto ii: *o->_array->ptr)
+					stack.push(&ii.second);
+			}
 		}
 	}
 

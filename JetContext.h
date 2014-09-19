@@ -105,7 +105,7 @@ namespace Jet
 		//actual data being worked on
 		::std::vector<Instruction> ins;
 		::std::vector<Value> vars;//where they are actually stored
-		
+
 		//garbage collector stuff
 		::std::vector<GCVal<::std::map<int, Value>*>*> arrays;
 		::std::vector<GCVal<::std::map<std::string, Value>*>*> objects;
@@ -335,9 +335,43 @@ namespace Jet
 				else if (strcmp(instruction, "ECall") == 0)
 					in.instruction = InstructionType::ECall;
 				else if (strcmp(instruction, "LoadAt") == 0)
+				{
+					::std::string str;
+					const char* tmp = code+strlen(instruction)+1;
+					if (*(code + strlen(instruction)+1) == ' ')
+					{
+						if (*code == '\n')
+							tmp++;
+						const char* tmp2 = tmp+1;
+						while(*tmp2!= '\'') str+= *(tmp2++);
+						char* otmp = new char[str.length()+1];
+						strcpy(otmp, str.c_str());
+						//name[strlen(name)-1] = 0;
+						in.string = otmp;
+					}
+					else
+						in.string = 0;
 					in.instruction = InstructionType::LoadAt;
+				}
 				else if (strcmp(instruction, "StoreAt") == 0)
+				{
+					::std::string str;
+					const char* tmp = code+strlen(instruction)+1;
+					if (*(code + strlen(instruction)+1) == ' ')
+					{
+						if (*code == '\n')
+							tmp++;
+						const char* tmp2 = tmp+1;
+						while(*tmp2!= '\'') str+= *(tmp2++);
+						char* otmp = new char[str.length()+1];
+						strcpy(otmp, str.c_str());
+						//name[strlen(name)-1] = 0;
+						in.string = otmp;
+					}
+					else
+						in.string = 0;
 					in.instruction = InstructionType::StoreAt;
+				}
 				else if (strcmp(instruction, "NewArray") == 0)
 					in.instruction = InstructionType::NewArray;
 				else if (strcmp(instruction, "NewObject") == 0)
@@ -829,31 +863,58 @@ namespace Jet
 						}
 					case InstructionType::StoreAt:
 						{
-							Value index = stack.Pop();
-							Value loc = stack.Pop();
-							Value val = stack.Pop();	
+							if (in.string)
+							{
+								//Value index = stack.Pop();
+								Value loc = stack.Pop();
+								Value val = stack.Pop();	
 
-							if (loc.type == ValueType::Array)
-								(*loc._array->ptr)[(int)index] = val;
-							else if (loc.type == ValueType::Object)
-								(*loc._obj->ptr)[index.ToString()] = val;
+								//if (loc.type == ValueType::Array)
+								//(*loc._array->ptr)[(int)index] = val;
+								if (loc.type == ValueType::Object)
+									(*loc._obj->ptr)[in.string] = val;
+								else
+									throw JetRuntimeException("Could not index a non array/object value!");
+							}
 							else
-								throw JetRuntimeException("Could not index a non array/object value!");
+							{
+								Value index = stack.Pop();
+								Value loc = stack.Pop();
+								Value val = stack.Pop();	
 
+								if (loc.type == ValueType::Array)
+									(*loc._array->ptr)[(int)index] = val;
+								else if (loc.type == ValueType::Object)
+									(*loc._obj->ptr)[index.ToString()] = val;
+								else
+									throw JetRuntimeException("Could not index a non array/object value!");
+							}
 							break;
 						}
 					case InstructionType::LoadAt:
 						{
-							Value index = stack.Pop();
-							Value loc = stack.Pop();
+							if (in.string)
+							{
+								//Value index = stack.Pop();
+								Value loc = stack.Pop();
 
-							if (loc.type == ValueType::Array)
-								stack.Push((*loc._array->ptr)[(int)index]);
-							else if (loc.type == ValueType::Object)
-								stack.Push((*loc._obj->ptr)[index.ToString()]);
+								if (loc.type == ValueType::Object)
+									stack.Push((*loc._obj->ptr)[in.string]);
+								else
+									throw JetRuntimeException("Could not index a non array/object value!");
+							}
 							else
-								throw JetRuntimeException("Could not index a non array/object value!");
+							{
+								Value index = stack.Pop();
+								Value loc = stack.Pop();
 
+								if (loc.type == ValueType::Array)
+									stack.Push((*loc._array->ptr)[(int)index]);
+								else if (loc.type == ValueType::Object)
+									stack.Push((*loc._obj->ptr)[index.ToString()]);
+								else
+									throw JetRuntimeException("Could not index a non array/object value!");
+							}
 							break;
 						}
 					case InstructionType::NewArray:
@@ -926,7 +987,7 @@ namespace Jet
 			/*printf("Variables:\n");
 			for (auto ii: variables)
 			{
-				printf("%s = %s\n", ii.first.c_str(), vars[ii.second].ToString().c_str());
+			printf("%s = %s\n", ii.first.c_str(), vars[ii.second].ToString().c_str());
 			}*/
 
 			/*printf("\nLabels:\n");

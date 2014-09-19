@@ -85,44 +85,6 @@ namespace Jet
 		}
 	};
 
-	class IndexExpression: public Expression, public IStorableExpression
-	{
-		Expression* left, *index;
-	public:
-		IndexExpression(Expression* left, Expression* index)//std::string name)
-		{
-			this->left = left;
-			this->index = index;
-		}
-
-		~IndexExpression()
-		{
-			delete left;
-			delete index;
-		}
-
-		void print()
-		{
-			printf("[");
-			index->print();
-			printf("]");
-		}
-
-		void Compile(CompilerContext* context)
-		{
-			//add load variable instruction
-			left->Compile(context);
-			index->Compile(context);
-			context->LoadIndex();
-		}
-
-		void CompileStore(CompilerContext* context)
-		{
-			left->Compile(context);
-			index->Compile(context);
-			context->StoreIndex();
-		}
-	};
 
 	class ArrayExpression: public Expression
 	{
@@ -251,6 +213,71 @@ namespace Jet
 		void Compile(CompilerContext* context)
 		{
 			context->String(this->value);
+		}
+	};
+
+	class IndexExpression: public Expression, public IStorableExpression
+	{
+		Expression* left, *index;
+	public:
+		IndexExpression(Expression* left, Expression* index)//std::string name)
+		{
+			this->left = left;
+			this->index = index;
+		}
+
+		~IndexExpression()
+		{
+			delete left;
+			delete index;
+		}
+
+		void print()
+		{
+			printf("[");
+			index->print();
+			printf("]");
+		}
+
+		void Compile(CompilerContext* context)
+		{
+			//add load variable instruction
+			left->Compile(context);
+			//if the index is constant compile to a special instruction carying that constant
+			if (dynamic_cast<NameExpression*>(index))
+			{
+				context->LoadIndex(dynamic_cast<NameExpression*>(index)->GetName().c_str());
+			}
+			else if (dynamic_cast<StringExpression*>(index))
+			{
+				context->LoadIndex(dynamic_cast<StringExpression*>(index)->GetValue().c_str());
+			}
+			else
+			{
+				index->Compile(context);
+				context->LoadIndex();
+			}
+		}
+
+		void CompileStore(CompilerContext* context)
+		{
+			left->Compile(context);
+			if (dynamic_cast<NameExpression*>(index))
+			{
+				context->StoreIndex(dynamic_cast<NameExpression*>(index)->GetName().c_str());
+			}
+			else if (dynamic_cast<StringExpression*>(index))
+			{
+				context->StoreIndex(dynamic_cast<StringExpression*>(index)->GetValue().c_str());
+			}
+			else
+			{
+				index->Compile(context);
+				context->StoreIndex();
+			}
+			//if the index is constant compile to a special instruction carying that constant
+			//index->Compile(context);
+			//context->StoreIndex();
 		}
 	};
 
@@ -542,7 +569,7 @@ namespace Jet
 
 		/*~ScopeExpression()
 		{
-			//delete block;
+		//delete block;
 		}*/
 
 		void Compile(CompilerContext* context)

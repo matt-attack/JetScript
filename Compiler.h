@@ -230,14 +230,20 @@ namespace Jet
 			this->output += "ECall " + ::std::to_string(args) + ";\n";
 		}
 
-		void LoadIndex()
+		void LoadIndex(const char* index = 0)
 		{
-			this->output += "LoadAt;\n";
+			if (index)
+				this->output += "LoadAt '"+std::string(index)+"';\n";
+			else
+				this->output += "LoadAt;\n";
 		}
 
-		void StoreIndex()
+		void StoreIndex(const char* index = 0)
 		{
-			this->output += "StoreAt;\n";
+			if (index)
+				this->output += "StoreAt '"+std::string(index)+"';\n";
+			else
+				this->output += "StoreAt;\n";
 		}
 
 		void NewArray()

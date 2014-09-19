@@ -131,28 +131,28 @@ namespace Jet
 				return "[NativeFunction "+::std::to_string((unsigned int)this->func)+"]";
 			case ValueType::Array:
 				{
-					std::string str = "[Array " + std::to_string((int)this->_array)+"] [\n";//"[\n";
-					for (auto ii: *this->_array->ptr)
+					std::string str = "[Array " + std::to_string((int)this->_array)+"]";//"[\n";
+					/*for (auto ii: *this->_array->ptr)
 					{
 						str += "\t";
 						str += ::std::to_string(ii.first);
 						str += " = ";
 						str += ii.second.ToString() + "\n";
 					}
-					str += "]";
+					str += "]";*/
 					return str;
 				}
 			case ValueType::Object:
 				{
-					std::string str = "[Object " + std::to_string((int)this->_obj)+"] {\n";
-					for (auto ii: *this->_obj->ptr)
+					std::string str = "[Object " + std::to_string((int)this->_obj)+"]";
+					/*for (auto ii: *this->_obj->ptr)
 					{
 						str += "\t";
 						str += ii.first;
 						str += " = ";
 						str += ii.second.ToString() + "\n";
 					}
-					str += "}";
+					str += "}";*/
 					return str;
 				}
 			case ValueType::Userdata:
