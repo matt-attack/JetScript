@@ -7,6 +7,8 @@
 
 namespace Jet
 {
+	class JetContext;
+
 	template<class t>
 	struct GCVal
 	{
@@ -23,6 +25,7 @@ namespace Jet
 
 	typedef GCVal<std::map<std::string, Value>*> _JetObject; 
 	typedef GCVal<std::map<int, Value>*> _JetArray; 
+	typedef void(*_JetNativeFunc)(JetContext*,Value*, int);///*std::function<void(JetContext*,Value*,int)>*/ _JetNativeFunc;
 
 	enum class ValueType
 	{
@@ -53,7 +56,7 @@ namespace Jet
 			_JetObject* _obj;
 			void* object;//used for userdata
 			unsigned int ptr;//used for functions, points to code
-			std::function<void(JetContext*,Value*,int)>* func;//native func
+			_JetNativeFunc func;//native func
 		};
 
 		Value()
@@ -68,7 +71,7 @@ namespace Jet
 			type = ValueType::String;
 
 			string.len = strlen(str)+10;
-			char* news = new char[string.len];
+ 			char* news = new char[string.len];
 			strcpy(news, str);
 			string.data = news;
 		}
@@ -97,7 +100,7 @@ namespace Jet
 			value = val;
 		}
 
-		Value(std::function<void(JetContext*,Value*,int)>* a)
+		Value(_JetNativeFunc a)
 		{
 			type = ValueType::NativeFunction;
 			func = a;
@@ -108,6 +111,12 @@ namespace Jet
 			type = ValueType::Function;
 			ptr = pos;
 		}
+
+		/*Value(std::function<void(JetContext*, Value*, int)>* ptr)
+		{
+			type = ValueType::NativeFunction;
+			func = *a;
+		}*/
 
 		Value(void* userdata)
 		{

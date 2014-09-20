@@ -14,7 +14,8 @@
 namespace Jet
 {
 	typedef std::function<void(Jet::JetContext*,Jet::Value*,int)> JetFunction;
-#define JetBind(context, fun) std::function<void(Jet::JetContext*,Jet::Value*,int)> temp__bind_##fun = [](Jet::JetContext* context,Jet::Value* args, int numargs) { context->Return(fun(args[0]));}; context[#fun] = &temp__bind_##fun;
+#define JetBind(context, fun) 	auto temp__bind_##fun = [](Jet::JetContext* context,Jet::Value* args, int numargs) { context->Return(fun(args[0]));};context[#fun] = Value(temp__bind_##fun);
+	//void(*temp__bind_##fun)(Jet::JetContext*,Jet::Value*,int)> temp__bind_##fun = &[](Jet::JetContext* context,Jet::Value* args, int numargs) { context->Return(fun(args[0]));}; context[#fun] = &temp__bind_##fun;
 
 	static enum InstructionType
 	{
@@ -92,6 +93,10 @@ namespace Jet
 		};
 	};
 
+	//builtin function definitions
+	void gc(JetContext* context,Value* args, int numargs);
+	void print(JetContext* context,Value* args, int numargs);
+
 	class JetContext
 	{
 		VMStack<Value> stack;
@@ -118,7 +123,11 @@ namespace Jet
 		JetContext()
 		{
 			this->labelposition = 0;
+			this->fptr = -1;
 			stack = VMStack<Value>(500000);
+
+			(*this)["print"] = print;
+			(*this)["gc"] = gc;
 		};
 
 		~JetContext()
@@ -137,7 +146,7 @@ namespace Jet
 
 			for (auto ii: this->ins)
 			{
-				if (ii.instruction == InstructionType::LdStr)
+				if (ii.instruction == InstructionType::LdStr || ii.instruction == InstructionType::StoreAt || ii.instruction == InstructionType::LoadAt)
 					delete[] ii.string;
 			}
 		}
@@ -190,6 +199,7 @@ namespace Jet
 		//puts compiled code into the VM and runs any globals
 		Value Assemble(const char* code)//takes in assembly code for execution
 		{
+			int startptr = this->ins.size();
 			INT64 start, rate, end;
 			QueryPerformanceFrequency( (LARGE_INTEGER *)&rate );
 			QueryPerformanceCounter( (LARGE_INTEGER *)&start );
@@ -515,7 +525,7 @@ namespace Jet
 			printf("Took %lf seconds to assemble\n\n", dt);
 
 			this->callstack.Push(123456789);
-			Value temp =  this->Execute(0);//run the static code
+			Value temp =  this->Execute(startptr);//run the static code
 			if (this->callstack.size() > 0)
 				this->callstack.Pop();
 
@@ -575,14 +585,16 @@ namespace Jet
 		};
 
 	private:
+		StackFrame frames[40];//max call depth
+		int fptr;
 		Value Execute(int iptr)
 		{
 			INT64 start, rate, end;
 			QueryPerformanceFrequency( (LARGE_INTEGER *)&rate );
 			QueryPerformanceCounter( (LARGE_INTEGER *)&start );
 
-			StackFrame frames[40];//max call depth
-			int fptr = 0;
+			//StackFrame frames[40];//max call depth
+			fptr = 0;
 
 			try
 			{
@@ -983,6 +995,8 @@ namespace Jet
 			double dt = ((double)diff)/((double)rate);
 
 			printf("Took %lf seconds to execute\n\n", dt);
+
+			this->fptr = -1;
 
 			/*printf("Variables:\n");
 			for (auto ii: variables)

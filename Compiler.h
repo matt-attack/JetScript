@@ -34,11 +34,12 @@ namespace Jet
 
 			CompilerContext* newfun = new CompilerContext();
 			//insert this into my list of functions
+			std::string fname = name+this->GetUUID();
 			newfun->uuid = this->uuid;
-			this->functions[name] = newfun;
+			this->functions[fname] = newfun;
 
 			//store the function in the variable
-			this->LoadFunction(name);
+			this->LoadFunction(fname);
 
 			return newfun;
 		};

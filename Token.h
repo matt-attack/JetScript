@@ -11,6 +11,9 @@
 #define _CRTDBG_MAP_ALLOC
 #include <crtdbg.h>
 
+#include <string>
+#undef EOF
+
 namespace Jet
 {
 	enum class TokenType

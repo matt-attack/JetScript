@@ -9,6 +9,20 @@
 
 using namespace Jet;
 
+void Jet::gc(JetContext* context,Value* args, int numargs) 
+{ 
+	context->RunGC();
+};
+
+void Jet::print(JetContext* context,Value* args, int numargs) 
+{ 
+	for (int i = 0; i < numargs; i++)
+	{
+		printf("%s", args[i].ToString().c_str());
+	}
+	printf("\n");
+};
+
 const char* JetContext::Compile(const char* code)
 {
 	INT64 start, rate, end;
@@ -57,6 +71,24 @@ void JetContext::RunGC()
 	}
 
 	//mark stack and locals here
+	if (this->fptr >= 0)
+	{
+		//printf("GC run at runtime!\n");
+		for (int i = fptr; i >= 0; i--)
+		{
+			for (int l = 0; l < 20; l++)
+			{
+				if (this->frames[i].locals[l].type == ValueType::Object)
+				{
+					this->frames[i].locals[l]._obj->flag = true;
+					//printf("marked a local!\n");
+				}
+			}
+			//printf("1 stack frame\n");
+		}
+	}
+
+	//check locals here
 	if (this->stack.size() > 0)
 	{
 		int loc = this->stack.size();

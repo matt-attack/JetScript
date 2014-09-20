@@ -220,7 +220,7 @@ namespace Jet
 	{
 		Expression* left, *index;
 	public:
-		IndexExpression(Expression* left, Expression* index)//std::string name)
+		IndexExpression(Expression* left, Expression* index)
 		{
 			this->left = left;
 			this->index = index;
@@ -244,11 +244,7 @@ namespace Jet
 			//add load variable instruction
 			left->Compile(context);
 			//if the index is constant compile to a special instruction carying that constant
-			if (dynamic_cast<NameExpression*>(index))
-			{
-				context->LoadIndex(dynamic_cast<NameExpression*>(index)->GetName().c_str());
-			}
-			else if (dynamic_cast<StringExpression*>(index))
+			if (dynamic_cast<StringExpression*>(index))
 			{
 				context->LoadIndex(dynamic_cast<StringExpression*>(index)->GetValue().c_str());
 			}
@@ -262,11 +258,8 @@ namespace Jet
 		void CompileStore(CompilerContext* context)
 		{
 			left->Compile(context);
-			if (dynamic_cast<NameExpression*>(index))
-			{
-				context->StoreIndex(dynamic_cast<NameExpression*>(index)->GetName().c_str());
-			}
-			else if (dynamic_cast<StringExpression*>(index))
+			//if the index is constant compile to a special instruction carying that constant
+			if (dynamic_cast<StringExpression*>(index))
 			{
 				context->StoreIndex(dynamic_cast<StringExpression*>(index)->GetValue().c_str());
 			}
@@ -275,9 +268,6 @@ namespace Jet
 				index->Compile(context);
 				context->StoreIndex();
 			}
-			//if the index is constant compile to a special instruction carying that constant
-			//index->Compile(context);
-			//context->StoreIndex();
 		}
 	};
 
