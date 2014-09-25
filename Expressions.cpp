@@ -26,12 +26,9 @@ void PostfixExpression::Compile(CompilerContext* context)
 
 void SwapExpression::Compile(CompilerContext* context)
 {
-	//std::string name2 = dynamic_cast<NameExpression*>(right)->GetName();
 	right->Compile(context);
-	//context->Load(name2);
 	left->Compile(context);
-	//context->Load(name);
-	//context->Store(name2);
+
 	if (dynamic_cast<IStorableExpression*>(this->right))
 		dynamic_cast<IStorableExpression*>(this->right)->CompileStore(context);
 
@@ -40,8 +37,6 @@ void SwapExpression::Compile(CompilerContext* context)
 
 	if (dynamic_cast<IStorableExpression*>(this->left))
 		dynamic_cast<IStorableExpression*>(this->left)->CompileStore(context);
-
-	//context->Store(name);
 }
 
 void AssignExpression::Compile(CompilerContext* context)
@@ -143,7 +138,6 @@ void FunctionExpression::Compile(CompilerContext* context)
 void LocalExpression::Compile(CompilerContext* context)
 {
 	//add load variable instruction
-	//todo make me detect if this is a local or not
 	if (this->_right)
 		this->_right->Compile(context);
 

@@ -47,6 +47,7 @@ namespace Jet
 		union
 		{
 			double value;
+			//std::string string;
 			struct string
 			{
 				unsigned int len;
@@ -141,33 +142,35 @@ namespace Jet
 			case ValueType::Array:
 				{
 					std::string str = "[Array " + std::to_string((int)this->_array)+"]";//"[\n";
-					/*for (auto ii: *this->_array->ptr)
+					for (auto ii: *this->_array->ptr)
 					{
 						str += "\t";
 						str += ::std::to_string(ii.first);
 						str += " = ";
 						str += ii.second.ToString() + "\n";
 					}
-					str += "]";*/
+					str += "]";
 					return str;
 				}
 			case ValueType::Object:
 				{
 					std::string str = "[Object " + std::to_string((int)this->_obj)+"]";
-					/*for (auto ii: *this->_obj->ptr)
+					for (auto ii: *this->_obj->ptr)
 					{
 						str += "\t";
 						str += ii.first;
 						str += " = ";
 						str += ii.second.ToString() + "\n";
 					}
-					str += "}";*/
+					str += "}";
 					return str;
 				}
 			case ValueType::Userdata:
 				{
 					return "[Userdata "+std::to_string((int)this->object)+"]";
 				}
+			default:
+				return "";
 			}
 		}
 

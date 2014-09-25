@@ -271,17 +271,18 @@ Expression* LocalParselet::parse(Parser* parser, Token token)
 
 Expression* ArrayParselet::parse(Parser* parser, Token token)
 {
-	auto inits = new std::vector<Value>;
+	auto inits = new std::vector<Expression*>;
 	while(parser->LookAhead().getType() == TokenType::String || parser->LookAhead().getType() == TokenType::Number)
 	{
-		Token value = parser->Consume();
+		Expression* e = parser->parseExpression(2);
+		/*Token value = parser->Consume();
 		Value v;
 		if (value.type == TokenType::Number)
 			v = ::atof(value.text.c_str());
 		else if (value.type == TokenType::String || value.type == TokenType::Name)
-			v = value.text.c_str();
+			v = value.text.c_str();*/
 
-		inits->push_back(v);
+		inits->push_back(e);
 
 		if (!parser->MatchAndConsume(TokenType::Comma))//check if more
 			break;//we are done
@@ -320,7 +321,7 @@ Expression* ObjectParselet::parse(Parser* parser, Token token)
 		return new ObjectExpression(0);
 	}
 	//parse initial values
-	auto inits = new std::vector<std::pair<std::string, Value>>;
+	auto inits = new std::vector<std::pair<std::string, Expression*>>;
 	while(parser->LookAhead().type == TokenType::Name || parser->LookAhead().type == TokenType::String || parser->LookAhead().type == TokenType::Number)
 	{
 		Token name = parser->Consume();
@@ -328,14 +329,15 @@ Expression* ObjectParselet::parse(Parser* parser, Token token)
 		parser->Consume(TokenType::Assign);
 
 		//parse the data;
-		Token value = parser->Consume();
+		Expression* e = parser->parseExpression(2);
+		/*Token value = parser->Consume();
 		Value v;
 		if (value.type == TokenType::Number)
 			v = ::atof(value.text.c_str());
 		else if (value.type == TokenType::String || value.type == TokenType::Name)
-			v = value.text.c_str();
+			v = value.text.c_str();*/
 
-		inits->push_back(std::pair<std::string, Value>(name.text, v));
+		inits->push_back(std::pair<std::string, Expression*>(name.text, e));
 		if (!parser->MatchAndConsume(TokenType::Comma))//is there more to parse?
 			break;//we are done
 	}

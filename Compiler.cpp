@@ -74,7 +74,7 @@ std::string CompilerContext::Compile(BlockExpression* expr)
 
 bool CompilerContext::RegisterLocal(std::string name)
 {
-	for (int i = 0; i < this->scope->localvars.size(); i++)
+	for (unsigned int i = 0; i < this->scope->localvars.size(); i++)
 	{
 		if (this->scope->localvars[i] == name)
 			return false;

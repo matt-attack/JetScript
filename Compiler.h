@@ -170,7 +170,7 @@ namespace Jet
 			while (ptr)
 			{
 				//look for var in locals
-				for (int i = 0; i < ptr->localvars.size(); i++)
+				for (unsigned int i = 0; i < ptr->localvars.size(); i++)
 				{
 					if (ptr->localvars[i] == variable)
 					{
@@ -201,7 +201,7 @@ namespace Jet
 			while (ptr)
 			{
 				//look for var in locals
-				for (int i = 0; i < ptr->localvars.size(); i++)
+				for (unsigned int i = 0; i < ptr->localvars.size(); i++)
 				{
 					if (ptr->localvars[i] == variable)
 					{
@@ -251,14 +251,14 @@ namespace Jet
 				this->output += "StoreAt;\n";
 		}
 
-		void NewArray()
+		void NewArray(unsigned int number)
 		{
-			this->output += "NewArray;\n";
+			this->output += "NewArray " + std::to_string(number) + ";\n";
 		}
 
-		void NewObject()
+		void NewObject(unsigned int number)
 		{
-			this->output += "NewObject;\n";
+			this->output += "NewObject " + std::to_string(number) + ";\n";
 		}
 
 		void Return()

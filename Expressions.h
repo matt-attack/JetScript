@@ -11,6 +11,7 @@
 
 #include <string>
 #include <stdio.h>
+#include <vector>
 
 #include "Compiler.h"
 #include "Value.h"
@@ -89,16 +90,20 @@ namespace Jet
 
 	class ArrayExpression: public Expression
 	{
-		std::vector<Value>* initialiers;
+		std::vector<Expression*>* initializers;
 	public:
-		ArrayExpression(std::vector<Value>* inits)
+		ArrayExpression(std::vector<Expression*>* inits)
 		{
-			this->initialiers = inits;
+			this->initializers = inits;
 		}
 
 		~ArrayExpression()
 		{
-			delete this->initialiers;
+			if (this->initializers)
+				for (auto ii: *this->initializers)
+					delete ii;
+
+			delete this->initializers;
 		}
 
 		void print()
@@ -108,19 +113,24 @@ namespace Jet
 
 		void Compile(CompilerContext* context)
 		{
-			if (this->initialiers)
+			int count = 0;
+			if (this->initializers)
 			{
-				//todo
+				count = this->initializers->size();
+				for (auto i: *this->initializers)
+				{
+					i->Compile(context);
+				}
 			}
-			context->NewArray();
+			context->NewArray(count);
 		}
 	};
 
 	class ObjectExpression: public Expression
 	{
-		std::vector<std::pair<std::string, Jet::Value>>* inits;
+		std::vector<std::pair<std::string, Expression*>>* inits;
 	public:
-		ObjectExpression(std::vector<std::pair<std::string, Jet::Value>>* initializers)
+		ObjectExpression(std::vector<std::pair<std::string, Expression*>>* initializers)
 		{
 			this->inits = initializers;
 		}
@@ -137,11 +147,18 @@ namespace Jet
 
 		void Compile(CompilerContext* context)
 		{
+			int count = 0;
 			if (this->inits)
 			{
 				//set these up
+				count = this->inits->size();
+				for (auto ii: *this->inits)
+				{
+					context->String(ii.first);
+					ii.second->Compile(context);
+				}
 			}
-			context->NewObject();
+			context->NewObject(count);
 		}
 	};
 
@@ -496,8 +513,6 @@ namespace Jet
 			context->BinaryOperation(this->_operator);
 		}
 	};
-
-#include <vector>
 
 	class StatementExpression: public Expression
 	{
