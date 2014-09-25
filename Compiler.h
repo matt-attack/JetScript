@@ -87,12 +87,16 @@ namespace Jet
 			s->previous = this->scope;
 			s->next = 0;
 			this->scope = s;
+			//printf("scope pushed\n");
 		}
 
 		void PopScope()
 		{
 			if (this->scope && this->scope->previous)
 				this->scope = this->scope->previous;
+
+			delete this->scope->next;
+			this->scope->next = 0;
 		}
 
 		bool RegisterLocal(std::string name);//returns success

@@ -13,6 +13,7 @@
 #include <stdio.h>
 
 #include "Compiler.h"
+#include "Value.h"
 
 namespace Jet
 {
@@ -88,38 +89,45 @@ namespace Jet
 
 	class ArrayExpression: public Expression
 	{
-		Token _name;
-		Expression* _right;
+		std::vector<Value>* initialiers;
 	public:
-		ArrayExpression(Token name, Expression* right)
+		ArrayExpression(std::vector<Value>* inits)
 		{
-			this->_name = name;
-			this->_right = right;
+			this->initialiers = inits;
 		}
 
 		~ArrayExpression()
 		{
-			delete this->_right;
+			delete this->initialiers;
 		}
 
 		void print()
 		{
-			printf(_name.getText().c_str());
+			//printf(_name.getText().c_str());
 		}
 
 		void Compile(CompilerContext* context)
 		{
+			if (this->initialiers)
+			{
+				//todo
+			}
 			context->NewArray();
 		}
 	};
 
 	class ObjectExpression: public Expression
 	{
-		std::vector<Expression*>* inits;
+		std::vector<std::pair<std::string, Jet::Value>>* inits;
 	public:
-		ObjectExpression(std::vector<Expression*>* initializers)
+		ObjectExpression(std::vector<std::pair<std::string, Jet::Value>>* initializers)
 		{
 			this->inits = initializers;
+		}
+
+		~ObjectExpression()
+		{
+			delete this->inits;
 		}
 
 		void print()

@@ -1,8 +1,8 @@
-test = [];
+test = [1,2,3,4,5,6,7,8,9];
 test[2] = [];
 test[2][2] = [];
 
-rec = {};
+rec = {a = 2, b = 3, "test" = 6};
 rec[1] = {};
 rec[1].id = 55;
 
@@ -18,7 +18,7 @@ test = 0;
 print(tan(3.1415926535895));
 btest = 4 | 5;
 print(btest);
-apples = {hi, apple, twenty};
+apples = {};
 apples.two = 7;
 apples["hello"] = "testing";
 apples.a7 = 6;

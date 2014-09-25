@@ -12,7 +12,6 @@
 
 #include <stdio.h>
 #include <map>
-//#include <list>
 
 #include "Token.h"
 #include "Compiler.h"

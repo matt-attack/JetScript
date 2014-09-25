@@ -271,8 +271,23 @@ Expression* LocalParselet::parse(Parser* parser, Token token)
 
 Expression* ArrayParselet::parse(Parser* parser, Token token)
 {
+	auto inits = new std::vector<Value>;
+	while(parser->LookAhead().getType() == TokenType::String || parser->LookAhead().getType() == TokenType::Number)
+	{
+		Token value = parser->Consume();
+		Value v;
+		if (value.type == TokenType::Number)
+			v = ::atof(value.text.c_str());
+		else if (value.type == TokenType::String || value.type == TokenType::Name)
+			v = value.text.c_str();
+
+		inits->push_back(v);
+
+		if (!parser->MatchAndConsume(TokenType::Comma))//check if more
+			break;//we are done
+	}
 	parser->Consume(TokenType::RightBracket);
-	return new ArrayExpression(token, 0);
+	return new ArrayExpression(inits);
 }
 
 Expression* IndexParselet::parse(Parser* parser, Expression* left, Token token)
@@ -299,23 +314,31 @@ Expression* MemberParselet::parse(Parser* parser, Expression* left, Token token)
 
 Expression* ObjectParselet::parse(Parser* parser, Token token)
 {
-	if (parser->LookAhead().getType() == TokenType::RightBrace)
+	if (parser->MatchAndConsume(TokenType::RightBrace))
 	{
-		parser->Consume();//take the right brace
 		//we are done, return null object
 		return new ObjectExpression(0);
 	}
 	//parse initial values
-	while(parser->LookAhead().getType() == TokenType::Name)
+	auto inits = new std::vector<std::pair<std::string, Value>>;
+	while(parser->LookAhead().type == TokenType::Name || parser->LookAhead().type == TokenType::String || parser->LookAhead().type == TokenType::Number)
 	{
 		Token name = parser->Consume();
-		if (parser->MatchAndConsume(TokenType::Comma))
-		{
-			//keep going
-		}
-		else
+
+		parser->Consume(TokenType::Assign);
+
+		//parse the data;
+		Token value = parser->Consume();
+		Value v;
+		if (value.type == TokenType::Number)
+			v = ::atof(value.text.c_str());
+		else if (value.type == TokenType::String || value.type == TokenType::Name)
+			v = value.text.c_str();
+
+		inits->push_back(std::pair<std::string, Value>(name.text, v));
+		if (!parser->MatchAndConsume(TokenType::Comma))//is there more to parse?
 			break;//we are done
 	}
 	parser->Consume(TokenType::RightBrace);//end part
-	return new ObjectExpression(0);
+	return new ObjectExpression(inits);
 };

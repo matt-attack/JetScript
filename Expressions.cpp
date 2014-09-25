@@ -75,7 +75,7 @@ void CallExpression::Compile(CompilerContext* context)
 	{
 		throw ParserException("dummy", 555, "Error: Cannot call an expression that is not a name");
 	}
-
+	//help, how should I handle this for multiple returns
 	//pop off return value if we dont need it
 	if (dynamic_cast<BlockExpression*>(this->Parent) != 0)
 		context->Pop();//if my parent is block expression, we dont the result, so pop it

@@ -31,8 +31,6 @@ CompilerContext::~CompilerContext(void)
 			next = tmp;
 		}
 	}
-	if (this->scope->previous)
-		printf("wat");
 	delete this->scope;
 
 	//delete functions
@@ -49,10 +47,28 @@ std::string CompilerContext::Compile(BlockExpression* expr)
 
 	this->Compile();
 
-	printf("Compile Output:\n%s\n\n", this->output.c_str());
+	//printf("Compile Output:\n%s\n\n", this->output.c_str());
 
-	std::string tmp = this->output;
+	std::string tmp = std::move(this->output);
 	this->output = "";
+
+	if (this->scope)
+	{
+		auto next = this->scope->next;
+		this->scope->next = 0;
+		while (next)
+		{
+			auto tmp = next->next;
+			delete next;
+			next = tmp;
+		}
+	}
+
+	for (auto ii: this->functions)
+		delete ii.second;
+
+	this->functions.clear();
+
 	return tmp;//this->output.c_str();
 }
 

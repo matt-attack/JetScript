@@ -269,11 +269,14 @@ Token Lexer::Next()
 		bool found = false; int len = 0;
 		for (auto ii: operators)
 		{
-			if (strncmp(ii.first.c_str(), &text.c_str()[index-1], ii.first.length()) == 0 && ii.first.length() > len)
+			if (ii.first.length() <= (text.length()+1-index))//fixes crashes/overruns if input string too short like "+"
 			{
-				len = ii.first.length();
-				str = ii.first;
-				found = true;
+				if(strncmp(ii.first.c_str(), &text.c_str()[index-1], ii.first.length()) == 0 && ii.first.length() > len)
+				{
+					len = ii.first.length();
+					str = ii.first;
+					found = true;
+				}
 			}
 		}
 
@@ -362,6 +365,6 @@ Token Lexer::Next()
 			//character to ignore like whitespace
 		}
 	}
-	return Token("test", linenumber, TokenType::EOF, "");
+	return Token("test", linenumber, TokenType::EOF, "EOF");
 }
 
