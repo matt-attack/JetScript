@@ -38,7 +38,7 @@ CompilerContext::~CompilerContext(void)
 		delete ii.second;
 }
 
-std::string CompilerContext::Compile(BlockExpression* expr)
+std::vector<IntermediateInstruction> CompilerContext::Compile(BlockExpression* expr)
 {
 	expr->Compile(this);
 
@@ -48,9 +48,6 @@ std::string CompilerContext::Compile(BlockExpression* expr)
 	this->Compile();
 
 	//printf("Compile Output:\n%s\n\n", this->output.c_str());
-
-	std::string tmp = std::move(this->output);
-	this->output = "";
 
 	if (this->scope)
 	{
@@ -63,13 +60,16 @@ std::string CompilerContext::Compile(BlockExpression* expr)
 			next = tmp;
 		}
 	}
+	this->scope->localvars.clear();
 
 	for (auto ii: this->functions)
 		delete ii.second;
 
 	this->functions.clear();
 
-	return tmp;//this->output.c_str();
+	auto temp = std::move(this->out);
+	this->out.clear();
+	return std::move(temp);
 }
 
 bool CompilerContext::RegisterLocal(std::string name)
@@ -86,33 +86,72 @@ bool CompilerContext::RegisterLocal(std::string name)
 void CompilerContext::BinaryOperation(TokenType operation)
 {
 	if (operation == TokenType::Plus || operation == TokenType::AddAssign)
-		output += "Add;\n";
+	{
+		this->out.push_back(IntermediateInstruction(InstructionType::Add));
+		//output += "Add;\n";
+	}
 	else if (operation == TokenType::Asterisk || operation == TokenType::MultiplyAssign)
-		output += "Mul;\n";
+	{
+		this->out.push_back(IntermediateInstruction(InstructionType::Mul));
+		//output += "Mul;\n";
+	}
 	else if (operation == TokenType::Minus || operation == TokenType::SubtractAssign)
-		output += "Sub;\n";
+	{
+		this->out.push_back(IntermediateInstruction(InstructionType::Sub));
+		//output += "Sub;\n";
+	}
 	else if (operation == TokenType::Slash || operation == TokenType::DivideAssign)
-		output += "Div;\n";
+	{
+		this->out.push_back(IntermediateInstruction(InstructionType::Div));
+		//output += "Div;\n";
+	}
 	else if (operation == TokenType::Modulo)
-		output += "Mod;\n";
+	{
+		this->out.push_back(IntermediateInstruction(InstructionType::Modulus));
+		//output += "Mod;\n";
+	}
 	else if (operation == TokenType::Equals)
-		output += "Eq;\n";
+	{
+		this->out.push_back(IntermediateInstruction(InstructionType::Eq));
+		//output += "Eq;\n";
+	}
 	else if (operation == TokenType::NotEqual)
-		output += "NotEq;\n";
+	{
+		this->out.push_back(IntermediateInstruction(InstructionType::NotEq));
+		//output += "NotEq;\n";
+	}
 	else if (operation == TokenType::LessThan)
-		output += "Lt;\n";
+	{
+		this->out.push_back(IntermediateInstruction(InstructionType::Lt));
+		//output += "Lt;\n";
+	}
 	else if (operation == TokenType::GreaterThan)
-		output += "Gt;\n";
+	{
+		this->out.push_back(IntermediateInstruction(InstructionType::Gt));
+		//output += "Gt;\n";
+	}
 	else if (operation == TokenType::Or)
-		output += "BOR;\n";
+	{
+		this->out.push_back(IntermediateInstruction(InstructionType::BOr));
+		//output += "BOR;\n";
+	}
 	else if (operation == TokenType::And)
-		output += "BAND;\n";
+	{
+		this->out.push_back(IntermediateInstruction(InstructionType::BAnd));
+		//output += "BAND;\n";
+	}
 }
 
 void CompilerContext::UnaryOperation(TokenType operation)
 {
 	if (operation == TokenType::Increment)
-		output += "Incr;\n";
+	{
+		this->out.push_back(IntermediateInstruction(InstructionType::Incr));
+		//output += "Incr;\n";
+	}
 	else if (operation == TokenType::Decrement)
-		output += "Decr;\n";
+	{
+		this->out.push_back(IntermediateInstruction(InstructionType::Decr));
+		//output += "Decr;\n";
+	}
 }

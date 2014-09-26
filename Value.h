@@ -47,7 +47,6 @@ namespace Jet
 		union
 		{
 			double value;
-			//std::string string;
 			struct string
 			{
 				unsigned int len;
@@ -65,16 +64,17 @@ namespace Jet
 			this->type = ValueType::Null;
 		};
 
+		//plz dont delete my string
 		Value(const char* str)
 		{
 			if (str == 0)
 				return;
 			type = ValueType::String;
 
-			string.len = strlen(str)+10;
- 			char* news = new char[string.len];
-			strcpy(news, str);
-			string.data = news;
+			string.len = strlen(str);//+10;
+ 			//char* news = new char[string.len];
+			//strcpy(news, str);
+			string.data = (char*)str;
 		}
 
 		Value(_JetObject* obj)
@@ -142,27 +142,27 @@ namespace Jet
 			case ValueType::Array:
 				{
 					std::string str = "[Array " + std::to_string((int)this->_array)+"]";//"[\n";
-					for (auto ii: *this->_array->ptr)
+					/*for (auto ii: *this->_array->ptr)
 					{
 						str += "\t";
 						str += ::std::to_string(ii.first);
 						str += " = ";
 						str += ii.second.ToString() + "\n";
 					}
-					str += "]";
+					str += "]";*/
 					return str;
 				}
 			case ValueType::Object:
 				{
 					std::string str = "[Object " + std::to_string((int)this->_obj)+"]";
-					for (auto ii: *this->_obj->ptr)
+					/*for (auto ii: *this->_obj->ptr)
 					{
 						str += "\t";
 						str += ii.first;
 						str += " = ";
 						str += ii.second.ToString() + "\n";
 					}
-					str += "}";
+					str += "}";*/
 					return str;
 				}
 			case ValueType::Userdata:
@@ -197,8 +197,11 @@ namespace Jet
 				return Value(value+other.value);
 			case ValueType::String:
 				{
-					if (other.type == ValueType::String)
-						return Value((std::string(other.string.data) + std::string(this->string.data)).c_str());
+					//throw JetRuntimeException("Cannot Add A String");
+					//if (other.type == ValueType::String)
+						//return Value((std::string(other.string.data) + std::string(this->string.data)).c_str());
+					//else
+						//return Value((other.ToString() + std::string(this->string.data)).c_str());
 				}
 			}
 

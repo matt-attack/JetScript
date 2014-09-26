@@ -12,16 +12,64 @@
 #include <vector>
 #include <map>
 #include "Token.h"
+#include "JetInstructions.h"
 
 namespace Jet
 {
+	struct IntermediateInstruction
+	{
+		InstructionType type;
+		/*union
+		{
+			char* string;
+			double second;
+		};*/
+		char* string;
+		double first;
+		double second;
+
+		IntermediateInstruction(InstructionType type, const char* string, double num = 0)
+		{
+			if (string)
+			{
+				char* c = new char[strlen(string)+1];
+				strcpy(c, string);
+				this->string = c;
+			}
+			else 
+				this->string = 0;
+			//this->string = (char*)string;
+			this->type = type;
+			this->first = num;
+		}
+
+		IntermediateInstruction(InstructionType type, std::string string, double num = 0)
+		{
+			char* c = new char[string.length()+1];
+			strcpy(c, string.c_str());
+			this->string = c;
+			this->type = type;
+			this->second = num;
+		}
+
+		IntermediateInstruction(InstructionType type, double num = 0, double num2 = 0)
+		{
+			this->type = type;
+			this->first = num;
+			this->second = num2;
+			this->string = 0;
+		}
+	};
+
 	class BlockExpression;
 
 	class CompilerContext
 	{
 
 	public:
-		::std::string output;
+		::std::vector<IntermediateInstruction> out;
+
+		//::std::string output;
 		::std::map<::std::string, CompilerContext*> functions;
 
 		CompilerContext(void);
@@ -49,7 +97,7 @@ namespace Jet
 			this->uuid += c->uuid + 1;
 		}
 
-		std::string Compile(BlockExpression* expr);
+		std::vector<IntermediateInstruction> Compile(BlockExpression* expr);
 
 	private:
 		void Compile()
@@ -57,13 +105,15 @@ namespace Jet
 			//append functions to end here
 			for (auto fun: this->functions)
 			{
-				this->output += "\n\n";
+				//this->output += "\n\n";
 
 				fun.second->Compile();
 
 				//need to set var with the function name and location
 				this->FunctionLabel(fun.first);
-				this->output += fun.second->output;
+				for (auto ins: fun.second->out)
+					this->out.push_back(ins);
+				//this->output += fun.second->output;
 
 				//add code of functions recursively
 			}
@@ -107,60 +157,72 @@ namespace Jet
 		//stack operations
 		void Pop()
 		{
-			output += "Pop;\n";
+			out.push_back(IntermediateInstruction(InstructionType::Pop));
+			//output += "Pop;\n";
 		}
 
 		void Duplicate()
 		{
-			output += "Dup;\n";
+			out.push_back(IntermediateInstruction(InstructionType::Dup));
+			//output += "Dup;\n";
 		}
 
 		//load operations
 		void Null()
 		{
-			this->output += "LdNull;\n";
+			out.push_back(IntermediateInstruction(InstructionType::LdNull));
+			//this->output += "LdNull;\n";
 		}
 		void Number(double value)
 		{
+			out.push_back(IntermediateInstruction(InstructionType::LdNum, value));
 			char t[50];
 			sprintf(t, "LdNum %lf;\n", value);
-			this->output += t;
+			//this->output += t;
 		}
 
 		void String(std::string string)
 		{
-			this->output += "LdStr '"+string+"';\n";
+			out.push_back(IntermediateInstruction(InstructionType::LdStr, string.c_str()));
+			//this->output += "LdStr '"+string+"';\n";
 		}
 
 		void JumpFalse(const char* pos)
 		{
-			char t[50];
-			sprintf(t, "JmpFalse %s;\n", pos);
-			this->output += t;
+			out.push_back(IntermediateInstruction(InstructionType::JumpFalse, pos));
+			//char t[50];
+			//sprintf(t, "JmpFalse %s;\n", pos);
+			//this->output += t;
 		}
 
 		void JumpTrue(const char* pos)
 		{
-			char t[50];
+			out.push_back(IntermediateInstruction(InstructionType::JumpTrue, pos));
+			/*char t[50];
 			sprintf(t, "JmpTrue %s;\n", pos);
-			this->output += t;
+			this->output += t;*/
 		}
 
 		void Jump(const char* pos)
 		{
-			char t[50];
+			out.push_back(IntermediateInstruction(InstructionType::Jump, pos));
+			/*char t[50];
 			sprintf(t, "Jmp %s;\n", pos);
-			this->output += t;
+			this->output += t;*/
 		}
 
 		void FunctionLabel(std::string name)
 		{
-			this->output += "func " + name + ":\n";
+			out.push_back(IntermediateInstruction(InstructionType::Function, name));
+
+			//this->output += "func " + name + ":\n";
 		}
 
 		void Label(std::string name)
 		{
-			this->output += name + ":\n";
+			out.push_back(IntermediateInstruction(InstructionType::Label, name));
+
+			//this->output += name + ":\n";
 		}
 
 		void Store(std::string variable)
@@ -176,15 +238,17 @@ namespace Jet
 					{
 						//printf("We found storing of a local var: %s at level %d\n", variable.c_str(), ptr->level);
 						//exit the loops we found it
-						this->output += ".local " + variable + " " + ::std::to_string(i) + ";\n";
-						this->output += "LStore " + ::std::to_string(i) + " " + ::std::to_string(ptr->level) + ";\n";
+						//this->output += ".local " + variable + " " + ::std::to_string(i) + ";\n";
+						out.push_back(IntermediateInstruction(InstructionType::LStore, i, ptr->level));
+						//this->output += "LStore " + ::std::to_string(i) + " " + ::std::to_string(ptr->level) + ";\n";
 						return;
 					}
 				}
 				if (ptr)
 					ptr = ptr->previous;
 			}
-			this->output += "Store " + variable + ";\n";
+			out.push_back(IntermediateInstruction(InstructionType::Store, variable));
+			//this->output += "Store " + variable + ";\n";
 		}
 
 		void StoreLocal(std::string variable)
@@ -208,62 +272,74 @@ namespace Jet
 						//printf("We found loading of a local var: %s at level %d\n", variable.c_str(), ptr->level);
 						//exit the loops we found it
 						//comment/debug info
-						this->output += ".local " + variable + " " + ::std::to_string(i) + ";\n";
-						this->output += "LLoad " + ::std::to_string(i) +" " + ::std::to_string(ptr->level) + ";\n";
+						//this->output += ".local " + variable + " " + ::std::to_string(i) + ";\n";
+						out.push_back(IntermediateInstruction(InstructionType::LLoad, i, ptr->level));
+						//this->output += "LLoad " + ::std::to_string(i) +" " + ::std::to_string(ptr->level) + ";\n";
 						return;
 					}
 				}
 				if (ptr)
 					ptr = ptr->previous;
 			}
-			this->output += "Load " + variable + ";\n";
+			out.push_back(IntermediateInstruction(InstructionType::Load, variable));
+			//this->output += "Load " + variable + ";\n";
 		}
 
 
 		void LoadFunction(::std::string name)
 		{
-			this->output += "LdFn " + name + ";\n";
+			out.push_back(IntermediateInstruction(InstructionType::LoadFunction, name));
+			//this->output += "LdFn " + name + ";\n";
 		}
 
 		void Call(::std::string function, unsigned int args)
 		{
-			this->output += "Call " + function + " " + ::std::to_string(args) + ";\n";
+			out.push_back(IntermediateInstruction(InstructionType::Call, function, args));
+			//this->output += "Call " + function + " " + ::std::to_string(args) + ";\n";
 		}
 
 		void ECall(unsigned int args)
 		{
-			this->output += "ECall " + ::std::to_string(args) + ";\n";
+			out.push_back(IntermediateInstruction(InstructionType::ECall, args));
+			//this->output += "ECall " + ::std::to_string(args) + ";\n";
 		}
 
 		void LoadIndex(const char* index = 0)
 		{
-			if (index)
+			out.push_back(IntermediateInstruction(InstructionType::LoadAt, index));
+
+			/*if (index)
 				this->output += "LoadAt '"+std::string(index)+"';\n";
 			else
-				this->output += "LoadAt;\n";
+				this->output += "LoadAt;\n";*/
 		}
 
 		void StoreIndex(const char* index = 0)
 		{
-			if (index)
+			out.push_back(IntermediateInstruction(InstructionType::StoreAt, index));
+
+			/*if (index)
 				this->output += "StoreAt '"+std::string(index)+"';\n";
 			else
-				this->output += "StoreAt;\n";
+				this->output += "StoreAt;\n";*/
 		}
 
 		void NewArray(unsigned int number)
 		{
-			this->output += "NewArray " + std::to_string(number) + ";\n";
+			out.push_back(IntermediateInstruction(InstructionType::NewArray, number));
+			//this->output += "NewArray " + std::to_string(number) + ";\n";
 		}
 
 		void NewObject(unsigned int number)
 		{
-			this->output += "NewObject " + std::to_string(number) + ";\n";
+			out.push_back(IntermediateInstruction(InstructionType::NewObject, number));
+			//this->output += "NewObject " + std::to_string(number) + ";\n";
 		}
 
 		void Return()
 		{
-			this->output += "Return;\n";
+			out.push_back(IntermediateInstruction(InstructionType::Return));
+			//this->output += "Return;\n";
 		}
 
 	private:

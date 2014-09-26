@@ -9,6 +9,7 @@
 
 #include "VMStack.h"
 #include "Parser.h"
+#include "JetInstructions.h"
 #include <Windows.h>
 
 namespace Jet
@@ -16,61 +17,6 @@ namespace Jet
 	typedef std::function<void(Jet::JetContext*,Jet::Value*,int)> JetFunction;
 #define JetBind(context, fun) 	auto temp__bind_##fun = [](Jet::JetContext* context,Jet::Value* args, int numargs) { context->Return(fun(args[0]));};context[#fun] = Jet::Value(temp__bind_##fun);
 	//void(*temp__bind_##fun)(Jet::JetContext*,Jet::Value*,int)> temp__bind_##fun = &[](Jet::JetContext* context,Jet::Value* args, int numargs) { context->Return(fun(args[0]));}; context[#fun] = &temp__bind_##fun;
-
-	static enum InstructionType
-	{
-		Add,
-		Mul,
-		Div,
-		Sub,
-		Modulus,
-
-		BAnd,
-		BOr,
-
-		Eq,
-		NotEq,
-		Lt,
-		Gt,
-
-		Incr,
-		Decr,
-
-		Dup,
-		Pop,
-
-		LdNum,
-		LdNull,
-		LdStr,
-		LoadFunction,
-
-		Jump,
-		JumpTrue,
-		JumpFalse,
-
-		NewArray,
-		NewObject,
-
-		Store,
-		Load,
-		//local vars
-		LStore,
-		LLoad,
-
-		Close,//closes a range of locals
-
-		//index functions
-		LoadAt,
-		StoreAt,
-
-		//these all work on the last value in the stack
-		EStore,
-		ELoad,
-		ECall,
-
-		Call,
-		Return
-	};
 
 	class JetRuntimeException
 	{
@@ -89,8 +35,9 @@ namespace Jet
 		union
 		{
 			double value2;
-			const char* string;
+			//const char* string;
 		};
+		const char* string;
 	};
 
 	//builtin function definitions
@@ -114,10 +61,10 @@ namespace Jet
 		//garbage collector stuff
 		::std::vector<GCVal<::std::map<int, Value>*>*> arrays;
 		::std::vector<GCVal<::std::map<std::string, Value>*>*> objects;
+		::std::vector<GCVal<char*>*> strings;
 
-		int labelposition;
-
-		CompilerContext compiler;
+		int labelposition;//used for keeping track in assembler
+		CompilerContext compiler;//root compiler context
 
 	public:
 		JetContext()
@@ -146,8 +93,9 @@ namespace Jet
 
 			for (auto ii: this->ins)
 			{
-				if (ii.instruction == InstructionType::LdStr || ii.instruction == InstructionType::StoreAt || ii.instruction == InstructionType::LoadAt)
-					delete[] ii.string;
+				//issue here
+				//if (ii.instruction == InstructionType::LdStr || ii.instruction == InstructionType::StoreAt || ii.instruction == InstructionType::LoadAt)
+				delete[] ii.string;
 			}
 		}
 
@@ -165,14 +113,19 @@ namespace Jet
 
 		Value Script(const char* code)//compiles, assembles and executes the script
 		{
-			const char* asmb = this->Compile(code);
+			auto asmb = this->Compile(code);
+			//this->ins.clear();
+			//this->labelposition = 0;
 			Value v = this->Assemble(asmb);
-			delete[] asmb;
+			//this->labelposition = 0;
+			//this->ins.clear();
+			//v = this->Assemble(asmb);
+			//delete[] asmb;
 			return v;
 		}
 
 		//compiles source code to ASM for the VM to read in
-		const char* Compile(const char* code);
+		std::vector<IntermediateInstruction> Compile(const char* code);
 
 		class StackFrame
 		{
@@ -196,335 +149,126 @@ namespace Jet
 			}
 		};
 
-		//puts compiled code into the VM and runs any globals
-		Value Assemble(const char* code)//takes in assembly code for execution
+		Value Assemble(const std::vector<IntermediateInstruction>& code)
 		{
 			int startptr = this->ins.size();
 			INT64 start, rate, end;
 			QueryPerformanceFrequency( (LARGE_INTEGER *)&rate );
 			QueryPerformanceCounter( (LARGE_INTEGER *)&start );
 
-			//O(2n) complexity
-			const char* tmp = code;
-			//this loop subs constant string names for integer var array indices and reads in labels
-			while(*code != 0)
+			//implement me for supa speed
+			for (auto inst: code)
 			{
-				if (*code == '\n' && *(code+1) == 0)
-					break;
-
-				char instruction[40];
-				char name[40];
-				sscanf(code, "%s %s", instruction, name);
-
-				if (instruction[0] == '.')
+				switch (inst.type)
 				{
-					//comment/debug info
-				}
-				else if (instruction[strlen(instruction)-1] == ':')//its a label
-				{
-					//just label
-					instruction[strlen(instruction)-1] = 0;
-					if (labels.find(instruction) == labels.end())
-						labels[instruction] = labelposition;
-					else
+				case InstructionType::Comment:
 					{
-						printf("ERROR: Duplicate Label Name: %s\n", instruction);
+						break;
 					}
-				}
-				else if (strncmp(instruction, "func", 5) == 0 && name[strlen(name)-1] == ':')
-				{
-					//look for function definitions
-					//need to push something about the function to variables somewhere, preferably in code
-
-					//it is function
-					name[strlen(name)-1] = 0;
-					if (functions.find(name) == functions.end())
-						functions[name] = labelposition;
-					else
+				case InstructionType::Function:
 					{
-						printf("ERROR: Duplicate Function Label Name: %s\n", name);
-					}
-				}
-				else
-				{
-					//check if its a variable
-					if (strcmp(instruction, "Store") == 0)
-					{
-						name[strlen(name)-1] = 0;
-						if (variables.find(name) == variables.end())
+						if (functions.find(inst.string) == functions.end())
+							functions[inst.string] = labelposition;
+						else
 						{
-							//add it
-							variables[name] = variables.size();
-							vars.push_back(Value());
+							printf("ERROR: Duplicate Function Label Name: %s\n", inst.string);
 						}
+						delete[] inst.string;
+						break;
 					}
-					else if (strcmp(instruction, "Load") == 0)
+				case InstructionType::Label:
 					{
-						name[strlen(name)-1] = 0;
-						if (variables.find(name) == variables.end())
-						{
-							//add it
-							variables[name] = variables.size();
-							vars.push_back(Value());
-						}
+						if (this->labels.find(inst.string) == labels.end())
+							this->labels[inst.string] = this->labelposition;
+						delete[] inst.string;
+						break;
 					}
-
-					//printf("Ins: %s at %d\n", instruction, labelposition);
-					labelposition++;
+				default:
+					{
+						this->labelposition++;
+					}
 				}
-
-				int str = 0;
-				while((*code != ';' && *code != ':') || str != 0) 
-				{
-					if (*code == '\'')
-						str = str ? 0 : 1;
-					code++;
-				}
-				code++;
 			}
 
-			code = tmp;
-			while(*code != 0)
+			for (auto inst: code)
 			{
-				if (*code == '\n' && *(code+1) == 0)
-					break;
-
-				char instruction[20];
-				double value;
-				sscanf(code, "%s %lf", instruction, &value);
-				if (instruction[strlen(instruction)-1] == ';')
+				switch (inst.type)
 				{
-					instruction[strlen(instruction)-1] = 0;
-				}
-				else if (instruction[strlen(instruction)-1] == ':')
-				{
-					while(*code != ';' && *code != ':') {code++;}
-					code++;
-					continue;
-				}
-
-				if (instruction[0] == '.')//am I a comment?
-				{
-					while(*code != ';' && *code != ':') {code++;}
-					code++;
-					continue;
-				}
-
-				Instruction in;
-				in.value = value;
-				in.value2 = 0;
-
-				if (strcmp(instruction, "LdNum") == 0)
-					in.instruction = InstructionType::LdNum;
-				else if (strcmp(instruction, "Add") == 0)
-					in.instruction = InstructionType::Add;
-				else if (strcmp(instruction, "Mul") == 0)
-					in.instruction = InstructionType::Mul;
-				else if (strcmp(instruction, "Div") == 0)
-					in.instruction = InstructionType::Div;
-				else if (strcmp(instruction, "Sub") == 0)
-					in.instruction = InstructionType::Sub;
-				else if (strcmp(instruction, "Mod") == 0)
-					in.instruction = InstructionType::Modulus;
-				else if (strcmp(instruction, "Decr") == 0)
-					in.instruction = InstructionType::Decr;
-				else if (strcmp(instruction, "Incr") == 0)
-					in.instruction = InstructionType::Incr;
-				else if (strcmp(instruction, "Eq") == 0)
-					in.instruction = InstructionType::Eq;
-				else if (strcmp(instruction, "NotEq") == 0)
-					in.instruction = InstructionType::NotEq;
-				else if (strcmp(instruction, "Dup") == 0)
-					in.instruction = InstructionType::Dup;
-				else if (strcmp(instruction, "Lt") == 0)
-					in.instruction = InstructionType::Lt;
-				else if (strcmp(instruction, "Gt") == 0)
-					in.instruction = InstructionType::Gt;
-				else if (strcmp(instruction, "Pop") == 0)
-					in.instruction = InstructionType::Pop;
-				else if (strcmp(instruction, "ECall") == 0)
-					in.instruction = InstructionType::ECall;
-				else if (strcmp(instruction, "LoadAt") == 0)
-				{
-					::std::string str;
-					const char* tmp = code+strlen(instruction)+1;
-					if (*(code + strlen(instruction)+1) == ' ')
+				case InstructionType::Comment:
 					{
-						if (*code == '\n')
-							tmp++;
-						const char* tmp2 = tmp+1;
-						while(*tmp2!= '\'') str+= *(tmp2++);
-						char* otmp = new char[str.length()+1];
-						strcpy(otmp, str.c_str());
-						//name[strlen(name)-1] = 0;
-						in.string = otmp;
+						break;
 					}
-					else
-						in.string = 0;
-					in.instruction = InstructionType::LoadAt;
-				}
-				else if (strcmp(instruction, "StoreAt") == 0)
-				{
-					::std::string str;
-					const char* tmp = code+strlen(instruction)+1;
-					if (*(code + strlen(instruction)+1) == ' ')
+				case InstructionType::Function:
 					{
-						if (*code == '\n')
-							tmp++;
-						const char* tmp2 = tmp+1;
-						while(*tmp2!= '\'') str+= *(tmp2++);
-						char* otmp = new char[str.length()+1];
-						strcpy(otmp, str.c_str());
-						//name[strlen(name)-1] = 0;
-						in.string = otmp;
+						/*if (functions.find(inst.string) == functions.end())
+							functions[inst.string] = labelposition;
+						else
+						{
+							printf("ERROR: Duplicate Function Label Name: %s\n", inst.string);
+						}*/
+						break;
 					}
-					else
-						in.string = 0;
-					in.instruction = InstructionType::StoreAt;
-				}
-				else if (strcmp(instruction, "NewArray") == 0)
-				{
-					int num;
-					sscanf(code, "%s %d", instruction, &num);
-					in.value = num;
-					in.instruction = InstructionType::NewArray;
-				}
-				else if (strcmp(instruction, "NewObject") == 0)
-				{
-					int num;
-					sscanf(code, "%s %d", instruction, &num);
-					in.value = num;
-					in.instruction = InstructionType::NewObject;
-				}
-				else if (strcmp(instruction, "BOR") == 0)
-					in.instruction = InstructionType::BOr;
-				else if (strcmp(instruction, "BAND") == 0)
-					in.instruction = InstructionType::BAnd;
-				else if (strcmp(instruction, "LdNull") == 0)
-					in.instruction = InstructionType::LdNum;
-				else if (strcmp(instruction, "LdStr") == 0)
-				{
-					::std::string str;
-					const char* tmp = code+strlen(instruction)+2;
-					if (*code == '\n')
-						tmp++;
-					const char* tmp2 = tmp;
-					while(*tmp2!= '\'') str+= *(tmp2++);
-					char* otmp = new char[str.length()+1];
-					strcpy(otmp, str.c_str());
-					//name[strlen(name)-1] = 0;
-					in.string = otmp;
-					in.instruction = InstructionType::LdStr;
-				}
-				else if (strcmp(instruction, "Jmp") == 0)
-				{
-					char name[50];
-					sscanf(code, "%s %s", instruction, name);
-					name[strlen(name)-1] = 0;
-					in.value = labels[name];
-					in.instruction = InstructionType::Jump;
-				}
-				else if (strcmp(instruction, "JmpTrue") == 0)
-				{
-					char name[50];
-					sscanf(code, "%s %s", instruction, name);
-					name[strlen(name)-1] = 0;
-					in.value = labels[name];
-					in.instruction = InstructionType::JumpTrue;
-				}
-				else if (strcmp(instruction, "JmpFalse") == 0)
-				{
-					char name[50];
-					sscanf(code, "%s %s", instruction, name);
-					name[strlen(name)-1] = 0;
-					in.value = labels[name];
-					in.instruction = InstructionType::JumpFalse;
-				}
-				else if (strcmp(instruction, "Store") == 0)
-				{
-					char name[50];
-					sscanf(code, "%s %s", instruction, name);
-					name[strlen(name)-1] = 0;
-					in.value = variables[name];
-					in.instruction = InstructionType::Store;
-				}
-				else if (strcmp(instruction, "Load") == 0)
-				{
-					char name[50];
-					sscanf(code, "%s %s", instruction, name);
-					name[strlen(name)-1] = 0;
-					in.value = variables[name];
-					in.instruction = InstructionType::Load;
-				}
-				else if (strcmp(instruction, "LStore") == 0)
-				{
-					int index, depth;
-					sscanf(code, "%s %d %d", instruction, &index, &depth);
-
-					in.value = index;
-					in.value2 = depth;
-					in.instruction = InstructionType::LStore;
-				}
-				else if (strcmp(instruction, "LLoad") == 0)
-				{
-					int index, depth;
-					sscanf(code, "%s %d %d", instruction, &index, &depth);
-
-					in.value = index;
-					in.value2 = depth;
-					in.instruction = InstructionType::LLoad;
-				}
-				else if (strcmp(instruction, "LdFn") == 0)
-				{
-					char name[50];
-					sscanf(code, "%s %s", instruction, name);
-					name[strlen(name)-1] = 0;
-					in.value = functions[name];
-					in.instruction = InstructionType::LoadFunction;
-				}
-				else if (strcmp(instruction, "Call") == 0)
-				{
-					char name[50]; unsigned int args = 0;
-					sscanf(code, "%s %s %d", instruction, name, &args);
-					name[strlen(name)] = 0;
-					//insert variable with function location
-					//check for native functions
-					if (variables.find(name) == variables.end())
+				case InstructionType::Label:
 					{
-						//add it
-						variables[name] = variables.size();
-						vars.push_back(0);
+						/*if (labels.find(inst.string) == labels.end())
+							labels[inst.string] = labelposition;
+						else
+						{
+							printf("ERROR: Duplicate Label Name: %s\n", inst.string);
+						}*/
+						break;
 					}
-					else if (vars[variables[name]].type != ValueType::Function && vars[variables[name]].type != ValueType::NativeFunction)
+				default:
 					{
-						//printf("Warning: Function name used as a variable name: %s\n", name);
+						Instruction ins;
+						ins.instruction = inst.type;
+						ins.string = inst.string;
+						ins.value = inst.first;
+						ins.value2 = inst.second;
+
+						if (inst.type == InstructionType::Store)
+						{
+							if (variables.find(inst.string) == variables.end())
+							{
+								//add it
+								variables[inst.string] = variables.size();
+								vars.push_back(Value());
+							}
+							ins.value = variables[inst.string];
+						}
+						else if (inst.type == InstructionType::Load)
+						{
+							if (variables.find(inst.string) == variables.end())
+							{
+								//add it
+								variables[inst.string] = variables.size();
+								vars.push_back(Value());
+							}
+							ins.value = variables[inst.string];
+						}
+						else if (inst.type == InstructionType::LoadFunction)
+						{
+							ins.value = functions[inst.string];
+						}
+						else if (inst.type == InstructionType::Call)
+						{
+							if (variables.find(inst.string) == variables.end())
+							{
+								//add it
+								variables[inst.string] = variables.size();
+								vars.push_back(Value());
+							}
+							//make sure to point to the right variable
+							ins.value = variables[inst.string];
+						}
+						else if (inst.type == InstructionType::Jump || inst.type == InstructionType::JumpFalse || inst.type == InstructionType::JumpTrue)
+						{
+							ins.value = labels[inst.string];
+						}
+
+						this->ins.push_back(ins);
 					}
-					in.value = variables[name];
-					in.value2 = args;
-
-					//ok, got to make the function here yo
-					in.instruction = InstructionType::Call;
 				}
-				else if (strcmp(instruction, "Return") == 0)
-				{
-					in.instruction = InstructionType::Return;
-				}
-				else if (strcmp(instruction, "func") != 0)
-				{
-					printf("unknown instruction!\n");
-				}
-
-				if (strcmp(instruction, "func") != 0)
-					ins.push_back(in);
-
-				int str = 0;
-				while((*code != ';' && *code != ':') || str != 0) 
-				{
-					if (*code == '\'')
-						str = str ? 0 : 1;
-					code++;
-				}
-				code++;
 			}
 
 			QueryPerformanceCounter( (LARGE_INTEGER *)&end );
@@ -594,7 +338,7 @@ namespace Jet
 		int fptr;
 		Value Execute(int iptr);
 
-	private:
+		//debug stuff
 		void StackTrace(int curiptr)
 		{
 			if (this->callstack.Peek() != 123456789)//dont do this if in native

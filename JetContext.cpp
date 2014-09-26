@@ -25,7 +25,7 @@ void Jet::print(JetContext* context,Value* args, int numargs)
 	printf("\n");
 };
 
-const char* JetContext::Compile(const char* code)
+std::vector<IntermediateInstruction> JetContext::Compile(const char* code)
 {
 	INT64 start, rate, end;
 	QueryPerformanceFrequency( (LARGE_INTEGER *)&rate );
@@ -39,7 +39,7 @@ const char* JetContext::Compile(const char* code)
 	//result->print();
 	//printf("\n\n");
 
-	std::string out = compiler.Compile(result);
+	std::vector<IntermediateInstruction> out = compiler.Compile(result);
 
 	delete result;
 
@@ -50,10 +50,7 @@ const char* JetContext::Compile(const char* code)
 
 	printf("Took %lf seconds to compile\n\n", dt);
 
-	char* nout = new char[out.size()+1];
-	out.copy(nout, out.size(), 0);
-	nout[out.size()] = 0;
-	return nout;
+	return std::move(out);
 }
 
 void JetContext::RunGC()
@@ -229,7 +226,7 @@ Value JetContext::Execute(int iptr)
 	QueryPerformanceFrequency( (LARGE_INTEGER *)&rate );
 	QueryPerformanceCounter( (LARGE_INTEGER *)&start );
 
-	//StackFrame frames[40];//max call depth
+	//frame pointer reset
 	fptr = 0;
 
 	try
@@ -599,13 +596,13 @@ Value JetContext::Execute(int iptr)
 		//generate call stack
 		this->StackTrace(iptr);
 
-		/*printf("\nLocals:\n");
+		printf("\nLocals:\n");
 		for (int i = 0; i < 2; i++)
 		{
 		Value v = frames[fptr].locals[i];
 		if (v.type >= ValueType(0))
 		printf("%d = %s\n", i, v.ToString().c_str());
-		}*/
+		}
 
 		printf("\nVariables:\n");
 		for (auto ii: variables)
@@ -636,7 +633,7 @@ Value JetContext::Execute(int iptr)
 
 	printf("Took %lf seconds to execute\n\n", dt);
 
-	this->fptr = -1;
+	this->fptr = -1;//set to invalid to indicate the the GC that we arent executing if it gets ran
 
 	/*printf("Variables:\n");
 	for (auto ii: variables)

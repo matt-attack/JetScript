@@ -137,6 +137,9 @@ namespace Jet
 
 		~ObjectExpression()
 		{
+			if (this->inits)
+				for (auto ii: *this->inits)
+					delete ii.second;
 			delete this->inits;
 		}
 
