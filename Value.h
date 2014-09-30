@@ -4,6 +4,7 @@
 #include <map>
 #include <functional>
 #include <string>
+#include <memory>
 
 namespace Jet
 {
@@ -25,8 +26,9 @@ namespace Jet
 
 	typedef GCVal<std::map<std::string, Value>*> _JetObject; 
 	typedef GCVal<std::map<int, Value>*> _JetArray; 
-	typedef void(*_JetNativeFunc)(JetContext*,Value*, int);///*std::function<void(JetContext*,Value*,int)>*/ _JetNativeFunc;
-
+	typedef void(*_JetNativeFunc)(JetContext*,Value*, int);
+	//typedef std::function<void(JetContext*,Value*,int)> _JetNativeFunc;
+	
 	enum class ValueType
 	{
 		Number = 0,
@@ -113,13 +115,7 @@ namespace Jet
 			ptr = pos;
 		}
 
-		/*Value(std::function<void(JetContext*, Value*, int)>* ptr)
-		{
-			type = ValueType::NativeFunction;
-			func = *a;
-		}*/
-
-		Value(void* userdata)
+		explicit Value(void* userdata)
 		{
 			this->type = ValueType::Userdata;
 			this->object = userdata;

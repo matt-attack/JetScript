@@ -229,6 +229,12 @@ Value JetContext::Execute(int iptr)
 	//frame pointer reset
 	fptr = 0;
 
+	callstack.Push(123456789);//bad value to get it to return;
+	unsigned int startcallstack = this->callstack.size();
+	//this->callstack.Push(iptr);
+	//callstack.Push(123456789);//bad value to get it to return;
+			
+
 	try
 	{
 		int max = ins.size();
@@ -432,6 +438,8 @@ Value JetContext::Execute(int iptr)
 						{
 						stack.Pop();
 						}*/
+						//ok fix this to be cleaner and resolve stack printing
+						//should just push a value to indicate that we are in a native function call
 						//fixme this stuff is baaaad
 						callstack.Push(iptr);
 						callstack.Push(123456789);
@@ -488,10 +496,10 @@ Value JetContext::Execute(int iptr)
 			case InstructionType::Return:
 				{
 					//get iptr from stack
-					if (callstack.size() == 1)
-						iptr = 55555555;
-					else
-						iptr = callstack.Pop();
+					//if (callstack.size() == 1)
+					//iptr = 55555555;
+					//else
+					iptr = callstack.Pop();
 
 					fptr--;
 					break;
@@ -599,9 +607,9 @@ Value JetContext::Execute(int iptr)
 		printf("\nLocals:\n");
 		for (int i = 0; i < 2; i++)
 		{
-		Value v = frames[fptr].locals[i];
-		if (v.type >= ValueType(0))
-		printf("%d = %s\n", i, v.ToString().c_str());
+			Value v = frames[fptr].locals[i];
+			if (v.type >= ValueType(0))
+				printf("%d = %s\n", i, v.ToString().c_str());
 		}
 
 		printf("\nVariables:\n");
@@ -609,6 +617,9 @@ Value JetContext::Execute(int iptr)
 		{
 			printf("%s = %s\n", ii.first.c_str(), vars[ii.second].ToString().c_str());
 		}
+
+		//ok, need to properly roll back callstack
+		this->callstack.QuickPop(this->callstack.size()-startcallstack);
 	}
 	catch(...)
 	{
@@ -623,8 +634,8 @@ Value JetContext::Execute(int iptr)
 		}
 	}
 
-	if (callstack.size() > 0)
-		callstack.Pop();
+	//if (callstack.size() > 0)
+		//callstack.Pop();
 
 	QueryPerformanceCounter( (LARGE_INTEGER *)&end );
 

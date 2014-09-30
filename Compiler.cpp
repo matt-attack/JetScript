@@ -86,72 +86,33 @@ bool CompilerContext::RegisterLocal(std::string name)
 void CompilerContext::BinaryOperation(TokenType operation)
 {
 	if (operation == TokenType::Plus || operation == TokenType::AddAssign)
-	{
 		this->out.push_back(IntermediateInstruction(InstructionType::Add));
-		//output += "Add;\n";
-	}
 	else if (operation == TokenType::Asterisk || operation == TokenType::MultiplyAssign)
-	{
 		this->out.push_back(IntermediateInstruction(InstructionType::Mul));
-		//output += "Mul;\n";
-	}
 	else if (operation == TokenType::Minus || operation == TokenType::SubtractAssign)
-	{
 		this->out.push_back(IntermediateInstruction(InstructionType::Sub));
-		//output += "Sub;\n";
-	}
 	else if (operation == TokenType::Slash || operation == TokenType::DivideAssign)
-	{
 		this->out.push_back(IntermediateInstruction(InstructionType::Div));
-		//output += "Div;\n";
-	}
 	else if (operation == TokenType::Modulo)
-	{
 		this->out.push_back(IntermediateInstruction(InstructionType::Modulus));
-		//output += "Mod;\n";
-	}
 	else if (operation == TokenType::Equals)
-	{
 		this->out.push_back(IntermediateInstruction(InstructionType::Eq));
-		//output += "Eq;\n";
-	}
 	else if (operation == TokenType::NotEqual)
-	{
 		this->out.push_back(IntermediateInstruction(InstructionType::NotEq));
-		//output += "NotEq;\n";
-	}
 	else if (operation == TokenType::LessThan)
-	{
 		this->out.push_back(IntermediateInstruction(InstructionType::Lt));
-		//output += "Lt;\n";
-	}
 	else if (operation == TokenType::GreaterThan)
-	{
 		this->out.push_back(IntermediateInstruction(InstructionType::Gt));
-		//output += "Gt;\n";
-	}
 	else if (operation == TokenType::Or)
-	{
 		this->out.push_back(IntermediateInstruction(InstructionType::BOr));
-		//output += "BOR;\n";
-	}
 	else if (operation == TokenType::And)
-	{
 		this->out.push_back(IntermediateInstruction(InstructionType::BAnd));
-		//output += "BAND;\n";
-	}
 }
 
 void CompilerContext::UnaryOperation(TokenType operation)
 {
 	if (operation == TokenType::Increment)
-	{
 		this->out.push_back(IntermediateInstruction(InstructionType::Incr));
-		//output += "Incr;\n";
-	}
 	else if (operation == TokenType::Decrement)
-	{
 		this->out.push_back(IntermediateInstruction(InstructionType::Decr));
-		//output += "Decr;\n";
-	}
 }

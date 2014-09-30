@@ -278,7 +278,7 @@ namespace Jet
 
 			printf("Took %lf seconds to assemble\n\n", dt);
 
-			this->callstack.Push(123456789);
+			//this->callstack.Push(123456789);
 			Value temp =  this->Execute(startptr);//run the static code
 			if (this->callstack.size() > 0)
 				this->callstack.Pop();
@@ -318,7 +318,6 @@ namespace Jet
 			{
 				this->stack.Push(args[i]);
 			}
-			callstack.Push(123456789);//bad value to get it to return;
 			Value temp = this->Execute(iptr);
 			if (callstack.size() > 0)
 				callstack.Pop();
@@ -341,11 +340,15 @@ namespace Jet
 		//debug stuff
 		void StackTrace(int curiptr)
 		{
-			if (this->callstack.Peek() != 123456789)//dont do this if in native
-				this->callstack.Push(curiptr);//push on current location
-			while(this->callstack.size() > 0)
+			VMStack<unsigned int> tempcallstack = this->callstack.Copy();
+			//if (callstack.size() == 1 && this->callstack.Peek() == 123456789)//dont do this if in native
+				//tempcallstack.Push(curiptr);//push on current location
+			//else if (callstack.Peek() != 123456789)
+			tempcallstack.Push(curiptr);
+
+			while(tempcallstack.size() > 0)
 			{
-				auto top = this->callstack.Pop();
+				auto top = tempcallstack.Pop();
 				unsigned int greatest = 0;
 				std::string fun;
 				for (auto ii: this->functions)
@@ -357,15 +360,14 @@ namespace Jet
 						greatest = ii.second;
 					}
 				}
-				if (greatest == 0)
-					printf("{Entry Point+%d}\n", top);
-				else if (top == 123456789)
+				if (top == 123456789)
 					printf("{Native}\n");
+				else if (greatest == 0)//fixme
+					printf("{Entry Point+%d}\n", top);
 				else
 					printf("%s()+%d\n", fun.c_str(), top-greatest);
 			}
 		}
 	};
-
 }
 #endif

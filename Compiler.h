@@ -105,15 +105,12 @@ namespace Jet
 			//append functions to end here
 			for (auto fun: this->functions)
 			{
-				//this->output += "\n\n";
-
 				fun.second->Compile();
 
 				//need to set var with the function name and location
 				this->FunctionLabel(fun.first);
 				for (auto ins: fun.second->out)
 					this->out.push_back(ins);
-				//this->output += fun.second->output;
 
 				//add code of functions recursively
 			}
@@ -137,7 +134,6 @@ namespace Jet
 			s->previous = this->scope;
 			s->next = 0;
 			this->scope = s;
-			//printf("scope pushed\n");
 		}
 
 		void PopScope()
@@ -158,71 +154,51 @@ namespace Jet
 		void Pop()
 		{
 			out.push_back(IntermediateInstruction(InstructionType::Pop));
-			//output += "Pop;\n";
 		}
 
 		void Duplicate()
 		{
 			out.push_back(IntermediateInstruction(InstructionType::Dup));
-			//output += "Dup;\n";
 		}
 
 		//load operations
 		void Null()
 		{
 			out.push_back(IntermediateInstruction(InstructionType::LdNull));
-			//this->output += "LdNull;\n";
 		}
 		void Number(double value)
 		{
 			out.push_back(IntermediateInstruction(InstructionType::LdNum, value));
-			char t[50];
-			sprintf(t, "LdNum %lf;\n", value);
-			//this->output += t;
 		}
 
 		void String(std::string string)
 		{
 			out.push_back(IntermediateInstruction(InstructionType::LdStr, string.c_str()));
-			//this->output += "LdStr '"+string+"';\n";
 		}
 
 		void JumpFalse(const char* pos)
 		{
 			out.push_back(IntermediateInstruction(InstructionType::JumpFalse, pos));
-			//char t[50];
-			//sprintf(t, "JmpFalse %s;\n", pos);
-			//this->output += t;
 		}
 
 		void JumpTrue(const char* pos)
 		{
 			out.push_back(IntermediateInstruction(InstructionType::JumpTrue, pos));
-			/*char t[50];
-			sprintf(t, "JmpTrue %s;\n", pos);
-			this->output += t;*/
 		}
 
 		void Jump(const char* pos)
 		{
 			out.push_back(IntermediateInstruction(InstructionType::Jump, pos));
-			/*char t[50];
-			sprintf(t, "Jmp %s;\n", pos);
-			this->output += t;*/
 		}
 
 		void FunctionLabel(std::string name)
 		{
 			out.push_back(IntermediateInstruction(InstructionType::Function, name));
-
-			//this->output += "func " + name + ":\n";
 		}
 
 		void Label(std::string name)
 		{
 			out.push_back(IntermediateInstruction(InstructionType::Label, name));
-
-			//this->output += name + ":\n";
 		}
 
 		void Store(std::string variable)
@@ -240,7 +216,6 @@ namespace Jet
 						//exit the loops we found it
 						//this->output += ".local " + variable + " " + ::std::to_string(i) + ";\n";
 						out.push_back(IntermediateInstruction(InstructionType::LStore, i, ptr->level));
-						//this->output += "LStore " + ::std::to_string(i) + " " + ::std::to_string(ptr->level) + ";\n";
 						return;
 					}
 				}
@@ -248,14 +223,12 @@ namespace Jet
 					ptr = ptr->previous;
 			}
 			out.push_back(IntermediateInstruction(InstructionType::Store, variable));
-			//this->output += "Store " + variable + ";\n";
 		}
 
 		void StoreLocal(std::string variable)
 		{
 			//look up if I am local or global
 			this->Store(variable);
-			//this->output += "Store " + variable + ";\n";
 		}
 
 		//this loads locals and globals atm
@@ -274,7 +247,6 @@ namespace Jet
 						//comment/debug info
 						//this->output += ".local " + variable + " " + ::std::to_string(i) + ";\n";
 						out.push_back(IntermediateInstruction(InstructionType::LLoad, i, ptr->level));
-						//this->output += "LLoad " + ::std::to_string(i) +" " + ::std::to_string(ptr->level) + ";\n";
 						return;
 					}
 				}
@@ -282,64 +254,47 @@ namespace Jet
 					ptr = ptr->previous;
 			}
 			out.push_back(IntermediateInstruction(InstructionType::Load, variable));
-			//this->output += "Load " + variable + ";\n";
 		}
 
 
 		void LoadFunction(::std::string name)
 		{
 			out.push_back(IntermediateInstruction(InstructionType::LoadFunction, name));
-			//this->output += "LdFn " + name + ";\n";
 		}
 
 		void Call(::std::string function, unsigned int args)
 		{
 			out.push_back(IntermediateInstruction(InstructionType::Call, function, args));
-			//this->output += "Call " + function + " " + ::std::to_string(args) + ";\n";
 		}
 
 		void ECall(unsigned int args)
 		{
 			out.push_back(IntermediateInstruction(InstructionType::ECall, args));
-			//this->output += "ECall " + ::std::to_string(args) + ";\n";
 		}
 
 		void LoadIndex(const char* index = 0)
 		{
 			out.push_back(IntermediateInstruction(InstructionType::LoadAt, index));
-
-			/*if (index)
-				this->output += "LoadAt '"+std::string(index)+"';\n";
-			else
-				this->output += "LoadAt;\n";*/
 		}
 
 		void StoreIndex(const char* index = 0)
 		{
 			out.push_back(IntermediateInstruction(InstructionType::StoreAt, index));
-
-			/*if (index)
-				this->output += "StoreAt '"+std::string(index)+"';\n";
-			else
-				this->output += "StoreAt;\n";*/
 		}
 
 		void NewArray(unsigned int number)
 		{
 			out.push_back(IntermediateInstruction(InstructionType::NewArray, number));
-			//this->output += "NewArray " + std::to_string(number) + ";\n";
 		}
 
 		void NewObject(unsigned int number)
 		{
 			out.push_back(IntermediateInstruction(InstructionType::NewObject, number));
-			//this->output += "NewObject " + std::to_string(number) + ";\n";
 		}
 
 		void Return()
 		{
 			out.push_back(IntermediateInstruction(InstructionType::Return));
-			//this->output += "Return;\n";
 		}
 
 	private:

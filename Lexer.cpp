@@ -65,17 +65,53 @@ Token Lexer::Next()
 			}
 			else if (operators[str] == TokenType::String)
 			{
-				//Token n;
+				std::string txt;
+
 				int start = index;
 				while (index < text.length())
 				{
-					if (text.at(index) == '"')
-						break;
+					if (text.at(index) == '\\')
+					{
+						//handle escape sequences
+						char c = text[index+1];
+						switch(c)
+						{
+						case 'n':
+							{
+								txt.push_back('\n');
+								break;
+							}
+						case '\\':
+							{
+								txt.push_back('\\');
+								break;
+							}
+						case 't':
+							{
+								txt.push_back('t');
+								break;
+							}
+						case '"':
+							{
+								txt.push_back('"');
+								break;
+							}
+						default:
+							throw ParserException("test", this->linenumber, "Unhandled Escape Sequence!");
+						}
 
-					index++;
+						index += 2;
+					}
+					else if (text.at(index) == '"')
+					{
+						break;
+					}
+					else
+					{
+						txt.push_back(text[index++]);
+					}
 				}
 
-				std::string txt = text.substr(start, index-start);
 				index++;
 				return Token("test", linenumber, operators[str], txt);
 			}

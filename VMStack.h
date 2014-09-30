@@ -21,6 +21,17 @@ public:
 		//mem = new T[size];
 	}
 
+	VMStack<T> Copy()
+	{
+		VMStack<T> ns;
+		for (unsigned int i = 0; i < this->_size; i++)
+		{
+			ns.mem[i] = this->mem[i];
+		}
+		ns._size = this->_size;
+		return std::move(ns);
+	}
+
 	~VMStack()
 	{
 		//delete[] this->mem;
@@ -35,6 +46,8 @@ public:
 
 	void QuickPop(int times = 1)
 	{
+		if (this->_size < times)
+			printf("Fail");
 		_size -= times;
 	}
 
