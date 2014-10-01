@@ -640,7 +640,11 @@ namespace Jet
 			context->Label("loopstart_"+uuid);
 			this->condition->Compile(context);
 			context->JumpFalse(("loopend_"+uuid).c_str());
+
+			context->PushLoop("loopend_"+uuid, "loopstart_"+uuid);
 			this->block->Compile(context);
+			context->PopLoop();
+
 			context->Jump(("loopstart_"+uuid).c_str());
 			context->Label("loopend_"+uuid);
 		}
@@ -691,18 +695,21 @@ namespace Jet
 
 		void Compile(CompilerContext* context)
 		{
-			//context->output += "\n";
 			::std::string uuid = context->GetUUID();
 			this->initial->Compile(context);
 			context->Label("forloopstart_"+uuid);
 			this->condition->Compile(context);
 			context->JumpFalse(("forloopend_"+uuid).c_str());
+
+			context->PushLoop("forloopend_"+uuid, "forloopcontinue_"+uuid);
 			this->block->Compile(context);
+			context->PopLoop();
+
 			//this wont work if we do some kind of continue keyword unless it jumps to here
+			context->Label("forloopcontinue_"+uuid);
 			this->incr->Compile(context);
 			context->Jump(("forloopstart_"+uuid).c_str());
 			context->Label("forloopend_"+uuid);
-			//context->output += "\n";
 		}
 	};
 
@@ -959,6 +966,64 @@ namespace Jet
 				context->Number(-555555);//bad value to prevent use
 
 			context->Return();
+		}
+	};
+
+	class BreakExpression: public Expression
+	{
+	public:
+		BreakExpression()
+		{
+
+		}
+
+		~BreakExpression()
+		{
+
+		}
+
+		void SetParent(Expression* parent)
+		{
+			this->Parent = parent;
+		}
+
+		void print()
+		{
+
+		}
+
+		void Compile(CompilerContext* context)
+		{
+			context->Break();
+		}
+	};
+
+	class ContinueExpression: public Expression
+	{
+	public:
+		ContinueExpression()
+		{
+
+		}
+
+		~ContinueExpression()
+		{
+
+		}
+
+		void SetParent(Expression* parent)
+		{
+			this->Parent = parent;
+		}
+
+		void print()
+		{
+
+		}
+
+		void Compile(CompilerContext* context)
+		{
+			context->Continue();
 		}
 	};
 

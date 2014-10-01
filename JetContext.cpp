@@ -231,9 +231,6 @@ Value JetContext::Execute(int iptr)
 
 	callstack.Push(123456789);//bad value to get it to return;
 	unsigned int startcallstack = this->callstack.size();
-	//this->callstack.Push(iptr);
-	//callstack.Push(123456789);//bad value to get it to return;
-			
 
 	try
 	{
@@ -348,6 +345,30 @@ Value JetContext::Execute(int iptr)
 					Value two = stack.Pop();
 
 					if ((double)one < (double)two)
+						stack.Push(Value(1));
+					else
+						stack.Push(Value(0));
+
+					break;
+				}
+			case InstructionType::GtE:
+				{
+					Value one = stack.Pop();
+					Value two = stack.Pop();
+
+					if ((double)one <= (double)two)
+						stack.Push(Value(1));
+					else
+						stack.Push(Value(0));
+
+					break;
+				}
+			case InstructionType::LtE:
+				{
+					Value one = stack.Pop();
+					Value two = stack.Pop();
+
+					if ((double)one >= (double)two)
 						stack.Push(Value(1));
 					else
 						stack.Push(Value(0));
@@ -620,6 +641,9 @@ Value JetContext::Execute(int iptr)
 
 		//ok, need to properly roll back callstack
 		this->callstack.QuickPop(this->callstack.size()-startcallstack);
+
+		if (this->callstack.size() == 1 && this->callstack.Peek() == 123456789)
+			this->callstack.Pop();
 	}
 	catch(...)
 	{
@@ -632,10 +656,13 @@ Value JetContext::Execute(int iptr)
 		{
 			printf("%s = %s\n", ii.first.c_str(), vars[ii.second].ToString().c_str());
 		}
-	}
 
-	//if (callstack.size() > 0)
-		//callstack.Pop();
+		//ok, need to properly roll back callstack
+		this->callstack.QuickPop(this->callstack.size()-startcallstack);
+
+		if (this->callstack.size() == 1 && this->callstack.Peek() == 123456789)
+			this->callstack.Pop();
+	}
 
 	QueryPerformanceCounter( (LARGE_INTEGER *)&end );
 
@@ -644,7 +671,7 @@ Value JetContext::Execute(int iptr)
 
 	printf("Took %lf seconds to execute\n\n", dt);
 
-	this->fptr = -1;//set to invalid to indicate the the GC that we arent executing if it gets ran
+	this->fptr = -1;//set to invalid to indicate to the GC that we arent executing if it gets ran
 
 	/*printf("Variables:\n");
 	for (auto ii: variables)

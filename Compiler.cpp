@@ -103,6 +103,10 @@ void CompilerContext::BinaryOperation(TokenType operation)
 		this->out.push_back(IntermediateInstruction(InstructionType::Lt));
 	else if (operation == TokenType::GreaterThan)
 		this->out.push_back(IntermediateInstruction(InstructionType::Gt));
+	else if (operation == TokenType::LessThanEqual)
+		this->out.push_back(IntermediateInstruction(InstructionType::LtE));
+	else if (operation == TokenType::GreaterThanEqual)
+		this->out.push_back(IntermediateInstruction(InstructionType::GtE));
 	else if (operation == TokenType::Or)
 		this->out.push_back(IntermediateInstruction(InstructionType::BOr));
 	else if (operation == TokenType::And)

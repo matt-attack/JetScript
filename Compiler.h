@@ -16,13 +16,30 @@
 
 namespace Jet
 {
+	class CompilerException
+	{
+	public:
+		unsigned int line;
+		::std::string file;
+		::std::string reason;
+
+		CompilerException(std::string file, unsigned int line, std::string r)
+		{
+			this->line = line;
+			this->file = file;
+			reason = r;
+		};
+
+		const char *ShowReason() const { return reason.c_str(); }
+	};
+
 	struct IntermediateInstruction
 	{
 		InstructionType type;
 		/*union
 		{
-			char* string;
-			double second;
+		char* string;
+		double second;
 		};*/
 		char* string;
 		double first;
@@ -143,6 +160,39 @@ namespace Jet
 
 			delete this->scope->next;
 			this->scope->next = 0;
+		}
+
+		struct _LoopInfo
+		{
+			std::string Break;
+			std::string Continue;
+		};
+		std::vector<_LoopInfo> _loops;
+		void PushLoop(std::string Break, std::string Continue)
+		{
+			_LoopInfo i;
+			i.Break = Break;
+			i.Continue = Continue;
+			_loops.push_back(i);
+		}
+
+		void PopLoop()
+		{
+			_loops.pop_back();
+		}
+
+		void Break()
+		{
+			if (this->_loops.size() == 0)
+				throw new CompilerException("test", 0, "Cannot use break outside of a loop!");
+			this->Jump(_loops.back().Break.c_str());
+		}
+
+		void Continue()
+		{
+			if (this->_loops.size() == 0)
+				throw new CompilerException("test", 0, "Cannot use continue outside of a loop!");
+			this->Jump(_loops.back().Continue.c_str());
 		}
 
 		bool RegisterLocal(std::string name);//returns success

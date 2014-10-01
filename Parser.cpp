@@ -73,6 +73,8 @@ Parser::Parser(Lexer* l)
 	this->Register(TokenType::NotEqual, new BinaryOperatorParselet(2, false));
 	this->Register(TokenType::LessThan, new BinaryOperatorParselet(2, false));
 	this->Register(TokenType::GreaterThan, new BinaryOperatorParselet(2, false));
+	this->Register(TokenType::LessThanEqual, new BinaryOperatorParselet(2, false));
+	this->Register(TokenType::GreaterThanEqual, new BinaryOperatorParselet(2, false));
 
 	//math
 	this->Register(TokenType::Plus, new BinaryOperatorParselet(4, false));
@@ -97,6 +99,9 @@ Parser::Parser(Lexer* l)
 	this->Register(TokenType::Ret, new ReturnParselet());
 	this->Register(TokenType::For, new ForParselet());
 	this->Register(TokenType::Local, new LocalParselet());
+
+	this->Register(TokenType::Break, new BreakParselet());
+	this->Register(TokenType::Continue, new ContinueParselet());
 }
 
 Parser::~Parser()

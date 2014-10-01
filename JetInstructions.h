@@ -18,6 +18,8 @@ namespace Jet
 		NotEq,
 		Lt,
 		Gt,
+		LtE,
+		GtE,
 
 		Incr,
 		Decr,

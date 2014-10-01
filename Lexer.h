@@ -32,6 +32,7 @@ namespace Jet
 			operators["*"] = TokenType::Asterisk;
 			operators["/"] = TokenType::Slash;
 			operators["%"] = TokenType::Modulo;
+
 			operators["|"] = TokenType::Or;//or
 			operators["&"] = TokenType::And;//xor
 
@@ -67,6 +68,8 @@ namespace Jet
 			//comparisons
 			operators["<"] = TokenType::LessThan;
 			operators[">"] = TokenType::GreaterThan;
+			operators["<="] = TokenType::LessThanEqual;
+			operators[">="] = TokenType::GreaterThanEqual;
 
 			//special stuff
 			operators["<>"] = TokenType::Swap;
@@ -86,6 +89,8 @@ namespace Jet
 			keywords["return"] = TokenType::Ret;
 			keywords["for"] = TokenType::For;
 			keywords["local"] = TokenType::Local;
+			keywords["break"] = TokenType::Break;
+			keywords["continue"] = TokenType::Continue;
 
 			for (auto ii = operators.begin(); ii != operators.end(); ii++)
 			{
@@ -94,31 +99,12 @@ namespace Jet
 		}
 
 		Token Next();
+
 	private:
-		char ConsumeChar()
-		{
-			if (text.at(index) == '\n')
-				this->linenumber++;
-			return text.at(index++);
-		}
 
-		char MatchAndConsumeChar(char c)
-		{
-			char ch = text.at(index);
-
-			if (c == ch)
-			{
-				if (ch == '\n')
-					this->linenumber++;
-				index++;
-			}
-			return ch;
-		}
-
-		char PeekChar()
-		{
-			return text.at(index);
-		}
+		char ConsumeChar();
+		char MatchAndConsumeChar(char c);
+		char PeekChar();
 	};
 }
 #endif

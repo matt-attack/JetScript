@@ -44,6 +44,8 @@ namespace Jet
 
 		LessThan,
 		GreaterThan,
+		LessThanEqual,
+		GreaterThanEqual,
 
 		RightParen,
 		LeftParen,
@@ -63,6 +65,8 @@ namespace Jet
 		Function,
 		For,
 		Local,
+		Break,
+		Continue,
 
 		Swap,
 

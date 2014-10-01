@@ -160,3 +160,27 @@ Token Lexer::Next()
 	return Token("test", linenumber, TokenType::EOF, "EOF");
 }
 
+char Lexer::ConsumeChar()
+{
+	if (text.at(index) == '\n')
+		this->linenumber++;
+	return text.at(index++);
+}
+
+char Lexer::MatchAndConsumeChar(char c)
+{
+	char ch = text.at(index);
+
+	if (c == ch)
+	{
+		if (ch == '\n')
+			this->linenumber++;
+		index++;
+	}
+	return ch;
+}
+
+char Lexer::PeekChar()
+{
+	return text.at(index);
+}
