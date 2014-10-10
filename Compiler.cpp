@@ -119,4 +119,6 @@ void CompilerContext::UnaryOperation(TokenType operation)
 		this->out.push_back(IntermediateInstruction(InstructionType::Incr));
 	else if (operation == TokenType::Decrement)
 		this->out.push_back(IntermediateInstruction(InstructionType::Decr));
+	else if (operation == TokenType::Minus)
+		this->out.push_back(IntermediateInstruction(InstructionType::Negate));
 }

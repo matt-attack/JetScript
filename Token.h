@@ -60,8 +60,11 @@ namespace Jet
 		If,
 		ElseIf,
 		Else,
+
+		Colon,
 		Semicolon,
 		Comma,
+
 		Function,
 		For,
 		Local,

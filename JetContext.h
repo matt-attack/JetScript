@@ -10,6 +10,8 @@
 #include "VMStack.h"
 #include "Parser.h"
 #include "JetInstructions.h"
+#include "JetExceptions.h"
+
 #include <Windows.h>
 
 namespace Jet
@@ -17,16 +19,6 @@ namespace Jet
 	typedef std::function<void(Jet::JetContext*,Jet::Value*,int)> JetFunction;
 #define JetBind(context, fun) 	auto temp__bind_##fun = [](Jet::JetContext* context,Jet::Value* args, int numargs) { context->Return(fun(args[0]));};context[#fun] = Jet::Value(temp__bind_##fun);
 	//void(*temp__bind_##fun)(Jet::JetContext*,Jet::Value*,int)> temp__bind_##fun = &[](Jet::JetContext* context,Jet::Value* args, int numargs) { context->Return(fun(args[0]));}; context[#fun] = &temp__bind_##fun;
-
-	class JetRuntimeException
-	{
-	public:
-		std::string reason;
-		JetRuntimeException(std::string reason)
-		{
-			this->reason = reason;
-		}
-	};
 
 	struct Instruction
 	{
@@ -54,6 +46,16 @@ namespace Jet
 		::std::map<::std::string, unsigned int> functions;
 		::std::map<::std::string, unsigned int> variables;//mapping from string to location in vars array
 
+		//debug info
+		struct FunctionData
+		{
+			std::string file;
+			unsigned int line;
+			unsigned int ptr;
+			unsigned int locals;
+		};
+		::std::map<::std::string, FunctionData> dfunctions;
+
 		//actual data being worked on
 		::std::vector<Instruction> ins;
 		::std::vector<Value> vars;//where they are actually stored
@@ -62,19 +64,187 @@ namespace Jet
 		::std::vector<GCVal<::std::map<int, Value>*>*> arrays;
 		::std::vector<GCVal<::std::map<std::string, Value>*>*> objects;
 		::std::vector<GCVal<char*>*> strings;
+		::std::vector<_JetUserdata*> userdata;
+
+		::std::vector<char*> gcObjects;
 
 		int labelposition;//used for keeping track in assembler
 		CompilerContext compiler;//root compiler context
 
+		_JetObject string;
+		_JetObject Array;
+		_JetObject file;
 	public:
+
+		Value NewObject()
+		{
+			auto v = new _JetObject;
+			return Value(v);
+		}
+
+		Value NewUserdata(void* data, _JetObject* proto)
+		{
+			auto ud = new GCVal<std::pair<void*, _JetObject*>>(std::pair<void*, _JetObject*>(data, proto));
+			this->userdata.push_back(ud);
+			return Value(ud, proto);
+		}
+
+		Value NewString(char* string)
+		{
+			this->strings.push_back(new GCVal<char*>(string));
+			return Value(string);
+		}
+
+	private:
+
+		//must free with GCFree, pointer is a bit offset to leave room for the flag
+		template<class T> 
+		T* GCAllocate()
+		{
+#undef new
+			//need to call constructor
+			char* buf = new char[sizeof(T)+1];
+			this->gcObjects.push_back(buf);
+			new (buf+1) T();
+			return (T*)(buf+1);
+
+#ifndef DBG_NEW      
+#define DBG_NEW new ( _NORMAL_BLOCK , __FILE__ , __LINE__ )     
+#define new DBG_NEW   
+#endif
+		}
+
+		template<class T> 
+		T* GCAllocate2(unsigned int size)
+		{
+			return (T*)((new char[sizeof(T)+1])+1);
+		}
+
+		char* GCAllocate(unsigned int size)
+		{
+			//this leads to less indirection, and simplified cleanup
+			char* data = new char[size+1];//enough room for the flag
+			this->gcObjects.push_back(data);
+			return data+1;
+		}
+
+		//need to call destructor first
+		template<class T>
+		void GCFree(T* data)
+		{
+			data->~T();
+			delete[] (((char*)data)-1);
+		}
+
+		void GCFree(char* data)
+		{
+			delete[] (data-1);
+		}
+
+	public:
+
 		JetContext()
 		{
 			this->labelposition = 0;
 			this->fptr = -1;
 			stack = VMStack<Value>(500000);
-
+			//add more functions and junk
 			(*this)["print"] = print;
 			(*this)["gc"] = gc;
+			(*this)["setprototype"] = Value([](JetContext* context, Value* v, int args)
+			{
+				if (args != 2)
+					throw JetRuntimeException("Invalid Call, Improper Arguments!");
+
+				if (v->type == ValueType::Object && (v+1)->type == ValueType::Object)
+				{
+					Value val = *v;
+					val._obj.prototype = (v+1)->_obj._object;
+					context->Return(val);
+				}
+				else
+				{
+					throw JetRuntimeException("Improper arguments!");
+				}
+			});
+
+
+			this->file.ptr = new std::map<std::string, Value>;
+			(*file.ptr)["read"] = Value([](JetContext* context, Value* v, int args)
+			{
+				if (args != 2)
+					throw JetRuntimeException("Invalid number of arguments to read!");
+
+				char* out = new char[((int)v->value)+1];//context->GCAllocate((v)->value);
+				fread(out, 1, (int)(v)->value, (v+1)->GetUserdata<FILE>());
+				out[(int)(v)->value] = 0;
+				context->Return(context->NewString(out));
+			});
+			(*file.ptr)["write"] = Value([](JetContext* context, Value* v, int args)
+			{
+				if (args != 2)
+					throw JetRuntimeException("Invalid number of arguments to write!");
+
+				std::string str = v->ToString();
+				fwrite(str.c_str(), 1, str.length(), (v+1)->GetUserdata<FILE>());
+			});
+			//this function is called when the value is garbage collected
+			(*file.ptr)["_gc"] = Value([](JetContext* context, Value* v, int args)
+			{
+				fclose(v->GetUserdata<FILE>());
+			});
+
+
+			(*this)["fopen"] = Value([](JetContext* context, Value* v, int args)
+			{
+				if (args != 2)
+					throw JetRuntimeException("Invalid number of arguments to fopen!");
+
+				FILE* f = fopen(v->ToString().c_str(), (*(v+1)).ToString().c_str());
+				context->Return(context->NewUserdata(f, &context->file));
+			});
+
+			(*this)["fclose"] = Value([](JetContext* context, Value* v, int args)
+			{
+				if (args != 1)
+					throw JetRuntimeException("Invalid number of arguments to fclose!");
+				fclose(v->GetUserdata<FILE>());
+			});
+
+
+			//setup the string and array tables
+			this->string.ptr = new std::map<std::string, Value>;
+			(*this->string.ptr)["append"] = Value([](JetContext* context, Value* v, int args)
+			{
+				if (args == 2)
+					context->Return(Value("newstr"));
+				else
+					throw JetRuntimeException("bad append call!");
+			});
+			(*this->string.ptr)["length"] = Value([](JetContext* context, Value* v, int args)
+			{
+				if (args == 1)
+					context->Return(Value((double)strlen(v->_obj._string)));
+				else
+					throw JetRuntimeException("bad length call!");
+			});
+
+			this->Array.ptr = new std::map<std::string, Value>;
+			(*this->Array.ptr)["add"] = Value([](JetContext* context, Value* v, int args)
+			{
+				if (args == 2)
+					(*(v+1)->_obj._array->ptr)[(v+1)->_obj._array->ptr->size()] = *(v);
+				else
+					throw JetRuntimeException("Invalid add call!!");
+			});
+			(*this->Array.ptr)["size"] = Value([](JetContext* context, Value* v, int args)
+			{
+				//how do I get access to the array from here?
+				if (args == 1)
+					context->Return((int)v->_obj._array->ptr->size());
+				else
+					throw JetRuntimeException("Invalid size call!!");
+			});
 		};
 
 		~JetContext()
@@ -85,18 +255,38 @@ namespace Jet
 				delete ii;
 			}
 
+			for (auto ii: this->userdata)
+			{
+				if (ii->ptr.second)
+				{
+					Value ud = Value(ii, ii->ptr.second);
+					Value _gc = (*ii->ptr.second->ptr)["_gc"];
+					if (_gc.type == ValueType::NativeFunction)
+						_gc.func(this, &ud, 1);
+					else if (_gc.type != ValueType::Null)
+						throw JetRuntimeException("Not Implemented!");
+				}
+				delete ii;
+			}
+
 			for (auto ii: this->objects)
 			{
 				delete ii->ptr;
 				delete ii;
 			}
 
-			for (auto ii: this->ins)
+			for (auto ii: this->strings)
 			{
-				//issue here
-				//if (ii.instruction == InstructionType::LdStr || ii.instruction == InstructionType::StoreAt || ii.instruction == InstructionType::LoadAt)
-				delete[] ii.string;
+				delete ii->ptr;
+				delete ii;
 			}
+
+			for (auto ii: this->ins)
+				delete[] ii.string;
+
+			delete this->string.ptr;
+			delete this->Array.ptr;
+			delete this->file.ptr;
 		}
 
 		//allows assignment and reading of variables stored
@@ -170,9 +360,8 @@ namespace Jet
 						if (functions.find(inst.string) == functions.end())
 							functions[inst.string] = labelposition;
 						else
-						{
-							printf("ERROR: Duplicate Function Label Name: %s\n", inst.string);
-						}
+							throw JetRuntimeException("ERROR: Duplicate Function Label Name: %s\n" + std::string(inst.string));
+
 						delete[] inst.string;
 						break;
 					}
@@ -180,6 +369,8 @@ namespace Jet
 					{
 						if (this->labels.find(inst.string) == labels.end())
 							this->labels[inst.string] = this->labelposition;
+						else
+							throw JetRuntimeException("ERROR: Duplicate Label Name: %s\n" + std::string(inst.string));
 						delete[] inst.string;
 						break;
 					}
@@ -200,22 +391,10 @@ namespace Jet
 					}
 				case InstructionType::Function:
 					{
-						/*if (functions.find(inst.string) == functions.end())
-							functions[inst.string] = labelposition;
-						else
-						{
-							printf("ERROR: Duplicate Function Label Name: %s\n", inst.string);
-						}*/
 						break;
 					}
 				case InstructionType::Label:
 					{
-						/*if (labels.find(inst.string) == labels.end())
-							labels[inst.string] = labelposition;
-						else
-						{
-							printf("ERROR: Duplicate Label Name: %s\n", inst.string);
-						}*/
 						break;
 					}
 				default:
@@ -278,7 +457,6 @@ namespace Jet
 
 			printf("Took %lf seconds to assemble\n\n", dt);
 
-			//this->callstack.Push(123456789);
 			Value temp =  this->Execute(startptr);//run the static code
 			if (this->callstack.size() > 0)
 				this->callstack.Pop();
@@ -333,17 +511,14 @@ namespace Jet
 		}
 
 	private:
-		StackFrame frames[40];//max call depth
 		int fptr;
+		StackFrame frames[40];//max call depth
 		Value Execute(int iptr);
 
 		//debug stuff
 		void StackTrace(int curiptr)
 		{
 			VMStack<unsigned int> tempcallstack = this->callstack.Copy();
-			//if (callstack.size() == 1 && this->callstack.Peek() == 123456789)//dont do this if in native
-				//tempcallstack.Push(curiptr);//push on current location
-			//else if (callstack.Peek() != 123456789)
 			tempcallstack.Push(curiptr);
 
 			while(tempcallstack.size() > 0)

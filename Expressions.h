@@ -248,8 +248,10 @@ namespace Jet
 	{
 		Expression* left, *index;
 	public:
-		IndexExpression(Expression* left, Expression* index)
+		Token token;
+		IndexExpression(Expression* left, Expression* index, Token t)
 		{
+			this->token = t;
 			this->left = left;
 			this->index = index;
 		}
@@ -710,6 +712,85 @@ namespace Jet
 			this->incr->Compile(context);
 			context->Jump(("forloopstart_"+uuid).c_str());
 			context->Label("forloopend_"+uuid);
+		}
+	};
+
+	class ForEachExpression: public Expression
+	{
+		Token name, container;
+		ScopeExpression* block;
+	public:
+		ForEachExpression(Token name, Token container, ScopeExpression* block)
+		{
+			this->container = container;
+			this->block = block;
+			this->name = name;
+		}
+
+		~ForEachExpression()
+		{
+			delete this->block;
+		}
+
+		void SetParent(Expression* parent)
+		{
+			this->Parent = parent;
+			block->SetParent(this);
+		}
+
+		void print()
+		{
+			/*printf("while(");
+			initial->print();
+			printf("; ");
+			condition->print();
+			printf("; ");
+			incr->print();
+			printf(") {\n");
+			block->print();
+			printf("\n}\n");*/
+		}
+
+		void Compile(CompilerContext* context)
+		{
+			printf("hi");
+			auto uuid = context->GetUUID();
+			context->RegisterLocal(this->name.text);
+			context->RegisterLocal("_iter");
+
+			context->Load(this->container.text);
+			context->LoadIndex("getIterator");
+			context->ECall(0);
+			context->Store("_iter");
+			
+			context->Load(this->container.text);
+			context->LoadIndex("next");
+			context->ECall(0);
+			context->Store(this->name.text);
+			
+			context->Label("_foreachstart"+uuid);
+			context->Store(this->name.text);
+			context->PushLoop("_foreachend"+uuid, "_foreachstart"+uuid);
+			this->block->Compile(context);
+			context->PopLoop();
+
+			//context->Jump("_foreachstart"+uuid);
+			context->Label("_foreachend"+uuid);
+			/*::std::string uuid = context->GetUUID();
+			this->initial->Compile(context);
+			context->Label("forloopstart_"+uuid);
+			this->condition->Compile(context);
+			context->JumpFalse(("forloopend_"+uuid).c_str());
+
+			context->PushLoop("forloopend_"+uuid, "forloopcontinue_"+uuid);
+			this->block->Compile(context);
+			context->PopLoop();
+
+			//this wont work if we do some kind of continue keyword unless it jumps to here
+			context->Label("forloopcontinue_"+uuid);
+			this->incr->Compile(context);
+			context->Jump(("forloopstart_"+uuid).c_str());
+			context->Label("forloopend_"+uuid);*/
 		}
 	};
 

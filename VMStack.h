@@ -2,6 +2,8 @@
 #ifndef _VMSTACK
 #define _VMSTACK
 
+#include "JetExceptions.h"
+
 template<class T>
 class VMStack
 {
@@ -40,14 +42,14 @@ public:
 	T Pop()
 	{
 		if (_size == 0)
-			printf("fail");
+			throw JetRuntimeException("Tried to pop empty stack!");////Jetprintf("fail");
 		return mem[--_size];
 	}
 
 	void QuickPop(int times = 1)
 	{
 		if (this->_size < times)
-			printf("Fail");
+			throw JetRuntimeException("Tried to pop empty stack!");//printf("Fail");
 		_size -= times;
 	}
 

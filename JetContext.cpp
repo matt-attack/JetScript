@@ -58,15 +58,19 @@ void JetContext::RunGC()
 	INT64 start, rate, end;
 	QueryPerformanceFrequency( (LARGE_INTEGER *)&rate );
 	QueryPerformanceCounter( (LARGE_INTEGER *)&start );
+
+	for (auto ii: this->gcObjects)
+		ii[0] = 0;
+
+
 	for (auto& ii: this->objects)
-	{
 		ii->flag = false;
-	}
 
 	for (auto& ii: this->arrays)
-	{
 		ii->flag = false;
-	}
+
+	for (auto& ii: this->userdata)
+		ii->flag = false;
 
 	//mark stack and locals here
 	if (this->fptr >= 0)
@@ -78,68 +82,12 @@ void JetContext::RunGC()
 			{
 				if (this->frames[i].locals[l].type == ValueType::Object)
 				{
-					this->frames[i].locals[l]._obj->flag = true;
+					this->frames[i].locals[l]._obj._object->flag = true;
 					//printf("marked a local!\n");
 				}
 			}
 			//printf("1 stack frame\n");
 		}
-	}
-
-	//check locals here
-	if (this->stack.size() > 0)
-	{
-		int loc = this->stack.size();
-		for (int i = 0; i < loc; i++)
-		{
-			if (this->stack.mem[i].type == ValueType::Object)
-			{
-				std::stack<Value*> stack;
-				stack.push(&this->stack.mem[i]);
-				while( !stack.empty() ) {
-					auto o = stack.top();
-					stack.pop();
-					if (o->type == ValueType::Object)
-					{
-						o->_obj->flag = true;
-
-						for (auto ii: *o->_obj->ptr)
-							stack.push(&ii.second);
-					}
-					else if (o->type == ValueType::Array)
-					{
-						o->_array->flag = true;
-
-						for (auto ii: *o->_array->ptr)
-							stack.push(&ii.second);
-					}
-				}
-			}
-			else if (this->stack.mem[i].type == ValueType::Array)
-			{
-				std::stack<Value*> stack;
-				stack.push(&this->stack.mem[i]);
-				while( !stack.empty() ) {
-					auto o = stack.top();
-					stack.pop();
-					if (o->type == ValueType::Object)
-					{
-						o->_obj->flag = true;
-
-						for (auto ii: *o->_obj->ptr)
-							stack.push(&ii.second);
-					}
-					else if (o->type == ValueType::Array)
-					{
-						o->_array->flag = true;
-
-						for (auto ii: *o->_array->ptr)
-							stack.push(&ii.second);
-					}
-				}
-			}
-		}
-		printf("there was stack left");
 	}
 
 	for (auto v: this->vars)
@@ -151,17 +99,40 @@ void JetContext::RunGC()
 			stack.pop();
 			if (o->type == ValueType::Object)
 			{
-				o->_obj->flag = true;
+				if (o->_obj.prototype)
+				{
+					o->_obj.prototype->flag = true;
 
-				for (auto ii: *o->_obj->ptr)
+					for (auto ii: *o->_obj.prototype->ptr)
+						stack.push(&ii.second);
+				}
+
+				o->_obj._object->flag = true;
+				for (auto ii: *o->_obj._object->ptr)
 					stack.push(&ii.second);
 			}
 			else if (o->type == ValueType::Array)
 			{
-				o->_array->flag = true;
+				o->_obj._array->flag = true;
 
-				for (auto ii: *o->_array->ptr)
+				for (auto ii: *o->_obj._array->ptr)
 					stack.push(&ii.second);
+			}
+			else if (o->type == ValueType::String)
+			{
+
+			}
+			else if (o->type == ValueType::Userdata)
+			{
+				o->_obj._userdata->flag = true;
+
+				if (o->_obj.prototype)
+				{
+					o->_obj.prototype->flag = true;
+
+					for (auto ii: *o->_obj.prototype->ptr)
+						stack.push(&ii.second);
+				}
 			}
 		}
 	}
@@ -190,6 +161,34 @@ void JetContext::RunGC()
 		}
 	}
 
+	//ok, need to be able to know the type of a gcobject, or just that its userdata
+	for (auto& ii: this->gcObjects)
+	{
+		if (ii[0] == 0)
+		{
+			//printf("gcObject needs deletion");
+		}
+	}
+
+	for (auto& ii: this->userdata)
+	{
+		if (!ii->flag)
+		{
+			//printf("userdata needs deletion!");
+			if (ii->ptr.second)
+			{
+				Value ud = Value(ii, ii->ptr.second);
+				Value _gc = (*ii->ptr.second->ptr)["_gc"];
+				if (_gc.type == ValueType::NativeFunction)
+					_gc.func(this, &ud, 1);
+				else if (_gc.type != ValueType::Null)
+					throw JetRuntimeException("Not Implemented!");
+			}
+			delete ii;
+			ii = 0;
+		}
+	}
+
 	//compact object list here
 	auto list = std::move(this->objects);
 	this->objects.clear();
@@ -209,6 +208,17 @@ void JetContext::RunGC()
 		if (ii)
 		{
 			this->arrays.push_back(ii);
+		}
+	}
+
+	//compact userdata list here
+	auto udlist = std::move(this->userdata);
+	this->userdata.clear();
+	for (auto ii: udlist)
+	{
+		if (ii)
+		{
+			this->userdata.push_back(ii);
 		}
 	}
 
@@ -301,6 +311,12 @@ Value JetContext::Execute(int iptr)
 					Value one = stack.Pop();
 
 					stack.Push(one-Value(1));
+					break;
+				}
+			case InstructionType::Negate:
+				{
+					Value one = stack.Pop();
+					stack.Push(-one.value);
 					break;
 				}
 			case InstructionType::Eq:
@@ -439,6 +455,8 @@ Value JetContext::Execute(int iptr)
 				}
 			case InstructionType::Call:
 				{
+					//need to store how many args each function takes in the bytecode
+					//change function calls to automatically push args into locals, and take account for extra/missing values
 					if (vars[(int)in.value].type == ValueType::Function)
 					{
 						//store iptr on call stack
@@ -447,6 +465,14 @@ Value JetContext::Execute(int iptr)
 
 						fptr++;
 						callstack.Push(iptr);
+						
+						//set all the locals
+						//also need to push nils
+						for (int i = (int)in.value2-1; i >= 0; i--)
+						{
+							frames[fptr].Set(stack.Pop(), i, 0);
+						}
+
 						//go to function
 						iptr = (int)vars[(int)in.value].ptr-1;//in.value-1;
 					}
@@ -492,8 +518,8 @@ Value JetContext::Execute(int iptr)
 				}
 			case InstructionType::ECall:
 				{
-					Value fun = stack.Pop();
-
+					Value fun = stack.Pop();//mem[stack.size()-(unsigned int)in.value];//stack.Pop();
+					//maybe put args after function?
 					if (fun.type == ValueType::Function)
 					{
 						if (fptr > 38)
@@ -504,9 +530,29 @@ Value JetContext::Execute(int iptr)
 						//go to function
 						iptr = fun.ptr-1;//in.value-1;
 					}
-					else if (vars[(int)in.value].type == ValueType::NativeFunction)
+					else if (fun.type == ValueType::NativeFunction)
 					{
-						throw JetRuntimeException("Not Implemented!!!");
+						unsigned int args = (unsigned int)in.value;
+						Value* tmp = &stack.mem[stack.size()-args];//new Value[(unsigned int)in.value2];
+						stack.QuickPop(args);//pop off args
+						/*for (int i = ((int)in.value2)-1; i >= 0; i--)
+						{
+						stack.Pop();
+						}*/
+						//ok fix this to be cleaner and resolve stack printing
+						//should just push a value to indicate that we are in a native function call
+						//fixme this stuff is baaaad
+						callstack.Push(iptr);
+						callstack.Push(123456789);
+						//to return something, push it to the stack
+						int s = stack.size();
+						(*fun.func)(this,tmp,args);
+
+						callstack.QuickPop(2);
+						if (stack.size() == s)//we didnt return anything
+							stack.Push(Value());//return null
+						//delete[] tmp;
+						//throw JetRuntimeException("Not Implemented!!!");
 					}
 					else
 					{
@@ -516,10 +562,6 @@ Value JetContext::Execute(int iptr)
 				}
 			case InstructionType::Return:
 				{
-					//get iptr from stack
-					//if (callstack.size() == 1)
-					//iptr = 55555555;
-					//else
 					iptr = callstack.Pop();
 
 					fptr--;
@@ -546,7 +588,7 @@ Value JetContext::Execute(int iptr)
 						//if (loc.type == ValueType::Array)
 						//(*loc._array->ptr)[(int)index] = val;
 						if (loc.type == ValueType::Object)
-							(*loc._obj->ptr)[in.string] = val;
+							(*loc._obj._object->ptr)[in.string] = val;
 						else
 							throw JetRuntimeException("Could not index a non array/object value!");
 					}
@@ -557,9 +599,9 @@ Value JetContext::Execute(int iptr)
 						Value val = stack.Pop();	
 
 						if (loc.type == ValueType::Array)
-							(*loc._array->ptr)[(int)index] = val;
+							(*loc._obj._array->ptr)[(int)index] = val;
 						else if (loc.type == ValueType::Object)
-							(*loc._obj->ptr)[index.ToString()] = val;
+							(*loc._obj._object->ptr)[index.ToString()] = val;
 						else
 							throw JetRuntimeException("Could not index a non array/object value!");
 					}
@@ -573,7 +615,21 @@ Value JetContext::Execute(int iptr)
 						Value loc = stack.Pop();
 
 						if (loc.type == ValueType::Object)
-							stack.Push((*loc._obj->ptr)[in.string]);
+						{
+							Value v = (*loc._obj._object->ptr)[in.string];
+
+							//check meta table
+							if (v.type == ValueType::Null && v._obj.prototype)
+								v = (*loc._obj.prototype->ptr)[in.string];
+
+							stack.Push(v);
+						}
+						else if (loc.type == ValueType::String)
+							stack.Push((*this->string.ptr)[in.string]);
+						else if (loc.type == ValueType::Array)
+							stack.Push((*this->Array.ptr)[in.string]);
+						else if (loc.type == ValueType::Userdata)
+							stack.Push((*loc._obj.prototype->ptr)[in.string]);
 						else
 							throw JetRuntimeException("Could not index a non array/object value!");
 					}
@@ -583,9 +639,9 @@ Value JetContext::Execute(int iptr)
 						Value loc = stack.Pop();
 
 						if (loc.type == ValueType::Array)
-							stack.Push((*loc._array->ptr)[(int)index]);
+							stack.Push((*loc._obj._array->ptr)[(int)index]);
 						else if (loc.type == ValueType::Object)
-							stack.Push((*loc._obj->ptr)[index.ToString()]);
+							stack.Push((*loc._obj._object->ptr)[index.ToString()]);
 						else
 							throw JetRuntimeException("Could not index a non array/object value!");
 					}
@@ -644,6 +700,8 @@ Value JetContext::Execute(int iptr)
 
 		if (this->callstack.size() == 1 && this->callstack.Peek() == 123456789)
 			this->callstack.Pop();
+
+		//should rethrow here or pass to a handler or something
 	}
 	catch(...)
 	{

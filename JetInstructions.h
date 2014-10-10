@@ -11,6 +11,8 @@ namespace Jet
 		Sub,
 		Modulus,
 
+		Negate,
+
 		BAnd,
 		BOr,
 

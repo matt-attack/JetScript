@@ -7,14 +7,13 @@ using namespace Jet;
 
 Expression* NameParselet::parse(Parser* parser, Token token)
 {
-	if (parser->LookAhead().getType() == TokenType::LeftBracket)
+	if (parser->MatchAndConsume(TokenType::LeftBracket))
 	{
 		//array index
-		parser->Consume();
 		Expression* index = parser->parseExpression();
 		parser->Consume(TokenType::RightBracket);
 
-		return new IndexExpression(new NameExpression(token.getText()), index);
+		return new IndexExpression(new NameExpression(token.getText()), index, token);
 	}
 	else
 		return new NameExpression(token.getText());
@@ -42,8 +41,6 @@ Expression* OperatorAssignParselet::parse(Parser* parser, Expression* left, Toke
 	{
 		std::string str = "OperatorAssignParselet: Left hand side must be a storable location!";
 		throw ParserException(token.filename, token.line, str);//printf("Consume: TokenType not as expected!\n");
-
-		return 0;
 	}
 
 	return new OperatorAssignExpression(token, left, right);
@@ -114,6 +111,25 @@ Expression* WhileParselet::parse(Parser* parser, Token token)
 Expression* ForParselet::parse(Parser* parser, Token token)
 {
 	parser->Consume(TokenType::LeftParen);
+	if (parser->LookAhead().type == TokenType::Local)
+	{
+		if (parser->LookAhead(1).type == TokenType::Name)
+		{
+			Token n = parser->LookAhead(2);
+			if (n.type == TokenType::Name && n.text == "in")
+			{
+				//ok its a foreach loop
+				parser->Consume();
+				Token name = parser->Consume();
+				parser->Consume();
+				Token container = parser->Consume();
+				parser->Consume(TokenType::RightParen);
+
+				auto block = new ScopeExpression(parser->parseBlock());
+				return new ForEachExpression(name, container, block);
+			}
+		}
+	}
 
 	auto initial = parser->ParseStatement(true);
 
@@ -161,10 +177,9 @@ Expression* IfParselet::parse(Parser* parser, Token token)
 			branch2->block = block;
 			branches->push_back(branch2);
 		}
-		else if (parser->Match(TokenType::Else))
+		else if (parser->MatchAndConsume(TokenType::Else))
 		{
 			//its an else
-			parser->Consume();
 			BlockExpression* block = parser->parseBlock(true);
 
 			Branch* branch2 = new Branch;
@@ -207,14 +222,17 @@ Expression* LambdaParselet::parse(Parser* parser, Token token)
 	parser->Consume(TokenType::LeftParen);
 
 	auto arguments = new std::vector<Expression*>;
-	while (true)
+	if (parser->LookAhead().type != TokenType::RightParen)
 	{
-		Token name = parser->Consume(TokenType::Name);
+		while (true)
+		{
+			Token name = parser->Consume(TokenType::Name);
 
-		arguments->push_back(new NameExpression(name.getText()));
+			arguments->push_back(new NameExpression(name.getText()));
 
-		if (!parser->MatchAndConsume(TokenType::Comma))
-			break;
+			if (!parser->MatchAndConsume(TokenType::Comma))
+				break;
+		}
 	}
 
 	parser->Consume(TokenType::RightParen);
@@ -229,6 +247,10 @@ Expression* LambdaParselet::parse(Parser* parser, Token token)
 Expression* CallParselet::parse(Parser* parser, Expression* left, Token token)
 {
 	auto arguments = new std::vector<Expression*>;
+	if (dynamic_cast<IndexExpression*>(left) != 0)
+	{
+		//possibly push an extra arg for "this"
+	}
 
 	if (!parser->MatchAndConsume(TokenType::RightParen))
 	{
@@ -275,12 +297,6 @@ Expression* ArrayParselet::parse(Parser* parser, Token token)
 	while(parser->LookAhead().getType() == TokenType::String || parser->LookAhead().getType() == TokenType::Number)
 	{
 		Expression* e = parser->parseExpression(2);
-		/*Token value = parser->Consume();
-		Value v;
-		if (value.type == TokenType::Number)
-			v = ::atof(value.text.c_str());
-		else if (value.type == TokenType::String || value.type == TokenType::Name)
-			v = value.text.c_str();*/
 
 		inits->push_back(e);
 
@@ -297,17 +313,18 @@ Expression* IndexParselet::parse(Parser* parser, Expression* left, Token token)
 	Expression* index = parser->parseExpression();
 	parser->Consume(TokenType::RightBracket);
 
-	return new IndexExpression(left, index);//::atof(token.getText().c_str()));
+	return new IndexExpression(left, index, token);//::atof(token.getText().c_str()));
 }
 
 Expression* MemberParselet::parse(Parser* parser, Expression* left, Token token)
 {
+	//fixme so I work with call expressions
 	//this is for const members
-	Expression* member = parser->parseExpression(1);
+	Expression* member = parser->parseExpression(9);
 	NameExpression* name = dynamic_cast<NameExpression*>(member);
 	if (name == 0)
 		throw ParserException(token.filename, token.line, "Cannot access member name that is not a string");
-	auto ret = new IndexExpression(left, new StringExpression(name->GetName()));
+	auto ret = new IndexExpression(left, new StringExpression(name->GetName()), token);
 	delete name;
 
 	return ret;
@@ -333,9 +350,9 @@ Expression* ObjectParselet::parse(Parser* parser, Token token)
 		/*Token value = parser->Consume();
 		Value v;
 		if (value.type == TokenType::Number)
-			v = ::atof(value.text.c_str());
+		v = ::atof(value.text.c_str());
 		else if (value.type == TokenType::String || value.type == TokenType::Name)
-			v = value.text.c_str();*/
+		v = value.text.c_str();*/
 
 		inits->push_back(std::pair<std::string, Expression*>(name.text, e));
 		if (!parser->MatchAndConsume(TokenType::Comma))//is there more to parse?

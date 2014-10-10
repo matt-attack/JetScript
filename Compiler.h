@@ -13,26 +13,10 @@
 #include <map>
 #include "Token.h"
 #include "JetInstructions.h"
+#include "JetExceptions.h"
 
 namespace Jet
 {
-	class CompilerException
-	{
-	public:
-		unsigned int line;
-		::std::string file;
-		::std::string reason;
-
-		CompilerException(std::string file, unsigned int line, std::string r)
-		{
-			this->line = line;
-			this->file = file;
-			reason = r;
-		};
-
-		const char *ShowReason() const { return reason.c_str(); }
-	};
-
 	struct IntermediateInstruction
 	{
 		InstructionType type;
@@ -82,17 +66,32 @@ namespace Jet
 
 	class CompilerContext
 	{
+		::std::map<::std::string, CompilerContext*> functions;
+
+		struct _LoopInfo
+		{
+			std::string Break;
+			std::string Continue;
+		};
+		::std::vector<_LoopInfo> _loops;
+
+		struct Scope
+		{
+			Scope* previous;
+			Scope* next;
+			int level;
+			::std::vector<std::string> localvars;
+		};
+		Scope* scope;
 
 	public:
-		::std::vector<IntermediateInstruction> out;
 
-		//::std::string output;
-		::std::map<::std::string, CompilerContext*> functions;
+		::std::vector<IntermediateInstruction> out;
 
 		CompilerContext(void);
 		~CompilerContext(void);
 
-		CompilerContext* AddFunction(::std::string name)
+		CompilerContext* AddFunction(::std::string name, unsigned int args)
 		{
 			//push instruction that sets the function
 			//todo, may need to have functions in other instruction code sets
@@ -125,7 +124,7 @@ namespace Jet
 				fun.second->Compile();
 
 				//need to set var with the function name and location
-				this->FunctionLabel(fun.first);
+				this->FunctionLabel(fun.first, 0);
 				for (auto ins: fun.second->out)
 					this->out.push_back(ins);
 
@@ -135,14 +134,6 @@ namespace Jet
 
 	public:
 
-		struct Scope
-		{
-			Scope* previous;
-			Scope* next;
-			int level;
-			::std::vector<std::string> localvars;
-		};
-		Scope* scope;
 		void PushScope()
 		{
 			Scope* s = new Scope;
@@ -162,12 +153,6 @@ namespace Jet
 			this->scope->next = 0;
 		}
 
-		struct _LoopInfo
-		{
-			std::string Break;
-			std::string Continue;
-		};
-		std::vector<_LoopInfo> _loops;
 		void PushLoop(std::string Break, std::string Continue)
 		{
 			_LoopInfo i;
@@ -184,14 +169,14 @@ namespace Jet
 		void Break()
 		{
 			if (this->_loops.size() == 0)
-				throw new CompilerException("test", 0, "Cannot use break outside of a loop!");
+				throw CompilerException("test", 0, "Cannot use break outside of a loop!");
 			this->Jump(_loops.back().Break.c_str());
 		}
 
 		void Continue()
 		{
 			if (this->_loops.size() == 0)
-				throw new CompilerException("test", 0, "Cannot use continue outside of a loop!");
+				throw CompilerException("test", 0, "Cannot use continue outside of a loop!");
 			this->Jump(_loops.back().Continue.c_str());
 		}
 
@@ -226,6 +211,7 @@ namespace Jet
 			out.push_back(IntermediateInstruction(InstructionType::LdStr, string.c_str()));
 		}
 
+		//jumps
 		void JumpFalse(const char* pos)
 		{
 			out.push_back(IntermediateInstruction(InstructionType::JumpFalse, pos));
@@ -241,9 +227,10 @@ namespace Jet
 			out.push_back(IntermediateInstruction(InstructionType::Jump, pos));
 		}
 
-		void FunctionLabel(std::string name)
+		//labels
+		void FunctionLabel(std::string name, int args)
 		{
-			out.push_back(IntermediateInstruction(InstructionType::Function, name));
+			out.push_back(IntermediateInstruction(InstructionType::Function, name, args));
 		}
 
 		void Label(std::string name)

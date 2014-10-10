@@ -52,19 +52,47 @@ void AssignExpression::Compile(CompilerContext* context)
 
 void CallExpression::Compile(CompilerContext* context)
 {
-	//push args onto stack
-	for (auto i: *args)
-		i->Compile(context);
-
 	if (dynamic_cast<NameExpression*>(left) != 0)
 	{
+		//push args onto stack
+		for (auto i: *args)
+			i->Compile(context);
+
 		context->Call(dynamic_cast<NameExpression*>(left)->GetName(), args->size());
 	}
 	else if (dynamic_cast<IStorableExpression*>(left) != 0)
 	{
-		//compile left I guess?
-		left->Compile(context);
-		context->ECall(args->size());
+		auto index = dynamic_cast<IndexExpression*>(left);
+		if (index && index->token.type == TokenType::Colon)
+		{
+			//push args onto stack
+			for (auto i: *args)
+				i->Compile(context);//pushes args
+
+			//compile left I guess?
+			left->Compile(context);//pushes function
+
+			//ok, fix the order here, this isnt working right
+			//need to insert before the last instruction
+			auto t = context->out.back();
+			context->out.pop_back();//pushes this
+			context->Duplicate();//duplicates this
+			context->out.push_back(t);//pushes function
+			//could just have this as last argument, idk
+			//increase number of args
+			context->ECall(args->size()+1);
+		}
+		else
+		{
+			//push args onto stack
+			for (auto i: *args)
+				i->Compile(context);
+
+			//compile left I guess?
+			left->Compile(context);
+
+			context->ECall(args->size());
+		}
 	}
 	else
 	{
@@ -100,14 +128,14 @@ void FunctionExpression::Compile(CompilerContext* context)
 	else
 		fname = "_lambda_id_"+context->GetUUID();//todo generate id
 
-	CompilerContext* function = context->AddFunction(fname);
-	
+	CompilerContext* function = context->AddFunction(fname, this->args->size());
+
 	//ok push locals, in opposite order
-	for (int i = this->args->size() - 1; i >= 0; i--)
+	for (int i = 0; i < this->args->size(); i++)
 	{
 		auto aname = dynamic_cast<NameExpression*>((*this->args)[i]);
 		function->RegisterLocal(aname->GetName());
-		function->StoreLocal(aname->GetName());
+		//function->StoreLocal(aname->GetName());
 	}
 	block->Compile(function);
 

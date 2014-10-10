@@ -46,6 +46,7 @@ Parser::Parser(Lexer* l)
 
 	this->Register(TokenType::Swap, new SwapParselet());
 
+	this->Register(TokenType::Colon, new MemberParselet());
 	this->Register(TokenType::Dot, new MemberParselet());
 	this->Register(TokenType::LeftBrace, new ObjectParselet());
 
@@ -63,6 +64,7 @@ Parser::Parser(Lexer* l)
 	//prefix stuff
 	this->Register(TokenType::Increment, new PrefixOperatorParselet(6));
 	this->Register(TokenType::Decrement, new PrefixOperatorParselet(6));
+	this->Register(TokenType::Minus, new PrefixOperatorParselet(6));
 
 	//postfix stuff
 	this->Register(TokenType::Increment, new PostfixOperatorParselet(7));
@@ -199,17 +201,13 @@ Token Parser::Consume(TokenType expected)
 Token Parser::LookAhead(unsigned int num)
 {
 	while (num >= mRead.size())
-	{
 		mRead.push_back(lexer->Next());
-	}
 
 	int c = 0;
 	for (auto ii: mRead)
 	{
 		if (c++ == num)
-		{
 			return ii;
-		}
 	}
 
 	return Token("test", 0, TokenType::EOF, "EOF");

@@ -48,7 +48,7 @@ namespace Jet
 
 			//object stuff
 			operators["."] = TokenType::Dot;
-
+			operators[":"] = TokenType::Colon;
 			operators[";"] = TokenType::Semicolon;
 			operators[","] = TokenType::Comma;
 
@@ -82,15 +82,24 @@ namespace Jet
 
 			//keywords
 			keywords["while"] = TokenType::While;
+			keywords["mientras"] = TokenType::While;
 			keywords["if"] = TokenType::If;
+			keywords["si"] = TokenType::If;
 			keywords["elseif"] = TokenType::ElseIf;
+			keywords["otrosi"] = TokenType::ElseIf;
 			keywords["else"] = TokenType::Else;
+			keywords["otro"] = TokenType::Else;
 			keywords["fun"] = TokenType::Function;
 			keywords["return"] = TokenType::Ret;
+			keywords["volver"] = TokenType::Ret;
 			keywords["for"] = TokenType::For;
+			//add spanish mode yo!
+			keywords["por"] = TokenType::For;
 			keywords["local"] = TokenType::Local;
 			keywords["break"] = TokenType::Break;
+			keywords["romper"/*"parar"*/] = TokenType::Break;
 			keywords["continue"] = TokenType::Continue;
+			keywords["continuar"] = TokenType::Continue;
 
 			for (auto ii = operators.begin(); ii != operators.end(); ii++)
 			{
