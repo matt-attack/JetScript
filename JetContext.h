@@ -4,6 +4,7 @@
 #include <functional>
 #include <string>
 #include <map>
+#include <algorithm>
 
 #include "Value.h"
 
@@ -59,7 +60,15 @@ namespace Jet
 			unsigned int locals;
 		};
 		::std::map<::std::string, FunctionData> dfunctions;
-		::std::map<unsigned int, std::pair<std::string, unsigned int>> debuginfo;
+
+		struct DebugInfo
+		{
+			unsigned int code;
+			std::string file;
+			unsigned int line;
+		};
+		std::vector<DebugInfo> debuginfo;
+		//::std::map<unsigned int, std::pair<std::string, unsigned int>> debuginfo;
 
 		//actual data being worked on
 		::std::vector<Instruction> ins;
@@ -361,7 +370,11 @@ namespace Jet
 				case InstructionType::DebugLine:
 					{
 						//this should contain line/file info
-						this->debuginfo[this->labelposition] = std::pair<std::string, unsigned int>(inst.string, inst.second);
+						DebugInfo info;
+						info.file = inst.string;
+						info.line = inst.second;
+						info.code = this->labelposition;
+						this->debuginfo.push_back(info);
 						//push something into the array at the instruction pointer
 						delete[] inst.string;
 
@@ -536,16 +549,42 @@ namespace Jet
 		//debug stuff
 		void GetCode(int ptr, std::string& ret, unsigned int& line)
 		{
-			for (auto ii: this->debuginfo)
+			//std::binary_search(this->debuginfo.begin(), this->debuginfo.end(), line);
+			int imax = this->debuginfo.size()-1;
+			int imin = 0;
+			while (imax >= imin)
 			{
-				if (ii.first >= ptr)
+				// calculate the midpoint for roughly equal partition
+				int imid = (imin+imax)/2;//midpoint(imin, imax);
+				if(this->debuginfo[imid].code == ptr)
+				{
+					// key found at index imid
+					ret = this->debuginfo[imid].file;
+					line = this->debuginfo[imid].line;
+					return;// imid; 
+				}
+				// determine which subarray to search
+				else if (this->debuginfo[imid].code < ptr)
+					// change min index to search upper subarray
+					imin = imid + 1;
+				else         
+					// change max index to search lower subarray
+					imax = imid - 1;
+			}
+			int index = min(imin, imax);
+			ret = this->debuginfo[index].file;
+			line = this->debuginfo[index].line;
+			/*for (int i = this->debuginfo.size()-1; i >= 0; i--)
+			{
+				DebugInfo info = this->debuginfo[i];
+				if (info.code <= ptr)
 				{
 					//fix me line numbers are REALLY wrong
-					ret = ii.second.first;
-					line = ii.second.second;
+					ret = info.file;
+					line = info.line;
 					break;
 				}
-			}
+			}*/
 		}
 
 		void StackTrace(int curiptr)
@@ -583,7 +622,7 @@ namespace Jet
 					unsigned int line;
 					this->GetCode(top, file, line);
 					//printf("File: %s line %d ", file.c_str(), line);
-					printf("%s() %s Line %d (instruction %d)\n", fun.c_str(), file.c_str(), line, top-greatest);
+					printf("%s() %s Line %d (Instruction %d)\n", fun.c_str(), file.c_str(), line, top-greatest);
 				}
 			}
 		}

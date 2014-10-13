@@ -6,8 +6,10 @@ using namespace Jet;
 
 void PrefixExpression::Compile(CompilerContext* context)
 {
+	context->Line(this->_operator.filename, this->_operator.line);
+
 	right->Compile(context);
-	context->UnaryOperation(this->_operator);
+	context->UnaryOperation(this->_operator.type);
 	if (dynamic_cast<BlockExpression*>(this->Parent) == 0)
 		context->Duplicate();
 	if (dynamic_cast<IStorableExpression*>(this->right))
@@ -16,10 +18,12 @@ void PrefixExpression::Compile(CompilerContext* context)
 
 void PostfixExpression::Compile(CompilerContext* context)
 {
+	context->Line(this->_operator.filename, this->_operator.line);
+
 	left->Compile(context);
 	if (dynamic_cast<BlockExpression*>(this->Parent) == 0)
 		context->Duplicate();
-	context->UnaryOperation(this->_operator);
+	context->UnaryOperation(this->_operator.type);
 	if (dynamic_cast<IStorableExpression*>(this->left))
 		dynamic_cast<IStorableExpression*>(this->left)->CompileStore(context);
 }
@@ -170,6 +174,8 @@ void FunctionExpression::Compile(CompilerContext* context)
 
 void LocalExpression::Compile(CompilerContext* context)
 {
+	context->Line(_name.filename, _name.line);
+
 	//add load variable instruction
 	if (this->_right)
 		this->_right->Compile(context);

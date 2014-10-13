@@ -381,7 +381,6 @@ namespace Jet
 	class SwapExpression: public Expression
 	{
 		Expression* left;
-
 		Expression* right;
 	public:
 		SwapExpression(Expression* l, Expression* r)
@@ -415,11 +414,11 @@ namespace Jet
 
 	class PrefixExpression: public Expression
 	{
-		TokenType _operator;
+		Token _operator;
 
 		Expression* right;
 	public:
-		PrefixExpression(TokenType type, Expression* r)
+		PrefixExpression(Token type, Expression* r)
 		{
 			this->_operator = type;
 			this->right = r;
@@ -438,7 +437,7 @@ namespace Jet
 
 		void print()
 		{
-			printf("(%s", Operator(_operator));
+			printf("(%s", Operator(_operator.type));
 			right->print();
 			printf(")");
 		}
@@ -448,11 +447,11 @@ namespace Jet
 
 	class PostfixExpression: public Expression
 	{
-		TokenType _operator;
+		Token _operator;
 
 		Expression* left;
 	public:
-		PostfixExpression(Expression* l, TokenType type)
+		PostfixExpression(Expression* l, Token type)
 		{
 			this->_operator = type;
 			this->left = l;
@@ -473,7 +472,7 @@ namespace Jet
 		{
 			printf("(");
 			left->print();
-			printf("%s)", Operator(_operator));
+			printf("%s)", Operator(_operator.type));
 		}
 
 		void Compile(CompilerContext* context);

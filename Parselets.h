@@ -134,7 +134,7 @@ namespace Jet
 
 		Expression* parse(Parser* parser, Expression* left, Token token)
 		{
-			return new PostfixExpression(left, token.getType());//::atof(token.getText().c_str()));
+			return new PostfixExpression(left, token);//::atof(token.getText().c_str()));
 		}
 
 		int getPrecedence()

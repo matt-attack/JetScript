@@ -74,7 +74,7 @@ Expression* PrefixOperatorParselet::parse(Parser* parser, Token token)
 		std::string str = "PrefixOperatorParselet: Right hand side missing!";
 		throw ParserException(token.filename, token.line, str);//printf("Consume: TokenType not as expected!\n");
 	}
-	return new PrefixExpression(token.getType(), right);//::atof(token.getText().c_str()));
+	return new PrefixExpression(token, right);//::atof(token.getText().c_str()));
 }
 
 Expression* BinaryOperatorParselet::parse(Parser* parser, Expression* left, Token token)

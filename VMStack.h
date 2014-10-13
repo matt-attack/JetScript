@@ -42,14 +42,14 @@ public:
 	T Pop()
 	{
 		if (_size == 0)
-			throw JetRuntimeException("Tried to pop empty stack!");////Jetprintf("fail");
+			throw Jet::JetRuntimeException("Tried to pop empty stack!");////Jetprintf("fail");
 		return mem[--_size];
 	}
 
 	void QuickPop(int times = 1)
 	{
 		if (this->_size < times)
-			throw JetRuntimeException("Tried to pop empty stack!");//printf("Fail");
+			throw Jet::JetRuntimeException("Tried to pop empty stack!");//printf("Fail");
 		_size -= times;
 	}
 

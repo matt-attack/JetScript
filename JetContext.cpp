@@ -537,6 +537,11 @@ Value JetContext::Execute(int iptr)
 
 						fptr++;
 						callstack.Push(iptr);
+						for (int i = (int)in.value-1; i >= 0; i--)
+						{
+							frames[fptr].Set(stack.Pop(), i, 0);
+						}
+
 						//go to function
 						iptr = fun.ptr-1;//in.value-1;
 					}

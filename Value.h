@@ -6,6 +6,8 @@
 #include <string>
 #include <memory>
 
+#include "JetExceptions.h"
+
 namespace Jet
 {
 	class JetContext;
@@ -213,7 +215,10 @@ namespace Jet
 			switch(this->type)
 			{
 			case ValueType::Number:
-				return Value(value+other.value);
+				if (other.type == ValueType::Number)
+					return Value(value+other.value);
+				else
+					throw JetRuntimeException("Cannot add two non-numeric types!");
 			case ValueType::String:
 				{
 					//throw JetRuntimeException("Cannot Add A String");
@@ -224,6 +229,8 @@ namespace Jet
 				}
 			}
 
+			throw JetRuntimeException("Cannot add two non-numeric types!");
+			
 			return Value(0);
 		};
 
@@ -273,32 +280,39 @@ namespace Jet
 
 		Value operator-( const Value &other )
 		{
-			if (type == ValueType::Number)
+			if (type == ValueType::Number && other.type == ValueType::Number)
 				return Value(value-other.value);
+
+			throw JetRuntimeException("Cannot subtract two non-numeric types!");
 
 			return Value(0);
 		};
 
 		Value operator*( const Value &other )
 		{
-			if (type == ValueType::Number)
+			if (type == ValueType::Number && other.type == ValueType::Number)
 				return Value(value*other.value);
+
+			throw JetRuntimeException("Cannot multiply two non-numeric types!");
 
 			return Value(0);
 		};
 
 		Value operator/( const Value &other )
 		{
-			if (type == ValueType::Number)
+			if (type == ValueType::Number && other.type == ValueType::Number)
 				return Value(value/other.value);
 
+			throw JetRuntimeException("Cannot divide two non-numeric types!");
 			return Value(0);
 		};
 
 		Value operator%( const Value &other )
 		{
-			if (type == ValueType::Number)
+			if (type == ValueType::Number && other.type == ValueType::Number)
 				return Value((int)value%(int)other.value);
+
+			throw JetRuntimeException("Cannot modulus two non-numeric types!");
 
 			return Value(0);
 		};
