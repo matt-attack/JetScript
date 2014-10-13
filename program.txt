@@ -1,9 +1,13 @@
+print("7 + 7 - 2 = ", 7+7-2);
 fun test(x, y, z)
 {
 	print(x,y,z);
 	return x+y+z;
 }
 test(1,2,3);
+
+j = 0;
+j();
 
 //f = fopen("jetio.txt", "w");
 //f:write("Hi i'm output by the programming language, Jet!");

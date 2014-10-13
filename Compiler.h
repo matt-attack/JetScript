@@ -334,6 +334,18 @@ namespace Jet
 			out.push_back(IntermediateInstruction(InstructionType::Return));
 		}
 
+		//debug info
+		std::string lastfile; unsigned int lastline;
+		void Line(std::string file, unsigned int line)
+		{
+			//need to avoid duplicates, because thats silly
+			if (lastline != line || lastfile != file)
+			{
+				lastline = line; lastfile = file;
+				out.push_back(IntermediateInstruction(InstructionType::DebugLine, file, line));
+			}
+		}
+
 	private:
 		int uuid;
 

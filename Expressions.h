@@ -271,6 +271,8 @@ namespace Jet
 
 		void Compile(CompilerContext* context)
 		{
+			context->Line(token.filename, token.line);
+
 			//add load variable instruction
 			left->Compile(context);
 			//if the index is constant compile to a special instruction carying that constant
@@ -287,6 +289,8 @@ namespace Jet
 
 		void CompileStore(CompilerContext* context)
 		{
+			context->Line(token.filename, token.line);
+
 			left->Compile(context);
 			//if the index is constant compile to a special instruction carying that constant
 			if (dynamic_cast<StringExpression*>(index))
@@ -339,12 +343,12 @@ namespace Jet
 	{
 		Expression* left;
 
-		Token t;
+		Token token;
 		Expression* right;
 	public:
 		OperatorAssignExpression(Token token, Expression* l, Expression* r)
 		{
-			this->t = token;
+			this->token = token;
 			this->left = l;
 			this->right = r;
 		}
@@ -364,7 +368,7 @@ namespace Jet
 
 		void print()
 		{
-			printf("(%s ", t.getText().c_str());
+			printf("(%s ", token.getText().c_str());
 			left->print();
 			printf(" ");
 			right->print();
@@ -607,11 +611,14 @@ namespace Jet
 	{
 		Expression* condition;
 		ScopeExpression* block;
+		Token token;
 	public:
+
 		WhileExpression(Token token, Expression* cond, ScopeExpression* block)
 		{
 			this->condition = cond;
 			this->block = block;
+			this->token = token;
 		}
 
 		~WhileExpression()
@@ -638,6 +645,8 @@ namespace Jet
 
 		void Compile(CompilerContext* context)
 		{
+			context->Line(token.filename, token.line);
+
 			::std::string uuid = context->GetUUID();
 			context->Label("loopstart_"+uuid);
 			this->condition->Compile(context);
@@ -656,6 +665,7 @@ namespace Jet
 	{
 		Expression* condition, *initial, *incr;
 		ScopeExpression* block;
+		Token token;
 	public:
 		ForExpression(Token token, Expression* init, Expression* cond, Expression* incr, ScopeExpression* block)
 		{
@@ -663,6 +673,7 @@ namespace Jet
 			this->block = block;
 			this->incr = incr;
 			this->initial = init;
+			this->token = token;
 		}
 
 		~ForExpression()
@@ -697,6 +708,8 @@ namespace Jet
 
 		void Compile(CompilerContext* context)
 		{
+			context->Line(token.filename, token.line);
+
 			::std::string uuid = context->GetUUID();
 			this->initial->Compile(context);
 			context->Label("forloopstart_"+uuid);
@@ -804,11 +817,13 @@ namespace Jet
 	{
 		::std::vector<Branch*>* branches;
 		Branch* Else;
+		Token token;
 	public:
 		IfExpression(Token token, ::std::vector<Branch*>* branches, Branch* elseBranch)
 		{
 			this->branches = branches;
 			this->Else = elseBranch;
+			this->token = token;
 		}
 
 		~IfExpression()
@@ -867,6 +882,8 @@ namespace Jet
 
 		void Compile(CompilerContext* context)
 		{
+			context->Line(token.filename, token.line);
+
 			::std::string uuid = context->GetUUID();
 			::std::string bname = "ifstatement_" + uuid + "_I";
 			int pos = 0;
@@ -904,12 +921,14 @@ namespace Jet
 
 	class CallExpression: public Expression
 	{
+		Token token;
 		Expression* left;
 		::std::vector<Expression*>* args;
 	public:
 		friend class FunctionParselet;
 		CallExpression(Token token, Expression* left, ::std::vector<Expression*>* args)
 		{
+			this->token = token;
 			this->left = left;
 			this->args = args;
 		}
@@ -954,6 +973,7 @@ namespace Jet
 		Expression* name;
 		::std::vector<Expression*>* args;
 		ScopeExpression* block;
+		Token token;
 	public:
 
 		FunctionExpression(Token token, Expression* name, ::std::vector<Expression*>* args, ScopeExpression* block)
@@ -961,6 +981,7 @@ namespace Jet
 			this->args = args;
 			this->block = block;
 			this->name = name;
+			this->token = token;
 		}
 
 		~FunctionExpression()
@@ -1006,10 +1027,12 @@ namespace Jet
 
 	class ReturnExpression: public Expression
 	{
+		Token token;
 		Expression* right;
 	public:
 		ReturnExpression(Token token, Expression* right)
 		{
+			this->token = token;
 			this->right = right;
 		}
 
@@ -1041,6 +1064,8 @@ namespace Jet
 
 		void Compile(CompilerContext* context)
 		{
+			context->Line(token.filename, token.line);
+
 			if (right)
 				right->Compile(context);
 			else

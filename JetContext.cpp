@@ -27,9 +27,11 @@ void Jet::print(JetContext* context,Value* args, int numargs)
 
 std::vector<IntermediateInstruction> JetContext::Compile(const char* code)
 {
+#ifdef JET_TIME_EXECUTION
 	INT64 start, rate, end;
 	QueryPerformanceFrequency( (LARGE_INTEGER *)&rate );
 	QueryPerformanceCounter( (LARGE_INTEGER *)&start );
+#endif
 
 	Lexer lexer = Lexer(code);
 	Parser parser = Parser(&lexer);
@@ -43,21 +45,25 @@ std::vector<IntermediateInstruction> JetContext::Compile(const char* code)
 
 	delete result;
 
+#ifdef JET_TIME_EXECUTION
 	QueryPerformanceCounter( (LARGE_INTEGER *)&end );
 
 	INT64 diff = end - start;
 	double dt = ((double)diff)/((double)rate);
 
 	printf("Took %lf seconds to compile\n\n", dt);
+#endif
 
 	return std::move(out);
 }
 
 void JetContext::RunGC()
 {
+#ifdef JET_TIME_EXECUTION
 	INT64 start, rate, end;
 	QueryPerformanceFrequency( (LARGE_INTEGER *)&rate );
 	QueryPerformanceCounter( (LARGE_INTEGER *)&start );
+#endif
 
 	for (auto ii: this->gcObjects)
 		ii[0] = 0;
@@ -222,19 +228,23 @@ void JetContext::RunGC()
 		}
 	}
 
+#ifdef JET_TIME_EXECUTION
 	QueryPerformanceCounter( (LARGE_INTEGER *)&end );
 
 	INT64 diff = end - start;
 	double dt = ((double)diff)/((double)rate);
 
 	printf("Took %lf seconds to collect garbage\n\n", dt);
+#endif
 }
 
 Value JetContext::Execute(int iptr)
 {
+#ifdef JET_TIME_EXECUTION
 	INT64 start, rate, end;
 	QueryPerformanceFrequency( (LARGE_INTEGER *)&rate );
 	QueryPerformanceCounter( (LARGE_INTEGER *)&start );
+#endif
 
 	//frame pointer reset
 	fptr = 0;
@@ -465,7 +475,7 @@ Value JetContext::Execute(int iptr)
 
 						fptr++;
 						callstack.Push(iptr);
-						
+
 						//set all the locals
 						//also need to push nils
 						for (int i = (int)in.value2-1; i >= 0; i--)
@@ -692,7 +702,8 @@ Value JetContext::Execute(int iptr)
 		printf("\nVariables:\n");
 		for (auto ii: variables)
 		{
-			printf("%s = %s\n", ii.first.c_str(), vars[ii.second].ToString().c_str());
+			if (vars[ii.second].type != ValueType::Null)
+				printf("%s = %s\n", ii.first.c_str(), vars[ii.second].ToString().c_str());
 		}
 
 		//ok, need to properly roll back callstack
@@ -701,7 +712,8 @@ Value JetContext::Execute(int iptr)
 		if (this->callstack.size() == 1 && this->callstack.Peek() == 123456789)
 			this->callstack.Pop();
 
-		//should rethrow here or pass to a handler or something
+		//should rethrow here or pass 
+		//to a handler or something
 	}
 	catch(...)
 	{
@@ -722,26 +734,16 @@ Value JetContext::Execute(int iptr)
 			this->callstack.Pop();
 	}
 
+#ifdef JET_TIME_EXECUTION
 	QueryPerformanceCounter( (LARGE_INTEGER *)&end );
 
 	INT64 diff = end - start;
 	double dt = ((double)diff)/((double)rate);
 
 	printf("Took %lf seconds to execute\n\n", dt);
+#endif
 
 	this->fptr = -1;//set to invalid to indicate to the GC that we arent executing if it gets ran
-
-	/*printf("Variables:\n");
-	for (auto ii: variables)
-	{
-	printf("%s = %s\n", ii.first.c_str(), vars[ii.second].ToString().c_str());
-	}*/
-
-	/*printf("\nLabels:\n");
-	for (auto ii: labels)
-	{
-	printf("%s = %d\n", ii.first.c_str(), ii.second);
-	}*/
 
 	if (stack.size() == 0)
 	{

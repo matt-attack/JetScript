@@ -12,7 +12,11 @@
 #include "JetInstructions.h"
 #include "JetExceptions.h"
 
+
+#ifdef _WIN32
 #include <Windows.h>
+//#define JET_TIME_EXECUTION
+#endif
 
 namespace Jet
 {
@@ -55,6 +59,7 @@ namespace Jet
 			unsigned int locals;
 		};
 		::std::map<::std::string, FunctionData> dfunctions;
+		::std::map<unsigned int, std::pair<std::string, unsigned int>> debuginfo;
 
 		//actual data being worked on
 		::std::vector<Instruction> ins;
@@ -304,13 +309,9 @@ namespace Jet
 		Value Script(const char* code)//compiles, assembles and executes the script
 		{
 			auto asmb = this->Compile(code);
-			//this->ins.clear();
-			//this->labelposition = 0;
+
 			Value v = this->Assemble(asmb);
-			//this->labelposition = 0;
-			//this->ins.clear();
-			//v = this->Assemble(asmb);
-			//delete[] asmb;
+
 			return v;
 		}
 
@@ -342,9 +343,11 @@ namespace Jet
 		Value Assemble(const std::vector<IntermediateInstruction>& code)
 		{
 			int startptr = this->ins.size();
+#ifdef JET_TIME_EXECUTION
 			INT64 start, rate, end;
 			QueryPerformanceFrequency( (LARGE_INTEGER *)&rate );
 			QueryPerformanceCounter( (LARGE_INTEGER *)&start );
+#endif
 
 			//implement me for supa speed
 			for (auto inst: code)
@@ -353,6 +356,15 @@ namespace Jet
 				{
 				case InstructionType::Comment:
 					{
+						break;
+					}
+				case InstructionType::DebugLine:
+					{
+						//this should contain line/file info
+						this->debuginfo[this->labelposition] = std::pair<std::string, unsigned int>(inst.string, inst.second);
+						//push something into the array at the instruction pointer
+						delete[] inst.string;
+
 						break;
 					}
 				case InstructionType::Function:
@@ -394,6 +406,10 @@ namespace Jet
 						break;
 					}
 				case InstructionType::Label:
+					{
+						break;
+					}
+				case InstructionType::DebugLine:
 					{
 						break;
 					}
@@ -450,12 +466,14 @@ namespace Jet
 				}
 			}
 
+#ifdef JET_TIME_EXECUTION
 			QueryPerformanceCounter( (LARGE_INTEGER *)&end );
 
 			INT64 diff = end - start;
 			double dt = ((double)diff)/((double)rate);
 
 			printf("Took %lf seconds to assemble\n\n", dt);
+#endif
 
 			Value temp =  this->Execute(startptr);//run the static code
 			if (this->callstack.size() > 0)
@@ -516,6 +534,20 @@ namespace Jet
 		Value Execute(int iptr);
 
 		//debug stuff
+		void GetCode(int ptr, std::string& ret, unsigned int& line)
+		{
+			for (auto ii: this->debuginfo)
+			{
+				if (ii.first >= ptr)
+				{
+					//fix me line numbers are REALLY wrong
+					ret = ii.second.first;
+					line = ii.second.second;
+					break;
+				}
+			}
+		}
+
 		void StackTrace(int curiptr)
 		{
 			VMStack<unsigned int> tempcallstack = this->callstack.Copy();
@@ -538,9 +570,21 @@ namespace Jet
 				if (top == 123456789)
 					printf("{Native}\n");
 				else if (greatest == 0)//fixme
-					printf("{Entry Point+%d}\n", top);
+				{
+					std::string file;
+					unsigned int line;
+					this->GetCode(top, file, line);
+					printf("{Entry Point+%d} %s Line %d\n", top, file.c_str(), line);
+				}
 				else
-					printf("%s()+%d\n", fun.c_str(), top-greatest);
+				{
+					//finish me
+					std::string file;
+					unsigned int line;
+					this->GetCode(top, file, line);
+					//printf("File: %s line %d ", file.c_str(), line);
+					printf("%s() %s Line %d (instruction %d)\n", fun.c_str(), file.c_str(), line, top-greatest);
+				}
 			}
 		}
 	};

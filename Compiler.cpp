@@ -85,40 +85,66 @@ bool CompilerContext::RegisterLocal(std::string name)
 
 void CompilerContext::BinaryOperation(TokenType operation)
 {
-	if (operation == TokenType::Plus || operation == TokenType::AddAssign)
+	switch (operation)
+	{
+	case TokenType::Plus:
+	case TokenType::AddAssign:
 		this->out.push_back(IntermediateInstruction(InstructionType::Add));
-	else if (operation == TokenType::Asterisk || operation == TokenType::MultiplyAssign)
+		break;	
+	case TokenType::Asterisk:
+	case TokenType::MultiplyAssign:
 		this->out.push_back(IntermediateInstruction(InstructionType::Mul));
-	else if (operation == TokenType::Minus || operation == TokenType::SubtractAssign)
+		break;	
+	case TokenType::Minus:
+	case TokenType::SubtractAssign:
 		this->out.push_back(IntermediateInstruction(InstructionType::Sub));
-	else if (operation == TokenType::Slash || operation == TokenType::DivideAssign)
+		break;
+	case TokenType::Slash:
+	case TokenType::DivideAssign:
 		this->out.push_back(IntermediateInstruction(InstructionType::Div));
-	else if (operation == TokenType::Modulo)
+		break;
+	case TokenType::Modulo:
 		this->out.push_back(IntermediateInstruction(InstructionType::Modulus));
-	else if (operation == TokenType::Equals)
+		break;
+	case TokenType::Equals:
 		this->out.push_back(IntermediateInstruction(InstructionType::Eq));
-	else if (operation == TokenType::NotEqual)
+		break;
+	case TokenType::NotEqual:
 		this->out.push_back(IntermediateInstruction(InstructionType::NotEq));
-	else if (operation == TokenType::LessThan)
+		break;
+	case TokenType::LessThan:
 		this->out.push_back(IntermediateInstruction(InstructionType::Lt));
-	else if (operation == TokenType::GreaterThan)
+		break;
+	case TokenType::GreaterThan:
 		this->out.push_back(IntermediateInstruction(InstructionType::Gt));
-	else if (operation == TokenType::LessThanEqual)
+		break;
+	case TokenType::LessThanEqual:
 		this->out.push_back(IntermediateInstruction(InstructionType::LtE));
-	else if (operation == TokenType::GreaterThanEqual)
+		break;
+	case TokenType::GreaterThanEqual:
 		this->out.push_back(IntermediateInstruction(InstructionType::GtE));
-	else if (operation == TokenType::Or)
+		break;
+	case TokenType::Or:
 		this->out.push_back(IntermediateInstruction(InstructionType::BOr));
-	else if (operation == TokenType::And)
+		break;
+	case TokenType::And:
 		this->out.push_back(IntermediateInstruction(InstructionType::BAnd));
+		break;
+	}
 }
 
 void CompilerContext::UnaryOperation(TokenType operation)
 {
-	if (operation == TokenType::Increment)
+	switch (operation)
+	{
+	case TokenType::Increment:
 		this->out.push_back(IntermediateInstruction(InstructionType::Incr));
-	else if (operation == TokenType::Decrement)
+		break;
+	case TokenType::Decrement:
 		this->out.push_back(IntermediateInstruction(InstructionType::Decr));
-	else if (operation == TokenType::Minus)
+		break;	
+	case TokenType::Minus:
 		this->out.push_back(IntermediateInstruction(InstructionType::Negate));
+		break;
+	}
 }

@@ -12,19 +12,37 @@ namespace Jet
 	class Lexer
 	{
 		unsigned int index;
+		::std::istream* stream;
+
 		::std::string text;
 		::std::map<::std::string, Jet::TokenType> operators;
 		::std::map<::std::string, Jet::TokenType> keywords;
 
 		unsigned int linenumber;
 	public:
+		Lexer(::std::istream* input)
+		{
+			this->stream = input;
+			this->linenumber = 1;
+			this->index = 0;
+			this->Init();
+		}
 
 		Lexer(::std::string text)
 		{
-			this->linenumber = 0;
+			this->stream = 0;
+			this->linenumber = 1;
 			this->index = 0;
 			this->text = text;
 
+			this->Init();
+		}
+
+		Token Next();
+
+	private:
+		void Init()
+		{
 			//math and assignment
 			operators["="] = TokenType::Assign;
 			operators["+"] = TokenType::Plus;
@@ -106,10 +124,6 @@ namespace Jet
 				TokenToString[ii->second] = ii->first;
 			}
 		}
-
-		Token Next();
-
-	private:
 
 		char ConsumeChar();
 		char MatchAndConsumeChar(char c);

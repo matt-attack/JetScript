@@ -52,6 +52,8 @@ void AssignExpression::Compile(CompilerContext* context)
 
 void CallExpression::Compile(CompilerContext* context)
 {
+	context->Line(token.filename, token.line);
+
 	if (dynamic_cast<NameExpression*>(left) != 0)
 	{
 		//push args onto stack
@@ -106,9 +108,11 @@ void CallExpression::Compile(CompilerContext* context)
 
 void OperatorAssignExpression::Compile(CompilerContext* context)
 {
+	context->Line(token.filename, token.line);
+
 	left->Compile(context);//context->Load(name);
 	this->right->Compile(context);
-	context->BinaryOperation(t.getType());
+	context->BinaryOperation(token.type);
 
 	//insert store here
 	if (dynamic_cast<BlockExpression*>(this->Parent) == 0)
@@ -121,7 +125,8 @@ void OperatorAssignExpression::Compile(CompilerContext* context)
 
 void FunctionExpression::Compile(CompilerContext* context)
 {
-	//todo make this push make a new functioncompilecontext
+	context->Line(token.filename, token.line);
+
 	std::string fname;
 	if (name)
 		fname = dynamic_cast<NameExpression*>(name)->GetName();
