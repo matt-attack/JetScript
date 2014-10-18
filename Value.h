@@ -5,6 +5,7 @@
 #include <functional>
 #include <string>
 #include <memory>
+#include <vector>
 
 #include "JetExceptions.h"
 
@@ -29,12 +30,11 @@ namespace Jet
 	struct Value;
 
 	typedef GCVal<std::map<std::string, Value>*> _JetObject; 
-	typedef GCVal<std::map<int, Value>*> _JetArray; 
+	typedef GCVal<std::vector<Value>*> _JetArray;//std::map<int, Value>*> _JetArray; 
 	typedef GCVal<std::pair<void*,_JetObject*>> _JetUserdata;
 	typedef GCVal<char*> _JetString;
 
 	typedef void(*_JetNativeFunc)(JetContext*,Value*, int);
-	typedef void(*_JetNativeInstanceFunc)(JetContext*,Value*,Value*,int);
 	//typedef std::function<void(JetContext*,Value*,int)> _JetNativeFunc;
 
 	enum class ValueType
@@ -48,6 +48,8 @@ namespace Jet
 		Userdata,//kinda todo
 		Null,
 	};
+
+	static char* ValueTypes[] = { "Number", "String", "Object", "Array" , "Function", "NativeFunction", "Userdata", "Null"};
 
 	class JetContext;
 
@@ -73,12 +75,12 @@ namespace Jet
 
 			unsigned int ptr;//used for functions, points to code
 			_JetNativeFunc func;//native func
-			_JetNativeInstanceFunc instancefunc;
 		};
 
 		Value()
 		{
 			this->type = ValueType::Null;
+			//this->value = 0;
 		};
 
 		//plz dont delete my string
@@ -210,30 +212,6 @@ namespace Jet
 			return 0;
 		}
 
-		Value operator+( const Value &other )
-		{
-			switch(this->type)
-			{
-			case ValueType::Number:
-				if (other.type == ValueType::Number)
-					return Value(value+other.value);
-				else
-					throw JetRuntimeException("Cannot add two non-numeric types!");
-			case ValueType::String:
-				{
-					//throw JetRuntimeException("Cannot Add A String");
-					//if (other.type == ValueType::String)
-					//return Value((std::string(other.string.data) + std::string(this->string.data)).c_str());
-					//else
-					//return Value((other.ToString() + std::string(this->string.data)).c_str());
-				}
-			}
-
-			throw JetRuntimeException("Cannot add two non-numeric types!");
-			
-			return Value(0);
-		};
-
 		Value operator[] (int index)
 		{
 			if (this->type == ValueType::Array)
@@ -273,19 +251,37 @@ namespace Jet
 				{
 					return (*this->_obj._object->ptr)[key.ToString()];
 				}
-				//default:
-				//throw JetRuntimeException("Cannot index type");
+			default:
+				throw JetRuntimeException("Cannot index type " + (std::string)ValueTypes[(int)this->type]);
 			}
 		}
+
+		Value operator+( const Value &other )
+		{
+			switch(this->type)
+			{
+			case ValueType::Number:
+				if (other.type == ValueType::Number)
+					return Value(value+other.value);
+			case ValueType::String:
+				{
+					//throw JetRuntimeException("Cannot Add A String");
+					//if (other.type == ValueType::String)
+					//return Value((std::string(other.string.data) + std::string(this->string.data)).c_str());
+					//else
+					//return Value((other.ToString() + std::string(this->string.data)).c_str());
+				}
+			}
+
+			throw JetRuntimeException("Cannot add two non-numeric types! " + (std::string)ValueTypes[(int)other.type] + " and " + (std::string)ValueTypes[(int)this->type]);
+		};
 
 		Value operator-( const Value &other )
 		{
 			if (type == ValueType::Number && other.type == ValueType::Number)
 				return Value(value-other.value);
 
-			throw JetRuntimeException("Cannot subtract two non-numeric types!");
-
-			return Value(0);
+			throw JetRuntimeException("Cannot subtract two non-numeric types! " + (std::string)ValueTypes[(int)this->type] + " and " + (std::string)ValueTypes[(int)other.type]);
 		};
 
 		Value operator*( const Value &other )
@@ -293,9 +289,7 @@ namespace Jet
 			if (type == ValueType::Number && other.type == ValueType::Number)
 				return Value(value*other.value);
 
-			throw JetRuntimeException("Cannot multiply two non-numeric types!");
-
-			return Value(0);
+			throw JetRuntimeException("Cannot multiply two non-numeric types! " + (std::string)ValueTypes[(int)this->type] + " and " + (std::string)ValueTypes[(int)other.type]);
 		};
 
 		Value operator/( const Value &other )
@@ -303,8 +297,7 @@ namespace Jet
 			if (type == ValueType::Number && other.type == ValueType::Number)
 				return Value(value/other.value);
 
-			throw JetRuntimeException("Cannot divide two non-numeric types!");
-			return Value(0);
+			throw JetRuntimeException("Cannot divide two non-numeric types! " + (std::string)ValueTypes[(int)this->type] + " and " + (std::string)ValueTypes[(int)other.type]);
 		};
 
 		Value operator%( const Value &other )
@@ -312,9 +305,7 @@ namespace Jet
 			if (type == ValueType::Number && other.type == ValueType::Number)
 				return Value((int)value%(int)other.value);
 
-			throw JetRuntimeException("Cannot modulus two non-numeric types!");
-
-			return Value(0);
+			throw JetRuntimeException("Cannot modulus two non-numeric types! " + (std::string)ValueTypes[(int)this->type] + " and " + (std::string)ValueTypes[(int)other.type]);
 		};
 	};
 }

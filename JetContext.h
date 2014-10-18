@@ -16,7 +16,7 @@
 
 #ifdef _WIN32
 #include <Windows.h>
-//#define JET_TIME_EXECUTION
+#define JET_TIME_EXECUTION
 #endif
 
 namespace Jet
@@ -24,6 +24,8 @@ namespace Jet
 	typedef std::function<void(Jet::JetContext*,Jet::Value*,int)> JetFunction;
 #define JetBind(context, fun) 	auto temp__bind_##fun = [](Jet::JetContext* context,Jet::Value* args, int numargs) { context->Return(fun(args[0]));};context[#fun] = Jet::Value(temp__bind_##fun);
 	//void(*temp__bind_##fun)(Jet::JetContext*,Jet::Value*,int)> temp__bind_##fun = &[](Jet::JetContext* context,Jet::Value* args, int numargs) { context->Return(fun(args[0]));}; context[#fun] = &temp__bind_##fun;
+#define JetBind2(context, fun) 	auto temp__bind_##fun = [](Jet::JetContext* context,Jet::Value* args, int numargs) { context->Return(fun(args[0],args[1]));};context[#fun] = Jet::Value(temp__bind_##fun);
+#define JetBind2(context, fun, type) 	auto temp__bind_##fun = [](Jet::JetContext* context,Jet::Value* args, int numargs) { context->Return(fun((type)args[0],(type)args[1]));};context[#fun] = Jet::Value(temp__bind_##fun);
 
 	struct Instruction
 	{
@@ -75,7 +77,7 @@ namespace Jet
 		::std::vector<Value> vars;//where they are actually stored
 
 		//garbage collector stuff
-		::std::vector<GCVal<::std::map<int, Value>*>*> arrays;
+		::std::vector<GCVal<::std::vector<Value>*>*> arrays;
 		::std::vector<GCVal<::std::map<std::string, Value>*>*> objects;
 		::std::vector<GCVal<char*>*> strings;
 		::std::vector<_JetUserdata*> userdata;
@@ -87,7 +89,10 @@ namespace Jet
 
 		_JetObject string;
 		_JetObject Array;
+		_JetObject object;
 		_JetObject file;
+		_JetObject arrayiter;
+		_JetObject objectiter;
 	public:
 
 		Value NewObject()
@@ -247,7 +252,10 @@ namespace Jet
 			(*this->Array.ptr)["add"] = Value([](JetContext* context, Value* v, int args)
 			{
 				if (args == 2)
-					(*(v+1)->_obj._array->ptr)[(v+1)->_obj._array->ptr->size()] = *(v);
+				{
+					(v+1)->_obj._array->ptr->push_back(*v);
+					//(*(v+1)->_obj._array->ptr)[(v+1)->_obj._array->ptr->size()] = *(v);
+				}
 				else
 					throw JetRuntimeException("Invalid add call!!");
 			});
@@ -258,6 +266,167 @@ namespace Jet
 					context->Return((int)v->_obj._array->ptr->size());
 				else
 					throw JetRuntimeException("Invalid size call!!");
+			});
+			(*this->Array.ptr)["resize"] = Value([](JetContext* context, Value* v, int args)
+			{
+				//how do I get access to the array from here?
+				if (args == 2)
+					(v+1)->_obj._array->ptr->resize((*v).value);
+				else
+					throw JetRuntimeException("Invalid size call!!");
+			});
+
+			(*this->Array.ptr)["getIterator"] = Value([](JetContext* context, Value* v, int args)
+			{
+				if (args == 1)
+				{
+					struct iter
+					{
+						std::vector<Value>* container;
+						std::vector<Value>::iterator iterator;
+					};
+					iter* it = new iter;
+					it->container = v->_obj._array->ptr;
+					it->iterator = v->_obj._array->ptr->begin();
+					context->Return(context->NewUserdata(it, &context->arrayiter));
+					return;
+				}
+				throw JetRuntimeException("Bad call to getIterator");
+			});
+			this->object.ptr = new std::map<std::string, Value>;
+			(*this->object.ptr)["size"] = Value([](JetContext* context, Value* v, int args)
+			{
+				//how do I get access to the array from here?
+				if (args == 1)
+					context->Return((int)v->_obj._object->ptr->size());
+				else
+					throw JetRuntimeException("Invalid size call!!");
+			});
+
+			(*this->object.ptr)["getIterator"] = Value([](JetContext* context, Value* v, int args)
+			{
+				if (args == 1)
+				{
+					struct iter2
+					{
+						std::map<std::string, Value>* container;
+						std::map<std::string, Value>::iterator iterator;
+					};
+					iter2* it = new iter2;
+					it->container = v->_obj._object->ptr;
+					it->iterator = v->_obj._object->ptr->begin();
+					context->Return(context->NewUserdata(it, &context->objectiter));
+					return;
+				}
+				throw JetRuntimeException("Bad call to getIterator");
+			});
+			this->objectiter.ptr = new std::map<std::string, Value>;
+			(*this->objectiter.ptr)["next"] = Value([](JetContext* context, Value* v, int args)
+			{
+				struct iter2
+				{
+					std::map<std::string, Value>* container;
+					std::map<std::string, Value>::iterator iterator;
+				};
+				auto iterator = v->GetUserdata<iter2>();
+				if (iterator->iterator != iterator->container->end())
+				{
+					context->Return((*iterator->iterator).second);
+					++iterator->iterator;//->operator++();
+				}
+				//just return null
+			});
+			(*this->objectiter.ptr)["current"] = Value([](JetContext* context, Value* v, int args)
+			{
+				struct iter2
+				{
+					std::map<std::string, Value>* container;
+					std::map<std::string, Value>::iterator iterator;
+				};
+				//still kinda wierd
+				auto iterator = v->GetUserdata<iter2>();
+				if (iterator->iterator != iterator->container->end())
+				{
+					context->Return((*iterator->iterator).second);
+				}
+				//just return null
+			});
+			(*this->objectiter.ptr)["advance"] = Value([](JetContext* context, Value* v, int args)
+			{
+				struct iter2
+				{
+					std::map<std::string, Value>* container;
+					std::map<std::string, Value>::iterator iterator;
+				};
+				auto iterator = v->GetUserdata<iter2>();
+				if (++iterator->iterator != iterator->container->end())
+					context->Return(1);
+				else
+					context->Return(0);
+				//just return null
+			});
+			(*this->objectiter.ptr)["_gc"] = Value([](JetContext* context, Value* v, int args)
+			{
+				struct iter2
+				{
+					std::map<std::string, Value>* container;
+					std::map<std::string, Value>::iterator iterator;
+				};
+				delete v->GetUserdata<iter2>();
+			});
+			this->arrayiter.ptr = new std::map<std::string, Value>;
+			(*this->arrayiter.ptr)["next"] = Value([](JetContext* context, Value* v, int args)
+			{
+				struct iter
+				{
+					std::vector<Value>* container;
+					std::vector<Value>::iterator iterator;
+				};
+				auto iterator = v->GetUserdata<iter>();
+				if (iterator->iterator != iterator->container->end())
+				{
+					context->Return((*iterator->iterator));
+					++iterator->iterator;//->operator++();
+				}
+				//just return null
+			});
+			(*this->arrayiter.ptr)["current"] = Value([](JetContext* context, Value* v, int args)
+			{
+				struct iter
+				{
+					std::vector<Value>* container;
+					std::vector<Value>::iterator iterator;
+				};
+				//still kinda wierd
+				auto iterator = v->GetUserdata<iter>();
+				if (iterator->iterator != iterator->container->end())
+				{
+					context->Return((*iterator->iterator));
+				}
+				//just return null
+			});
+			(*this->arrayiter.ptr)["advance"] = Value([](JetContext* context, Value* v, int args)
+			{
+				struct iter
+				{
+					std::vector<Value>* container;
+					std::vector<Value>::iterator iterator;
+				};
+				auto iterator = v->GetUserdata<iter>();
+				if (++iterator->iterator != iterator->container->end())
+					context->Return(1);
+				else
+					context->Return(0);
+				//just return null
+			});
+			(*this->arrayiter.ptr)["_gc"] = Value([](JetContext* context, Value* v, int args)
+			{
+				struct iter
+				{
+					std::vector<Value>* container;
+					std::vector<Value>::iterator iterator;
+				};
+				delete v->GetUserdata<iter>();
 			});
 		};
 
@@ -301,6 +470,8 @@ namespace Jet
 			delete this->string.ptr;
 			delete this->Array.ptr;
 			delete this->file.ptr;
+			delete this->arrayiter.ptr;
+			delete this->objectiter.ptr;
 		}
 
 		//allows assignment and reading of variables stored
@@ -321,6 +492,9 @@ namespace Jet
 
 			Value v = this->Assemble(asmb);
 
+			//this->RunGC();
+			if (this->labels.size() > 100000)
+				throw CompilerException("test", 5, "problem with lables!");
 			return v;
 		}
 
@@ -337,7 +511,8 @@ namespace Jet
 				if (depth == 0)
 					return this->locals[id];
 				else
-					return (this-depth)->locals[id];
+					throw JetRuntimeException("get on multiple scopes not implemented");
+				return (this-depth)->locals[id];
 			}
 
 			void Set(Value v, unsigned int id, unsigned int depth)
@@ -345,7 +520,11 @@ namespace Jet
 				if (depth == 0)
 					this->locals[id] = v;
 				else
+				{
+					throw JetRuntimeException("set on multiple scopes not implemented");
+
 					(this-depth)->locals[id] = v;
+				}
 			}
 		};
 
@@ -393,10 +572,15 @@ namespace Jet
 				case InstructionType::Label:
 					{
 						if (this->labels.find(inst.string) == labels.end())
+						{
 							this->labels[inst.string] = this->labelposition;
+							delete[] inst.string;
+						}
 						else
+						{
+							delete[] inst.string;
 							throw JetRuntimeException("ERROR: Duplicate Label Name: %s\n" + std::string(inst.string));
-						delete[] inst.string;
+						}
 						break;
 					}
 				default:
@@ -549,7 +733,6 @@ namespace Jet
 		//debug stuff
 		void GetCode(int ptr, std::string& ret, unsigned int& line)
 		{
-			//std::binary_search(this->debuginfo.begin(), this->debuginfo.end(), line);
 			int imax = this->debuginfo.size()-1;
 			int imin = 0;
 			while (imax >= imin)
@@ -571,20 +754,10 @@ namespace Jet
 					// change max index to search lower subarray
 					imax = imid - 1;
 			}
+
 			int index = min(imin, imax);
 			ret = this->debuginfo[index].file;
 			line = this->debuginfo[index].line;
-			/*for (int i = this->debuginfo.size()-1; i >= 0; i--)
-			{
-				DebugInfo info = this->debuginfo[i];
-				if (info.code <= ptr)
-				{
-					//fix me line numbers are REALLY wrong
-					ret = info.file;
-					line = info.line;
-					break;
-				}
-			}*/
 		}
 
 		void StackTrace(int curiptr)
@@ -621,7 +794,6 @@ namespace Jet
 					std::string file;
 					unsigned int line;
 					this->GetCode(top, file, line);
-					//printf("File: %s line %d ", file.c_str(), line);
 					printf("%s() %s Line %d (Instruction %d)\n", fun.c_str(), file.c_str(), line, top-greatest);
 				}
 			}

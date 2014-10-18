@@ -80,7 +80,7 @@ namespace Jet
 			Scope* previous;
 			Scope* next;
 			int level;
-			::std::vector<std::string> localvars;
+			::std::vector<std::pair<int ,std::string>> localvars;
 		};
 		Scope* scope;
 
@@ -110,7 +110,7 @@ namespace Jet
 
 		void FinalizeFunction(CompilerContext* c)
 		{
-			this->uuid += c->uuid + 1;
+			this->uuid = c->uuid + 1;
 		}
 
 		std::vector<IntermediateInstruction> Compile(BlockExpression* expr);
@@ -180,6 +180,7 @@ namespace Jet
 			this->Jump(_loops.back().Continue.c_str());
 		}
 
+		unsigned int localindex;
 		bool RegisterLocal(std::string name);//returns success
 
 		void BinaryOperation(TokenType operation);
@@ -247,12 +248,12 @@ namespace Jet
 				//look for var in locals
 				for (unsigned int i = 0; i < ptr->localvars.size(); i++)
 				{
-					if (ptr->localvars[i] == variable)
+					if (ptr->localvars[i].second == variable)
 					{
-						//printf("We found storing of a local var: %s at level %d\n", variable.c_str(), ptr->level);
+						//printf("We found storing of a local var: %s at level %d, index %d\n", variable.c_str(), ptr->level, ptr->localvars[i].first);
 						//exit the loops we found it
 						//this->output += ".local " + variable + " " + ::std::to_string(i) + ";\n";
-						out.push_back(IntermediateInstruction(InstructionType::LStore, i, ptr->level));
+						out.push_back(IntermediateInstruction(InstructionType::LStore, ptr->localvars[i].first, 0));//i, ptr->level));
 						return;
 					}
 				}
@@ -277,13 +278,13 @@ namespace Jet
 				//look for var in locals
 				for (unsigned int i = 0; i < ptr->localvars.size(); i++)
 				{
-					if (ptr->localvars[i] == variable)
+					if (ptr->localvars[i].second == variable)
 					{
-						//printf("We found loading of a local var: %s at level %d\n", variable.c_str(), ptr->level);
+						//printf("We found loading of a local var: %s at level %d, index %d\n", variable.c_str(), ptr->level, ptr->localvars[i].first);
 						//exit the loops we found it
 						//comment/debug info
 						//this->output += ".local " + variable + " " + ::std::to_string(i) + ";\n";
-						out.push_back(IntermediateInstruction(InstructionType::LLoad, i, ptr->level));
+						out.push_back(IntermediateInstruction(InstructionType::LLoad, ptr->localvars[i].first, 0));//i, ptr->level));
 						return;
 					}
 				}

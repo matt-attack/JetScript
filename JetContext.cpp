@@ -122,7 +122,7 @@ void JetContext::RunGC()
 				o->_obj._array->flag = true;
 
 				for (auto ii: *o->_obj._array->ptr)
-					stack.push(&ii.second);
+					stack.push(&ii);
 			}
 			else if (o->type == ValueType::String)
 			{
@@ -443,12 +443,13 @@ Value JetContext::Execute(int iptr)
 				}
 			case InstructionType::LLoad:
 				{
-					stack.Push(frames[fptr].Get((unsigned int)in.value, (unsigned int)in.value2));
+					stack.Push(frames[fptr].locals[(unsigned int)in.value]);
+					//stack.Push(frames[fptr].Get((unsigned int)in.value, (unsigned int)in.value2));
 					break;
 				}
 			case InstructionType::LStore:
 				{
-					frames[fptr].Set(stack.Pop(), (unsigned int)in.value, (unsigned int)in.value2);
+					frames[fptr].locals[(unsigned int)in.value] = stack.Pop();//frames[fptr].Set(stack.Pop(), (unsigned int)in.value, (unsigned int)in.value2);
 					break;
 				}
 			case InstructionType::LoadFunction:
@@ -614,7 +615,11 @@ Value JetContext::Execute(int iptr)
 						Value val = stack.Pop();	
 
 						if (loc.type == ValueType::Array)
+						{
+							if ((int)index >= loc._obj._array->ptr->size())
+								throw JetRuntimeException("Array index out of range!");
 							(*loc._obj._array->ptr)[(int)index] = val;
+						}
 						else if (loc.type == ValueType::Object)
 							(*loc._obj._object->ptr)[index.ToString()] = val;
 						else
@@ -631,13 +636,40 @@ Value JetContext::Execute(int iptr)
 
 						if (loc.type == ValueType::Object)
 						{
-							Value v = (*loc._obj._object->ptr)[in.string];
+							Value v;
+							auto ii = loc._obj._object->ptr->find(in.string);
+							if (ii == loc._obj._object->ptr->end())
+							{
+								if (loc._obj.prototype)
+								{
+									ii = loc._obj.prototype->ptr->find(in.string);
+									if (ii == loc._obj.prototype->ptr->end())
+									{
+										ii = this->object.ptr->find(in.string);
+										if (ii != this->object.ptr->end())
+											v = ii->second;
+									}
+									else
+										v = ii->second;
+								}
+								else
+								{
+									ii = this->object.ptr->find(in.string);
+									if (ii != this->object.ptr->end())
+										v = ii->second;
+								}
+								stack.Push(v);
+							}
+							else
+								stack.Push(ii->second);
+							//Value v = (*loc._obj._object->ptr)[in.string];
 
 							//check meta table
-							if (v.type == ValueType::Null && v._obj.prototype)
-								v = (*loc._obj.prototype->ptr)[in.string];
-
-							stack.Push(v);
+							//if (v.type == ValueType::Null && loc._obj.prototype)
+							//v = (*loc._obj.prototype->ptr)[in.string];
+							//if (v.type == ValueType::Null)
+							//v = (*this->object.ptr)[in.string];
+							//stack.Push(v);
 						}
 						else if (loc.type == ValueType::String)
 							stack.Push((*this->string.ptr)[in.string]);
@@ -654,7 +686,11 @@ Value JetContext::Execute(int iptr)
 						Value loc = stack.Pop();
 
 						if (loc.type == ValueType::Array)
+						{
+							if ((int)index >= loc._obj._array->ptr->size())
+								throw JetRuntimeException("Array index out of range!");
 							stack.Push((*loc._obj._array->ptr)[(int)index]);
+						}
 						else if (loc.type == ValueType::Object)
 							stack.Push((*loc._obj._object->ptr)[index.ToString()]);
 						else
@@ -664,7 +700,7 @@ Value JetContext::Execute(int iptr)
 				}
 			case InstructionType::NewArray:
 				{
-					auto arr = new GCVal<std::map<int, Value>*>(new std::map<int, Value>);//new std::map<int, Value>;
+					auto arr = new GCVal<std::vector<Value>*>(new std::vector<Value>(in.value));//new std::map<int, Value>;
 					this->arrays.push_back(arr);
 					for (int i = (int)in.value-1; i >= 0; i--)
 						(*arr->ptr)[i] = stack.Pop();

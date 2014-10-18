@@ -40,14 +40,21 @@ test = [1,2,3,4,5,6,7,8,9];
 p = test:add(10);
 print("Sise of test is: ", test:size());
 print("Testing for each loop: ");
--[[for (local v in test)
+for (local v in test)
 {
 	print(v);
-}]]-
+}
+print("done");
 test[2] = [];
 test[2][2] = [];
 
 rec = {a = 2, b = 3, "test" = 6};
+print("test forloop on objects");
+for (local x2 in rec)
+{
+	print(x2);
+}
+print("done");
 rec[1] = {};
 rec[1].id = 55;
 
@@ -68,7 +75,7 @@ apples.two = 7;
 apples["hello"] = "testing";
 apples.a7 = 6;
 
-
+//return;
 //gc test code
 cur = {};
 begin = cur;
@@ -115,6 +122,8 @@ fun fibo(n)
 print("Fibonacci of 10: ", fibo(10));
 //return;
 
+//return;
+
 print("swap test should be 1 2");
 local a = 2;
 b = 1;
@@ -122,15 +131,17 @@ a <> b;
 print(a,b);
 test = 7;
 ans = 0;
+//return;
 for (local i = 0; i < 1000; i++)
 {
-	local test = 5+i;
+	local tttest2 = 5+i;
 	if (i%3 == 0)
 		ans = ans + i;
 	else if (i%5 == 0)
 		ans = ans + i;
 }
 test = 5;
+return;
 //return ans;
 //p();
 test = 6;

@@ -765,44 +765,40 @@ namespace Jet
 
 		void Compile(CompilerContext* context)
 		{
-			printf("hi");
+			//return;
+			context->PushScope();
+
 			auto uuid = context->GetUUID();
 			context->RegisterLocal(this->name.text);
 			context->RegisterLocal("_iter");
 
 			context->Load(this->container.text);
+			context->Duplicate();
 			context->LoadIndex("getIterator");
-			context->ECall(0);
+			context->ECall(1);
 			context->Store("_iter");
 			
-			context->Load(this->container.text);
-			context->LoadIndex("next");
-			context->ECall(0);
+
+			context->Label("_foreachstart"+uuid);
+			context->Load("_iter");//this->container.text);
+			context->Duplicate();
+			context->LoadIndex("current");
+			context->ECall(1);
 			context->Store(this->name.text);
 			
-			context->Label("_foreachstart"+uuid);
-			context->Store(this->name.text);
 			context->PushLoop("_foreachend"+uuid, "_foreachstart"+uuid);
 			this->block->Compile(context);
 			context->PopLoop();
 
-			//context->Jump("_foreachstart"+uuid);
+			context->Load("_iter");
+			context->Duplicate();
+			context->LoadIndex("advance");
+			context->ECall(1);
+			context->JumpFalse(("_foreachend"+uuid).c_str());
+
+			context->Jump(("_foreachstart"+uuid).c_str());
 			context->Label("_foreachend"+uuid);
-			/*::std::string uuid = context->GetUUID();
-			this->initial->Compile(context);
-			context->Label("forloopstart_"+uuid);
-			this->condition->Compile(context);
-			context->JumpFalse(("forloopend_"+uuid).c_str());
-
-			context->PushLoop("forloopend_"+uuid, "forloopcontinue_"+uuid);
-			this->block->Compile(context);
-			context->PopLoop();
-
-			//this wont work if we do some kind of continue keyword unless it jumps to here
-			context->Label("forloopcontinue_"+uuid);
-			this->incr->Compile(context);
-			context->Jump(("forloopstart_"+uuid).c_str());
-			context->Label("forloopend_"+uuid);*/
+			context->PopScope();
 		}
 	};
 
