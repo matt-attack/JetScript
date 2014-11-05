@@ -3,6 +3,25 @@
 
 namespace Jet
 {
+	//exceptions
+	class ParserException
+	{
+	public:
+		unsigned int line;
+		::std::string file;
+		::std::string reason;
+
+		ParserException(std::string file, unsigned int line, std::string r)
+		{
+			this->line = line;
+			this->file = file;
+			reason = r;
+		};
+		~ParserException() {};
+
+		const char *ShowReason() const { return reason.c_str(); }
+	};
+
 	class CompilerException
 	{
 	public:
@@ -20,11 +39,11 @@ namespace Jet
 		const char *ShowReason() const { return reason.c_str(); }
 	};
 
-	class JetRuntimeException
+	class RuntimeException
 	{
 	public:
 		std::string reason;
-		JetRuntimeException(std::string reason)
+		RuntimeException(std::string reason)
 		{
 			this->reason = reason;
 		}

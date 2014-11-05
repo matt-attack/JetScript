@@ -2,6 +2,7 @@
 #ifndef _PARSER
 #define _PARSER
 
+#ifdef _DEBUG
 #ifndef DBG_NEW      
 #define DBG_NEW new ( _NORMAL_BLOCK , __FILE__ , __LINE__ )     
 #define new DBG_NEW   
@@ -9,6 +10,7 @@
 
 #define _CRTDBG_MAP_ALLOC
 #include <crtdbg.h>
+#endif
 
 #include <stdio.h>
 #include <map>
@@ -18,33 +20,12 @@
 #include "Expressions.h"
 #include "Parselets.h"
 #include "Lexer.h"
+#include "JetExceptions.h"
 
 #include <list>
 
 namespace Jet
 {
-	//exceptions
-	class ParserException
-	{
-	public:
-		unsigned int line;
-		::std::string file;
-		::std::string reason;
-
-		ParserException(std::string file, unsigned int line, std::string r)
-		{
-			this->line = line;
-			this->file = file;
-			reason = r;
-		};
-		~ParserException() {};
-
-		const char *ShowReason() const { return reason.c_str(); }
-	};
-
-
-#include "Parselets.h"
-
 	/*public class Precedence {
 	// Ordered in increasing precedence.
 	public static final int ASSIGNMENT = 1;
@@ -63,46 +44,18 @@ namespace Jet
 		::std::map<TokenType, PrefixParselet*> mPrefixParselets;
 		::std::map<TokenType, StatementParselet*> mStatementParselets;
 		::std::list<Jet::Token> mRead;
+
 	public:
 		Parser(Lexer* l);
 
 		~Parser();
 
-		Expression* parseExpression(int precedence = 0)
-		{
-			Token token = Consume();
-			PrefixParselet* prefix = mPrefixParselets[token.getType()];
-
-			if (prefix == 0)
-			{
-				std::string str = "ParseExpression: No Parser Found for: " + token.getText();
-				throw ParserException(token.filename, token.line, str);//printf("Consume: TokenType not as expected!\n");
-			}
-
-			Expression* left = prefix->parse(this, token);
-			while (precedence < getPrecedence())
-			{
-				token = Consume();
-
-				InfixParselet* infix = mInfixParselets[token.getType()];
-				left = infix->parse(this, left, token);
-			}
-			return left;
-		}
-
+		Expression* parseExpression(int precedence = 0);
 		Expression* ParseStatement(bool takeTrailingSemicolon = true);//call this until out of tokens (hit EOF)
-
 		BlockExpression* parseBlock(bool allowsingle = true);
-
 		BlockExpression* parseAll();
 
-		int getPrecedence() {
-			InfixParselet* parser = mInfixParselets[LookAhead(0).getType()];
-			if (parser != 0) 
-				return parser->getPrecedence();
-
-			return 0;
-		}
+		int getPrecedence();
 
 		Token Consume();
 		Token Consume(TokenType expected);
@@ -117,7 +70,7 @@ namespace Jet
 		void Register(TokenType token, StatementParselet* parselet);
 	};
 
-#define EOF -1
+//#define EOF -1
 
 }
 #endif

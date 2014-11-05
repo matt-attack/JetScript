@@ -4,68 +4,71 @@
 
 #include "JetExceptions.h"
 
-template<class T>
-class VMStack
+namespace Jet
 {
-	unsigned int _size;
-	
-public:
-	T mem[5000];
-	VMStack()
+	template<class T>
+	class VMStack
 	{
-		_size = 0;
-		//mem = new T[size];
-	}
+		unsigned int _size;
 
-	VMStack(unsigned int size)
-	{
-		_size = 0;
-		//mem = new T[size];
-	}
-
-	VMStack<T> Copy()
-	{
-		VMStack<T> ns;
-		for (unsigned int i = 0; i < this->_size; i++)
+	public:
+		T mem[5000];
+		VMStack()
 		{
-			ns.mem[i] = this->mem[i];
+			_size = 0;
+			//mem = new T[size];
 		}
-		ns._size = this->_size;
-		return std::move(ns);
-	}
 
-	~VMStack()
-	{
-		//delete[] this->mem;
-	}
+		VMStack(unsigned int size)
+		{
+			_size = 0;
+			//mem = new T[size];
+		}
 
-	T Pop()
-	{
-		if (_size == 0)
-			throw Jet::JetRuntimeException("Tried to pop empty stack!");////Jetprintf("fail");
-		return mem[--_size];
-	}
+		VMStack<T> Copy()
+		{
+			VMStack<T> ns;
+			for (unsigned int i = 0; i < this->_size; i++)
+			{
+				ns.mem[i] = this->mem[i];
+			}
+			ns._size = this->_size;
+			return std::move(ns);
+		}
 
-	void QuickPop(int times = 1)
-	{
-		if (this->_size < times)
-			throw Jet::JetRuntimeException("Tried to pop empty stack!");//printf("Fail");
-		_size -= times;
-	}
+		~VMStack()
+		{
+			//delete[] this->mem;
+		}
 
-	T Peek()
-	{
-		return mem[_size-1];
-	}
+		T Pop()
+		{
+			if (_size == 0)
+				throw RuntimeException("Tried to pop empty stack!");
+			return mem[--_size];
+		}
 
-	void Push(T item)
-	{
-		mem[_size++] = item;
-	}
+		void QuickPop(int times = 1)
+		{
+			if (this->_size < times)
+				throw RuntimeException("Tried to pop empty stack!");
+			_size -= times;
+		}
 
-	unsigned int size()
-	{
-		return _size;
-	}
-};
+		T Peek()
+		{
+			return mem[_size-1];
+		}
+
+		void Push(T item)
+		{
+			mem[_size++] = item;
+		}
+
+		unsigned int size()
+		{
+			return _size;
+		}
+	};
+}
 #endif

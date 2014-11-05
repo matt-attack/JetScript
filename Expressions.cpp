@@ -102,7 +102,7 @@ void CallExpression::Compile(CompilerContext* context)
 	}
 	else
 	{
-		throw ParserException("dummy", 555, "Error: Cannot call an expression that is not a name");
+		throw ParserException(token.filename, token.line, "Error: Cannot call an expression that is not a name");
 	}
 	//help, how should I handle this for multiple returns
 	//pop off return value if we dont need it
@@ -114,7 +114,7 @@ void OperatorAssignExpression::Compile(CompilerContext* context)
 {
 	context->Line(token.filename, token.line);
 
-	left->Compile(context);//context->Load(name);
+	left->Compile(context);
 	this->right->Compile(context);
 	context->BinaryOperation(token.type);
 
@@ -124,7 +124,6 @@ void OperatorAssignExpression::Compile(CompilerContext* context)
 
 	if (dynamic_cast<IStorableExpression*>(this->left))
 		dynamic_cast<IStorableExpression*>(this->left)->CompileStore(context);
-	//context->Store(name);
 }
 
 void FunctionExpression::Compile(CompilerContext* context)
@@ -144,7 +143,6 @@ void FunctionExpression::Compile(CompilerContext* context)
 	{
 		auto aname = dynamic_cast<NameExpression*>((*this->args)[i]);
 		function->RegisterLocal(aname->GetName());
-		//function->StoreLocal(aname->GetName());
 	}
 	block->Compile(function);
 
@@ -174,18 +172,21 @@ void FunctionExpression::Compile(CompilerContext* context)
 
 void LocalExpression::Compile(CompilerContext* context)
 {
-	context->Line(_name.filename, _name.line);
+	context->Line((*_names)[0].filename, (*_names)[0].line);
 
 	//add load variable instruction
-	if (this->_right)
-		this->_right->Compile(context);
+	for (auto ii: *this->_right)
+		ii->Compile(context);
 
 	//make sure to create identifier
-	if (context->RegisterLocal(_name.getText()) == false)
-		throw ParserException(_name.filename, _name.line, "Duplicate Local Variable '"+_name.getText()+"'");
+	for (auto _name: *this->_names)
+		if (context->RegisterLocal(_name.getText()) == false)
+			throw ParserException(_name.filename, _name.line, "Duplicate Local Variable '"+_name.text+"'");
 
 	//actually store if we have something to store
-	if (this->_right)
-		context->StoreLocal(_name.getText());
+	for (int i = _right->size()-1; i >= 0; i--)
+	{
+		context->StoreLocal((*_names)[i].text);
+	}
 }
 

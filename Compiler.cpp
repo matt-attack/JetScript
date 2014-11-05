@@ -1,3 +1,4 @@
+#ifdef _DEBUG
 #ifndef DBG_NEW      
 #define DBG_NEW new ( _NORMAL_BLOCK , __FILE__ , __LINE__ )     
 #define new DBG_NEW   
@@ -5,6 +6,7 @@
 
 #define _CRTDBG_MAP_ALLOC
 #include <crtdbg.h>
+#endif
 
 #include "Compiler.h"
 #include "Parser.h"
@@ -13,6 +15,8 @@ using namespace Jet;
 
 CompilerContext::CompilerContext(void)
 {
+	this->closures = 0;
+	this->parent = 0;
 	uuid = 0;
 	this->localindex = 0;
 	this->scope = new CompilerContext::Scope;
@@ -43,12 +47,19 @@ std::vector<IntermediateInstruction> CompilerContext::Compile(BlockExpression* e
 {
 	try
 	{
+		//may want to correct number of locals here
+		this->FunctionLabel("{Entry Point}", 0, 0, 0);
+
 		expr->Compile(this);
 
 		//add a return to signify end of global code
 		this->Return();
 
 		this->Compile();
+
+		//modify the entry point with number of locals
+		this->out[0].b = this->localindex;
+		this->out[0].c = this->closures;
 	}
 	catch (CompilerException e)
 	{
@@ -72,6 +83,7 @@ std::vector<IntermediateInstruction> CompilerContext::Compile(BlockExpression* e
 		this->functions.clear();
 
 		this->localindex = 0;
+		this->closures = 0;
 
 		throw e;
 	}
@@ -97,6 +109,9 @@ std::vector<IntermediateInstruction> CompilerContext::Compile(BlockExpression* e
 	this->functions.clear();
 
 	this->localindex = 0;
+	this->closures = 0;
+
+	//this->ToString();
 
 	auto temp = std::move(this->out);
 	this->out.clear();
@@ -111,7 +126,7 @@ bool CompilerContext::RegisterLocal(std::string name)
 		if (this->scope->localvars[i].second == name)
 			return false;
 	}
-	this->scope->localvars.push_back(std::pair<int, std::string>(this->localindex++,name));
+	this->scope->localvars.push_back(triple<int, std::string, int>(this->localindex++,name, -1));
 	return true;
 }
 

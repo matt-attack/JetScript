@@ -1,6 +1,5 @@
 #include "Parser.h"
 #include "Token.h"
-#undef EOF
 
 using namespace Jet;
 
@@ -88,11 +87,13 @@ Parser::Parser(Lexer* l)
 	this->Register(TokenType::And, new BinaryOperatorParselet(3, false));//and
 
 
+	//add parser for includes k
 	//function stuff
 	this->Register(TokenType::LeftParen, new CallParselet());
 
 	//lambda
 	this->Register(TokenType::Function, new LambdaParselet());
+	//this->Register(TokenType::LeftParen, new LambdaParselet());
 
 	//statements
 	this->Register(TokenType::While, new WhileParselet()); 
@@ -117,6 +118,29 @@ Parser::~Parser()
 	for (auto ii: this->mStatementParselets)
 		delete ii.second;
 };
+
+Expression* Parser::parseExpression(int precedence)
+{
+	Token token = Consume();
+	PrefixParselet* prefix = mPrefixParselets[token.getType()];
+
+	if (prefix == 0)
+	{
+		std::string str = "ParseExpression: No Parser Found for: " + token.getText();
+		throw ParserException(token.filename, token.line, str);//printf("Consume: TokenType not as expected!\n");
+	}
+
+	Expression* left = prefix->parse(this, token);
+	while (precedence < getPrecedence())
+	{
+		token = Consume();
+
+		InfixParselet* infix = mInfixParselets[token.getType()];
+		left = infix->parse(this, left, token);
+	}
+	return left;
+}
+
 
 Expression* Parser::ParseStatement(bool takeTrailingSemicolon)//call this until out of tokens (hit EOF)
 {
@@ -167,7 +191,7 @@ BlockExpression* Parser::parseBlock(bool allowsingle)
 BlockExpression* Parser::parseAll()
 {
 	auto statements = new std::vector<Expression*>;
-	while (!Match(TokenType::EOF))
+	while (!Match(TokenType::EoF))
 	{
 		statements->push_back(this->ParseStatement());
 	}
@@ -192,7 +216,7 @@ Token Parser::Consume(TokenType expected)
 	if (temp.getType() != expected)
 	{
 		std::string str = "Consume: TokenType not as expected! Expected: " + TokenToString[expected] + " Got: " + temp.text;
-		throw ParserException(temp.filename, temp.line, str);//printf("Consume: TokenType not as expected!\n");
+		throw ParserException(temp.filename, temp.line, str);
 	}
 	mRead.pop_front();
 	return temp;
@@ -210,7 +234,7 @@ Token Parser::LookAhead(unsigned int num)
 			return ii;
 	}
 
-	return Token("test", 0, TokenType::EOF, "EOF");
+	return Token("test", 0, TokenType::EoF, "EOF");
 }
 
 bool Parser::Match(TokenType expected)
@@ -251,3 +275,10 @@ void Parser::Register(TokenType token, StatementParselet* parselet)
 	this->mStatementParselets[token] = parselet;
 }
 
+int Parser::getPrecedence() {
+	InfixParselet* parser = mInfixParselets[LookAhead(0).getType()];
+	if (parser != 0) 
+		return parser->getPrecedence();
+
+	return 0;
+}

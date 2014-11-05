@@ -1,6 +1,7 @@
 #ifndef _EXPRESSIONS_HEADER
 #define _EXPRESSIONS_HEADER
 
+#ifdef _DEBUG
 #ifndef DBG_NEW      
 #define DBG_NEW new ( _NORMAL_BLOCK , __FILE__ , __LINE__ )     
 #define new DBG_NEW   
@@ -8,6 +9,7 @@
 
 #define _CRTDBG_MAP_ALLOC
 #include <crtdbg.h>
+#endif
 
 #include <string>
 #include <stdio.h>
@@ -167,28 +169,32 @@ namespace Jet
 
 	class LocalExpression: public Expression
 	{
-		Token _name;
-		Expression* _right;
+		std::vector<Token>* _names;
+		std::vector<Expression*>* _right;
 	public:
-		LocalExpression(Token name, Expression* right)
+		LocalExpression(std::vector<Token>* names, std::vector<Expression*>* right)
 		{
-			this->_name = name;
+			this->_names = names;
 			this->_right = right;
 		}
 
 		~LocalExpression()
 		{
+			for (auto ii: *this->_right)
+				delete ii;
+
 			delete this->_right;
+			delete this->_names;
 		}
 
 		std::string GetName()
 		{
-			return this->_name.getText();
+			return "";//this->_name.getText();
 		}
 
 		void print()
 		{
-			printf(_name.getText().c_str());
+			//printf(_name.getText().c_str());
 		}
 
 		void Compile(CompilerContext* context);
@@ -1064,7 +1070,7 @@ namespace Jet
 			if (right)
 				right->Compile(context);
 			else
-				context->Number(-555555);//bad value to prevent use
+				context->Null();//bad value to prevent use
 
 			context->Return();
 		}

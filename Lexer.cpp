@@ -16,6 +16,113 @@ bool Jet::IsNumber(char c)
 	return (c >= '0' && c <= '9');
 }
 
+Lexer::Lexer(::std::istream* input, std::string filename)
+{
+	this->stream = input;
+	this->linenumber = 1;
+	this->index = 0;
+	this->filename = filename;
+
+	this->Init();
+}
+
+Lexer::Lexer(::std::string text, std::string filename)
+{
+	this->stream = 0;
+	this->linenumber = 1;
+	this->index = 0;
+	this->text = text;
+	this->filename = filename;
+
+	this->Init();
+}
+
+void Lexer::Init()
+{
+	//math and assignment
+	operators["="] = TokenType::Assign;
+	operators["+"] = TokenType::Plus;
+	operators["-"] = TokenType::Minus;
+	operators["*"] = TokenType::Asterisk;
+	operators["/"] = TokenType::Slash;
+	operators["%"] = TokenType::Modulo;
+
+	operators["|"] = TokenType::Or;//or
+	operators["&"] = TokenType::And;//xor
+
+	//grouping
+	operators["("] = TokenType::LeftParen;
+	operators[")"] = TokenType::RightParen;
+	operators["{"] = TokenType::LeftBrace;
+	operators["}"] = TokenType::RightBrace;
+
+	//array stuff
+	operators["["] = TokenType::LeftBracket;
+	operators["]"] = TokenType::RightBracket;
+
+	//object stuff
+	operators["."] = TokenType::Dot;
+	operators[":"] = TokenType::Colon;
+	operators[";"] = TokenType::Semicolon;
+	operators[","] = TokenType::Comma;
+
+	operators["++"] = TokenType::Increment;
+	operators["--"] = TokenType::Decrement;
+
+	//operator + equals sign
+	operators["+="] = TokenType::AddAssign;
+	operators["-="] = TokenType::SubtractAssign;
+	operators["*="] = TokenType::MultiplyAssign;
+	operators["/="] = TokenType::DivideAssign;
+
+	//boolean logic
+	operators["!="] = TokenType::NotEqual;
+	operators["=="] = TokenType::Equals;
+
+	//comparisons
+	operators["<"] = TokenType::LessThan;
+	operators[">"] = TokenType::GreaterThan;
+	operators["<="] = TokenType::LessThanEqual;
+	operators[">="] = TokenType::GreaterThanEqual;
+
+	//special stuff
+	operators["<>"] = TokenType::Swap;
+	operators["\""] = TokenType::String;
+
+	//comments
+	operators["//"] = TokenType::LineComment;
+	operators["-[["] = TokenType::CommentBegin;
+	operators["]]-"] = TokenType::CommentEnd;
+	operators["/*"] = TokenType::CommentBegin;
+	operators["*/"] = TokenType::CommentEnd;
+
+	//keywords
+	keywords["while"] = TokenType::While;
+	keywords["mientras"] = TokenType::While;
+	keywords["if"] = TokenType::If;
+	keywords["si"] = TokenType::If;
+	keywords["elseif"] = TokenType::ElseIf;
+	keywords["otrosi"] = TokenType::ElseIf;
+	keywords["else"] = TokenType::Else;
+	keywords["otro"] = TokenType::Else;
+	keywords["fun"] = TokenType::Function;
+	keywords["return"] = TokenType::Ret;
+	keywords["volver"] = TokenType::Ret;
+	keywords["for"] = TokenType::For;
+	//add spanish mode yo!
+	keywords["por"] = TokenType::For;
+	keywords["local"] = TokenType::Local;
+	keywords["break"] = TokenType::Break;
+	keywords["romper"/*"parar"*/] = TokenType::Break;
+	keywords["continue"] = TokenType::Continue;
+	keywords["continuar"] = TokenType::Continue;
+
+	for (auto ii = operators.begin(); ii != operators.end(); ii++)
+	{
+		TokenToString[ii->second] = ii->first;
+	}
+}
+
 Token Lexer::Next()
 {
 	while (index < text.length())
@@ -41,8 +148,6 @@ Token Lexer::Next()
 			for (unsigned int i = 0; i < len-1; i++)
 				this->ConsumeChar();
 
-			std::string s;
-			s += c;
 			if (operators[str] == TokenType::LineComment)
 			{
 				//go to next line
@@ -52,12 +157,14 @@ Token Lexer::Next()
 			}
 			else if (operators[str] == TokenType::CommentBegin)
 			{
+				int startline = this->linenumber;
+
 				Token n = this->Next();
 				while(n.type != TokenType::CommentEnd) 
 				{
-					if (n.type == TokenType::EOF)
+					if (n.type == TokenType::EoF)
 					{
-						throw ParserException(n.filename, n.line, "Missing end to comment block starting at:");
+						throw ParserException(n.filename, n.line, "Missing end to comment block starting at line "+std::to_string(startline));
 					}
 					n = this->Next();
 				}
@@ -70,7 +177,7 @@ Token Lexer::Next()
 				int start = index;
 				while (index < text.length())
 				{
-					if (text.at(index) == '\\')
+					if (text[index] == '\\')
 					{
 						//handle escape sequences
 						char c = text[index+1];
@@ -88,7 +195,7 @@ Token Lexer::Next()
 							}
 						case 't':
 							{
-								txt.push_back('t');
+								txt.push_back('\t');
 								break;
 							}
 						case '"':
@@ -97,12 +204,12 @@ Token Lexer::Next()
 								break;
 							}
 						default:
-							throw ParserException("test", this->linenumber, "Unhandled Escape Sequence!");
+							throw ParserException(filename, this->linenumber, "Unhandled Escape Sequence!");
 						}
 
 						index += 2;
 					}
-					else if (text.at(index) == '"')
+					else if (text[index] == '"')
 					{
 						break;
 					}
@@ -113,19 +220,19 @@ Token Lexer::Next()
 				}
 
 				index++;
-				return Token("test", linenumber, operators[str], txt);
+				return Token(filename, linenumber, operators[str], txt);
 			}
 
-			return Token("test", linenumber, operators[str], str);
+			return Token(filename, linenumber, operators[str], str);
 		}
-		else if (IsLetter(c))//word
+		else if (IsLetter(c) || c == '_')//word
 		{
 			int start = index - 1;
 			while (index < text.length())
 			{
 				char c = this->PeekChar();
-				if (!IsLetter(text.at(index)))
-					if (!IsNumber(text.at(index)))
+				if (!(IsLetter(c) || c == '_'))
+					if (!IsNumber(c))
 						break;
 
 				this->ConsumeChar();
@@ -134,30 +241,31 @@ Token Lexer::Next()
 			std::string name = text.substr(start, index-start);
 			//check if it is a keyword
 			if (keywords.find(name) != keywords.end())//is keyword?
-				return Token("test", linenumber, keywords[name], name);
+				return Token(filename, linenumber, keywords[name], name);
 			else//just a variable name
-				return Token("test", linenumber, TokenType::Name, name);
+				return Token(filename, linenumber, TokenType::Name, name);
 		}
-		else if (c >= '0' && c <= '9')//number
+		else if (IsNumber(c))//number
 		{
 			int start = index-1;
 			while (index < text.length())
 			{
-				if (!(text[index] == '.' || (text[index] >= '0' && text[index] <= '9')))
+				char c = text[index];
+				if (!(c == '.' || IsNumber(c)))
 					break;
 
 				this->ConsumeChar();
 			}
 
 			std::string num = text.substr(start, index-start);
-			return Token("test", linenumber, TokenType::Number, num);
+			return Token(filename, linenumber, TokenType::Number, num);
 		}
 		else
 		{
 			//character to ignore like whitespace
 		}
 	}
-	return Token("test", linenumber, TokenType::EOF, "EOF");
+	return Token(filename, linenumber, TokenType::EoF, "EOF");
 }
 
 char Lexer::ConsumeChar()

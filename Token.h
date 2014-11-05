@@ -1,8 +1,7 @@
 #ifndef _TOKEN_HEADER
 #define _TOKEN_HEADER
 
-#undef EOF
-
+#ifdef _DEBUG
 #ifndef DBG_NEW      
 #define DBG_NEW new ( _NORMAL_BLOCK , __FILE__ , __LINE__ )     
 #define new DBG_NEW   
@@ -10,9 +9,9 @@
 
 #define _CRTDBG_MAP_ALLOC
 #include <crtdbg.h>
+#endif
 
 #include <string>
-#undef EOF
 
 namespace Jet
 {
@@ -82,21 +81,10 @@ namespace Jet
 		CommentBegin,
 		CommentEnd,
 
-		EOF
+		EoF
 	};
 
 	char* Operator(Jet::TokenType t);
-	/*{
-	if (t == TokenType::Plus)
-	return "+";
-	else if (t == TokenType::Minus)
-	return "-";
-	else if (t == TokenType::Asterisk)
-	return "*";
-	else if (t == TokenType::Slash)
-	return "/";
-	return "";
-	}*/
 
 	struct Token
 	{
