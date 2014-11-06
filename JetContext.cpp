@@ -357,6 +357,9 @@ JetContext::~JetContext()
 	delete this->objectiter.ptr;
 }
 
+#ifndef _WIN32
+typedef signed long long INT64;
+#endif
 INT64 rate;
 std::vector<IntermediateInstruction> JetContext::Compile(const char* code, const char* filename)
 {
@@ -396,7 +399,7 @@ class StackProfile
 	char* name;
 	INT64 start;
 public:
-	StackProfile::StackProfile(char* name)
+	StackProfile(char* name)
 	{
 		this->name = name;
 #ifdef JET_TIME_EXECUTION
@@ -407,7 +410,7 @@ public:
 #endif
 	};
 
-	StackProfile::~StackProfile()
+	~StackProfile()
 	{
 #ifdef JET_TIME_EXECUTION
 #ifdef _WIN32
@@ -456,9 +459,9 @@ void JetContext::RunGC2()
 
 	bool nextIncremental = ((this->collectionCounter+1)%GC_STEPS)!=0;
 	//if (this->collectionCounter % GC_STEPS == 0)
-		//printf("Full Collection!\n");
+	//printf("Full Collection!\n");
 	//else
-		//printf("Incremental Collection!\n");
+	//printf("Incremental Collection!\n");
 
 	if (this->stack.size() > 0)
 	{
@@ -1212,7 +1215,7 @@ Value JetContext::Execute(int iptr)
 							throw RuntimeException("Stack Overflow!");
 
 						fptr++;
-						
+
 						callstack.Push(std::pair<unsigned int, Closure*>(iptr, curframe));//callstack.Push(iptr);
 
 						curframe = vars[(int)in.value]._function;
@@ -1911,7 +1914,16 @@ Value& JetContext::operator[](const char* id)
 
 std::string JetContext::Script(const std::string code, const std::string filename)
 {
-	return this->Script(code.c_str(), filename.c_str()).ToString();
+	try
+	{
+		//try and execute
+		return this->Script(code.c_str(), filename.c_str()).ToString();
+	}
+	catch(ParserException E)
+	{
+		printf("Exception found:\n");
+		printf("%s (%d): %s\n", E.file.c_str(), E.line, E.ShowReason());
+	}
 }
 
 Value JetContext::Script(const char* code, const char* filename)//compiles, assembles and executes the script
