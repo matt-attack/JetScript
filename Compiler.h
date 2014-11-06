@@ -350,10 +350,11 @@ namespace Jet
 					ptr = ptr->previous;
 			}
 
-			if (this->parent)
+			int level = -1;
+			auto cur = this->parent;
+			while(cur)//if (this->parent)
 			{
-				int level = -1;
-				ptr = this->parent->scope;
+				ptr = cur->scope;
 				while (ptr)
 				{
 					//look for var in locals
@@ -365,7 +366,7 @@ namespace Jet
 							//exit the loops we found it
 							//this->output += ".local " + variable + " " + ::std::to_string(i) + ";\n";
 							if (ptr->localvars[i].third == -1)
-								ptr->localvars[i].third = this->parent->closures++;
+								ptr->localvars[i].third = cur->closures++;
 
 							out.push_back(IntermediateInstruction(InstructionType::CStore, ptr->localvars[i].third, level));//i, ptr->level));
 							return;
@@ -375,6 +376,7 @@ namespace Jet
 						ptr = ptr->previous;
 				}
 				level--;
+				cur = cur->parent;
 			}
 			out.push_back(IntermediateInstruction(InstructionType::Store, variable));
 		}
@@ -408,10 +410,11 @@ namespace Jet
 					ptr = ptr->previous;
 			}
 
-			if (this->parent)
+			int level = -1;
+			auto cur = this->parent;
+			while(cur)//if (this->parent)
 			{
-				int level = -1;
-				ptr = this->parent->scope;
+				ptr = cur->scope;
 				while (ptr)
 				{
 					//look for var in locals
@@ -424,7 +427,7 @@ namespace Jet
 							//comment/debug info
 							//this->output += ".local " + variable + " " + ::std::to_string(i) + ";\n";
 							if (ptr->localvars[i].third == -1)
-								ptr->localvars[i].third = this->parent->closures++;
+								ptr->localvars[i].third = cur->closures++;
 
 							out.push_back(IntermediateInstruction(InstructionType::CLoad, ptr->localvars[i].third, level));//i, ptr->level));
 							return;
@@ -434,10 +437,58 @@ namespace Jet
 						ptr = ptr->previous;
 				}
 				level--;
+				cur = cur->parent;
 			}
 			out.push_back(IntermediateInstruction(InstructionType::Load, variable));
 		}
 
+		bool IsLocal(std::string variable)
+		{
+			Scope* ptr = this->scope;
+			while (ptr)
+			{
+				//look for var in locals
+				for (unsigned int i = 0; i < ptr->localvars.size(); i++)
+				{
+					if (ptr->localvars[i].second == variable)
+					{
+						//printf("We found loading of a local var: %s at level %d, index %d\n", variable.c_str(), ptr->level, ptr->localvars[i].first);
+						//exit the loops we found it
+						//comment/debug info
+						//this->output += ".local " + variable + " " + ::std::to_string(i) + ";\n";
+						return true;
+					}
+				}
+				if (ptr)
+					ptr = ptr->previous;
+			}
+
+			auto cur = this->parent;
+			while(cur)//if (this->parent)
+			{
+				ptr = cur->scope;
+				while (ptr)
+				{
+					//look for var in locals
+					for (unsigned int i = 0; i < ptr->localvars.size(); i++)
+					{
+						if (ptr->localvars[i].second == variable)
+						{
+							//printf("We found loading of a captured var: %s at level %d, index %d\n", variable.c_str(), level, ptr->localvars[i].first);
+							//exit the loops we found it
+							//comment/debug info
+							//this->output += ".local " + variable + " " + ::std::to_string(i) + ";\n";
+							
+							return true;
+						}
+					}
+					if (ptr)
+						ptr = ptr->previous;
+				}
+				cur = cur->parent;
+			}
+			return false;
+		}
 
 		void LoadFunction(::std::string name)
 		{

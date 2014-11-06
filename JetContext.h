@@ -62,7 +62,7 @@ namespace Jet
 	class JetContext
 	{
 		VMStack<Value> stack;
-		VMStack<unsigned int> callstack;
+		VMStack<std::pair<unsigned int, Closure*> > callstack;
 
 		//need to go through and find all labels/functions/variables
 		::std::map<::std::string, unsigned int> labels;

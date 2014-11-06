@@ -151,7 +151,14 @@ Token Lexer::Next()
 			if (operators[str] == TokenType::LineComment)
 			{
 				//go to next line
-				while(this->ConsumeChar() != '\n') {};
+				char c = this->ConsumeChar();
+				while(c != '\n' && c != 0) 
+				{
+					c = this->ConsumeChar();
+				};
+
+				if (c == 0)
+					break;
 
 				continue;
 			}
@@ -270,6 +277,9 @@ Token Lexer::Next()
 
 char Lexer::ConsumeChar()
 {
+	if (index >= text.size())
+		return 0;
+
 	if (text.at(index) == '\n')
 		this->linenumber++;
 	return text.at(index++);

@@ -437,17 +437,12 @@ void JetContext::RunGC2()
 	//if no flag and grey bit, then grey
 	//if no flag or grey bit, then white
 
-	//todo make incremental as well
-
 	//push all reachable items onto grey stack
 	//this means globals
 	{
 		StackProfile profile("Mark Globals as Grey");
 		for (int i = 0; i < this->vars.size(); i++)
 		{
-			//may only want to push gc objects, but w/e
-			//only push if not already marked
-			//need type independent way of checking marks
 			if (vars[i].type > ValueType::NativeFunction)
 			{
 				if (vars[i]._obj._object->mark == false && vars[i]._obj._object->grey == false)
@@ -497,10 +492,6 @@ void JetContext::RunGC2()
 			//get actual number of locals here from current frame
 			for (int l = 0; l < this->frames[i].size; l++)
 			{
-				//if (this->frames[i].locals[l].type > ValueType::NativeFunction)
-				//{
-				//this->frames[i].locals[l]._obj._object->mark = true;
-				//}
 				if (this->frames[i].locals[l].type > ValueType::NativeFunction)
 				{
 					if (this->frames[i].locals[l]._obj._object->mark == false && this->frames[i].locals[l]._obj._object->grey == false)
@@ -509,34 +500,12 @@ void JetContext::RunGC2()
 						this->greys.Push(this->frames[i].locals[l]);
 					}
 				}
-				//need to mark members as well
-
-				/*if (this->frames[i].locals[l].type == ValueType::Object)
-				{
-				this->frames[i].locals[l]._obj._object->mark = true;
-				}
-				else if (this->frames[i].locals[l].type == ValueType::Userdata)
-				{
-				this->frames[i].locals[l]._obj._userdata->mark = true;
-				}
-				else if (this->frames[i].locals[l].type == ValueType::Array)
-				{
-				this->frames[i].locals[l]._obj._array->mark = true;
-				}
-				else if (this->frames[i].locals[l].type == ValueType::Function)
-				{
-				this->frames[i].locals[l]._function->mark = true;
-				}*/
-				//else if (this->frames[i].locals[i].type == ValueType::String)
-				//this->frames[i].locals[l]._obj._string->flag = true;
 			}
 			frame = this->curframe->prev;
 		}
 	}
 
 
-	//somehow stuff is getting deleted that should not be fix me
-	//process grey stack, dont always have to go through all of them
 	{
 		StackProfile prof("Traverse Greys");
 		while(this->greys.size() > 0)
@@ -615,7 +584,6 @@ void JetContext::RunGC2()
 		}
 	}
 
-	//incrementals could use some work at freeing more data
 
 	/* SWEEPING SECTION */
 
@@ -623,33 +591,6 @@ void JetContext::RunGC2()
 	//this must all be done when sweeping!!!!!!!
 
 	//process stack variables, stack vars are ALWAYS grey
-	/*if (this->fptr >= 0)
-	{
-	StackProfile prof("Traverse/Mark Stack");
-	//printf("GC run at runtime!\n");
-	Closure* frame = this->curframe;
-	for (int i = fptr; i >= 0; i--)
-	{
-	if (frame != 0)
-	frame->mark;//break;
-
-	//frame->mark = true;
-	//get actual number of locals here from current frame
-	for (int l = 0; l < this->frames[i].size; l++)
-	{
-	if (this->frames[i].locals[l].type > ValueType::NativeFunction)
-	{
-	this->frames[i].locals[l]._obj._object->mark = true;
-	}
-	//need to mark members as well
-	//else if (this->frames[i].locals[i].type == ValueType::String)
-	//this->frames[i].locals[l]._obj._string->flag = true;
-	}
-	frame = this->curframe->prev;
-	}
-	}*/
-
-	//process stack, interpret stack as all grey
 
 	//finally sweep through
 	//sweep and free all whites and make all blacks white
@@ -1013,7 +954,7 @@ Value JetContext::Execute(int iptr)
 	//frame pointer reset
 	fptr = 0;
 
-	callstack.Push(123456789);//bad value to get it to return;
+	callstack.Push(std::pair<unsigned int, Closure*>(123456789, curframe));//bad value to get it to return;
 	unsigned int startcallstack = this->callstack.size();
 
 	this->frames[0].size = curframe->prototype->locals;//used in gc
@@ -1224,7 +1165,7 @@ Value JetContext::Execute(int iptr)
 					auto frame = curframe;
 					int index = in.value2;
 					while ( index++ < 0)
-						frame = curframe->prev;
+						frame = frame->prev;
 
 					stack.Push(frame->upvals[(int)in.value]);
 					break;
@@ -1234,7 +1175,7 @@ Value JetContext::Execute(int iptr)
 					auto frame = curframe;
 					int index = in.value2;
 					while ( index++ < 0)
-						frame = curframe->prev;
+						frame = frame->prev;
 
 					frame->upvals[(int)in.value] = stack.Pop();
 					break;
@@ -1271,7 +1212,8 @@ Value JetContext::Execute(int iptr)
 							throw RuntimeException("Stack Overflow!");
 
 						fptr++;
-						callstack.Push(iptr);
+						
+						callstack.Push(std::pair<unsigned int, Closure*>(iptr, curframe));//callstack.Push(iptr);
 
 						curframe = vars[(int)in.value]._function;
 
@@ -1311,8 +1253,8 @@ Value JetContext::Execute(int iptr)
 
 						//ok fix this to be cleaner and resolve stack printing
 						//should just push a value to indicate that we are in a native function call
-						callstack.Push(iptr);
-						callstack.Push(123456789);
+						callstack.Push(std::pair<unsigned int, Closure*>(iptr, curframe));//callstack.Push(iptr);
+						callstack.Push(std::pair<unsigned int, Closure*>(123456789, curframe));//callstack.Push(123456789);
 						//to return something, push it to the stack
 						int s = stack.size();
 						(*vars[(int)in.value].func)(this,tmp,args);
@@ -1347,7 +1289,8 @@ Value JetContext::Execute(int iptr)
 							throw RuntimeException("Stack Overflow!");
 
 						fptr++;
-						callstack.Push(iptr);
+						//callstack.Push(iptr);
+						callstack.Push(std::pair<unsigned int, Closure*>(iptr, curframe));
 
 						curframe = fun._function;
 
@@ -1388,8 +1331,10 @@ Value JetContext::Execute(int iptr)
 
 						//ok fix this to be cleaner and resolve stack printing
 						//should just push a value to indicate that we are in a native function call
-						callstack.Push(iptr);
-						callstack.Push(123456789);
+						callstack.Push(std::pair<unsigned int, Closure*>(iptr, curframe));
+						//callstack.Push(iptr);
+						callstack.Push(std::pair<unsigned int, Closure*>(123456789, curframe));
+						//callstack.Push(123456789);
 						//to return something, push it to the stack
 						int s = stack.size();
 						(*fun.func)(this,tmp,args);
@@ -1406,9 +1351,9 @@ Value JetContext::Execute(int iptr)
 				}
 			case InstructionType::Return:
 				{
-					iptr = callstack.Pop();
-					if (curframe)
-						curframe = curframe->prev;
+					auto oframe = callstack.Pop();//iptr = callstack.Pop();
+					iptr = oframe.first;
+					curframe = oframe.second;
 
 					fptr--;
 					break;
@@ -1656,7 +1601,7 @@ Value JetContext::Execute(int iptr)
 		//ok, need to properly roll back callstack
 		this->callstack.QuickPop(this->callstack.size()-startcallstack);
 
-		if (this->callstack.size() == 1 && this->callstack.Peek() == 123456789)
+		if (this->callstack.size() == 1 && this->callstack.Peek().first == 123456789)
 			this->callstack.Pop();
 	}
 
@@ -1709,8 +1654,8 @@ void JetContext::GetCode(int ptr, std::string& ret, unsigned int& line)
 
 void JetContext::StackTrace(int curiptr)
 {
-	VMStack<unsigned int> tempcallstack = this->callstack.Copy();
-	tempcallstack.Push(curiptr);
+	auto tempcallstack = this->callstack.Copy();
+	tempcallstack.Push(std::pair<unsigned int, Closure*>(curiptr,0));
 
 	while(tempcallstack.size() > 0)
 	{
@@ -1720,20 +1665,20 @@ void JetContext::StackTrace(int curiptr)
 		for (auto ii: this->functions)
 		{
 			//ok, need to find which label pos I am most greatest than or equal to
-			if (top >= ii.second->ptr && (int)ii.second->ptr > greatest)
+			if (top.first >= ii.second->ptr && (int)ii.second->ptr > greatest)
 			{
 				fun = ii.first;
 				greatest = ii.second->ptr;
 			}
 		}
-		if (top == 123456789)
+		if (top.first == 123456789)
 			printf("{Native}\n");
 		else
 		{
 			std::string file;
 			unsigned int line;
-			this->GetCode(top, file, line);
-			printf("%s() %s Line %d (Instruction %d)\n", fun.c_str(), file.c_str(), line, top-greatest);
+			this->GetCode(top.first, file, line);
+			printf("%s() %s Line %d (Instruction %d)\n", fun.c_str(), file.c_str(), line, top.first-greatest);
 		}
 	}
 }

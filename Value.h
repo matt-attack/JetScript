@@ -181,18 +181,19 @@ namespace Jet
 			case ValueType::String:
 				return this->_obj._string;
 			case ValueType::Function:
-				return "[Function "+::std::to_string(this->_function->prototype->ptr)+"]"; 
+				return "[Function "+this->_function->prototype->name+"]";//"[Function "+::std::to_string(this->_function->prototype->ptr)+"]";//"[Function "+this->_function->prototype->name+"]";
 			case ValueType::NativeFunction:
 				return "[NativeFunction "+::std::to_string((unsigned int)this->func)+"]";
 			case ValueType::Array:
 				{
 					std::string str = "[Array " + std::to_string((int)this->_obj._array)+"]";//"[\n";
-					/*for (auto ii: *this->_array->ptr)
+					/*int i = 0;
+					for (auto ii: *this->_obj._array->ptr)
 					{
 					str += "\t";
-					str += ::std::to_string(ii.first);
+					str += ::std::to_string(i++);
 					str += " = ";
-					str += ii.second.ToString() + "\n";
+					str += ii.ToString() + "\n";
 					}
 					str += "]";*/
 					return str;
@@ -388,6 +389,7 @@ namespace Jet
 			throw RuntimeException("Cannot divide two non-numeric types! " + (std::string)ValueTypes[(int)this->type] + " and " + (std::string)ValueTypes[(int)other.type]);
 		};
 
+		//add overloads for binary operators
 		Value operator%( const Value &other )
 		{
 			if (type == ValueType::Number && other.type == ValueType::Number)

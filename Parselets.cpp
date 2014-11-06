@@ -235,7 +235,7 @@ Expression* CallParselet::parse(Parser* parser, Expression* left, Token token)
 	{
 		do
 		{
-			arguments->push_back(parser->ParseStatement(false));
+			arguments->push_back(parser->parseExpression(2));//ParseStatement(false));
 		}
 		while( parser->MatchAndConsume(TokenType::Comma));
 
@@ -249,7 +249,7 @@ Expression* ReturnParselet::parse(Parser* parser, Token token)
 {
 	Expression* right = 0;
 	if (parser->Match(TokenType::Semicolon) == false)
-		right = parser->ParseStatement(false);
+		right = parser->parseExpression(2);//parser->ParseStatement(false);
 
 	return new ReturnExpression(token, right);
 }
@@ -288,7 +288,7 @@ Expression* LocalParselet::parse(Parser* parser, Token token)
 Expression* ArrayParselet::parse(Parser* parser, Token token)
 {
 	auto inits = new std::vector<Expression*>;
-	while(parser->LookAhead().getType() == TokenType::String || parser->LookAhead().getType() == TokenType::Number)
+	while(parser->LookAhead().getType() != TokenType::RightBracket)//== TokenType::String || parser->LookAhead().getType() == TokenType::Number)
 	{
 		Expression* e = parser->parseExpression(2);
 

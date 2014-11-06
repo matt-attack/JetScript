@@ -58,7 +58,8 @@ void CallExpression::Compile(CompilerContext* context)
 {
 	context->Line(token.filename, token.line);
 
-	if (dynamic_cast<NameExpression*>(left) != 0)
+	//need to check if left is a local, or a captured value before looking at globals
+	if (dynamic_cast<NameExpression*>(left) != 0 && context->IsLocal(dynamic_cast<NameExpression*>(left)->GetName()) == false)
 	{
 		//push args onto stack
 		for (auto i: *args)
@@ -66,7 +67,7 @@ void CallExpression::Compile(CompilerContext* context)
 
 		context->Call(dynamic_cast<NameExpression*>(left)->GetName(), args->size());
 	}
-	else if (dynamic_cast<IStorableExpression*>(left) != 0)
+	else// if (dynamic_cast<IStorableExpression*>(left) != 0)
 	{
 		auto index = dynamic_cast<IndexExpression*>(left);
 		if (index && index->token.type == TokenType::Colon)
@@ -100,10 +101,10 @@ void CallExpression::Compile(CompilerContext* context)
 			context->ECall(args->size());
 		}
 	}
-	else
-	{
-		throw ParserException(token.filename, token.line, "Error: Cannot call an expression that is not a name");
-	}
+	//else
+	//{
+		//throw ParserException(token.filename, token.line, "Error: Cannot call an expression that is not a name");
+	//}
 	//help, how should I handle this for multiple returns
 	//pop off return value if we dont need it
 	if (dynamic_cast<BlockExpression*>(this->Parent) != 0)
