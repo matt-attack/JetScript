@@ -48,7 +48,11 @@ void Lexer::Init()
 	operators["%"] = TokenType::Modulo;
 
 	operators["|"] = TokenType::Or;//or
-	operators["&"] = TokenType::And;//xor
+	operators["&"] = TokenType::And;//and
+	operators["^"] = TokenType::Xor;//xor
+	operators["~"] = TokenType::BNot;//binary not
+	operators["<<"] = TokenType::LeftShift;
+	operators[">>"] = TokenType::RightShift;
 
 	//grouping
 	operators["("] = TokenType::LeftParen;

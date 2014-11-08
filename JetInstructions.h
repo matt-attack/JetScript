@@ -9,9 +9,16 @@ namespace Jet
 		"Div",
 		"Sub",
 		"Modulus",
+
 		"Negate",
+
 		"BAnd",
 		"BOr",
+		"Xor",
+		"BNot",
+		"LeftShift",
+		"RightShift",
+
 		"Eq",
 		"NotEq",
 		"Lt",
@@ -69,6 +76,10 @@ namespace Jet
 
 		BAnd,
 		BOr,
+		Xor,
+		BNot,
+		LeftShift,
+		RightShift,
 
 		Eq,
 		NotEq,

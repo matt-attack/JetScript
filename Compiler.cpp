@@ -177,6 +177,15 @@ void CompilerContext::BinaryOperation(TokenType operation)
 	case TokenType::And:
 		this->out.push_back(IntermediateInstruction(InstructionType::BAnd));
 		break;
+	case TokenType::Xor:
+		this->out.push_back(IntermediateInstruction(InstructionType::Xor));
+		break;
+	case TokenType::LeftShift:
+		this->out.push_back(IntermediateInstruction(InstructionType::LeftShift));
+		break;
+	case TokenType::RightShift:
+		this->out.push_back(IntermediateInstruction(InstructionType::RightShift));
+		break;
 	}
 }
 
@@ -192,6 +201,9 @@ void CompilerContext::UnaryOperation(TokenType operation)
 		break;	
 	case TokenType::Minus:
 		this->out.push_back(IntermediateInstruction(InstructionType::Negate));
+		break;
+	case TokenType::BNot:
+		this->out.push_back(IntermediateInstruction(InstructionType::BNot));
 		break;
 	}
 }

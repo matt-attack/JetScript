@@ -1005,7 +1005,6 @@ Value JetContext::Execute(int iptr)
 					stack.Push(two%one);
 					break;
 				}
-#ifdef _WIN32
 			case InstructionType::BAnd:
 				{
 					Value one = stack.Pop();
@@ -1020,7 +1019,33 @@ Value JetContext::Execute(int iptr)
 					stack.Push(two|one);
 					break;
 				}
-#endif
+			case InstructionType::Xor:
+				{
+					Value one = stack.Pop();
+					Value two = stack.Pop();
+					stack.Push(two^one);
+					break;
+				}
+			case InstructionType::BNot:
+				{
+					Value one = stack.Pop();
+					stack.Push(~one);
+					break;
+				}
+			case InstructionType::LeftShift:
+				{
+					Value one = stack.Pop();
+					Value two = stack.Pop();
+					stack.Push(two<<one);
+					break;
+				}
+			case InstructionType::RightShift:
+				{
+					Value one = stack.Pop();
+					Value two = stack.Pop();
+					stack.Push(two>>one);
+					break;
+				}
 			case InstructionType::Incr:
 				{
 					Value one = stack.Pop();
@@ -1938,7 +1963,7 @@ Value JetContext::Script(const char* code, const char* filename)//compiles, asse
 	return v;
 }
 
-#ifndef _WIN32
+#ifdef EMSCRIPTEN
 #ifndef _HGUAD
 #define _HGUAD
 #include <emscripten/bind.h>

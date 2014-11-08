@@ -389,7 +389,6 @@ namespace Jet
 			throw RuntimeException("Cannot divide two non-numeric types! " + (std::string)ValueTypes[(int)this->type] + " and " + (std::string)ValueTypes[(int)other.type]);
 		};
 
-		//add overloads for binary operators
 		Value operator%( const Value &other )
 		{
 			if (type == ValueType::Number && other.type == ValueType::Number)
@@ -400,6 +399,78 @@ namespace Jet
 			}
 
 			throw RuntimeException("Cannot modulus two non-numeric types! " + (std::string)ValueTypes[(int)this->type] + " and " + (std::string)ValueTypes[(int)other.type]);
+		};
+
+		Value operator|( const Value &other )
+		{
+			if (type == ValueType::Number && other.type == ValueType::Number)
+				return Value((int)value|(int)other.value);
+			else if (type == ValueType::Object)
+			{
+				//do metamethod
+			}
+
+			throw RuntimeException("Cannot binary or two non-numeric types! " + (std::string)ValueTypes[(int)this->type] + " and " + (std::string)ValueTypes[(int)other.type]);
+		};
+
+		Value operator&( const Value &other )
+		{
+			if (type == ValueType::Number && other.type == ValueType::Number)
+				return Value((int)value&(int)other.value);
+			else if (type == ValueType::Object)
+			{
+				//do metamethod
+			}
+
+			throw RuntimeException("Cannot binary and two non-numeric types! " + (std::string)ValueTypes[(int)this->type] + " and " + (std::string)ValueTypes[(int)other.type]);
+		};
+
+		Value operator^( const Value &other )
+		{
+			if (type == ValueType::Number && other.type == ValueType::Number)
+				return Value((int)value^(int)other.value);
+			else if (type == ValueType::Object)
+			{
+				//do metamethod
+			}
+
+			throw RuntimeException("Cannot xor two non-numeric types! " + (std::string)ValueTypes[(int)this->type] + " and " + (std::string)ValueTypes[(int)other.type]);
+		};
+
+		Value operator<<( const Value &other )
+		{
+			if (type == ValueType::Number && other.type == ValueType::Number)
+				return Value((int)value<<(int)other.value);
+			else if (type == ValueType::Object)
+			{
+				//do metamethod
+			}
+
+			throw RuntimeException("Cannot left-shift two non-numeric types! " + (std::string)ValueTypes[(int)this->type] + " and " + (std::string)ValueTypes[(int)other.type]);
+		};
+
+		Value operator>>( const Value &other )
+		{
+			if (type == ValueType::Number && other.type == ValueType::Number)
+				return Value((int)value>>(int)other.value);
+			else if (type == ValueType::Object)
+			{
+				//do metamethod
+			}
+
+			throw RuntimeException("Cannot right-shift two non-numeric types! " + (std::string)ValueTypes[(int)this->type] + " and " + (std::string)ValueTypes[(int)other.type]);
+		};
+
+		Value operator~()
+		{
+			if (type == ValueType::Number)
+				return Value(~(int)value);
+			else if (type == ValueType::Object)
+			{
+				//do metamethod
+			}
+
+			throw RuntimeException("Cannot binary complement non-numeric type! " + (std::string)ValueTypes[(int)this->type]);
 		};
 	};
 }

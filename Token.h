@@ -31,6 +31,10 @@ namespace Jet
 		Modulo,
 		Or,
 		And,
+		Xor,
+		BNot,
+		LeftShift,
+		RightShift,
 
 
 		AddAssign,

@@ -64,6 +64,7 @@ Parser::Parser(Lexer* l)
 	this->Register(TokenType::Increment, new PrefixOperatorParselet(6));
 	this->Register(TokenType::Decrement, new PrefixOperatorParselet(6));
 	this->Register(TokenType::Minus, new PrefixOperatorParselet(6));
+	this->Register(TokenType::BNot, new PrefixOperatorParselet(6));
 
 	//postfix stuff
 	this->Register(TokenType::Increment, new PostfixOperatorParselet(7));
@@ -85,7 +86,9 @@ Parser::Parser(Lexer* l)
 	this->Register(TokenType::Modulo, new BinaryOperatorParselet(5, false));
 	this->Register(TokenType::Or, new BinaryOperatorParselet(3, false));//or
 	this->Register(TokenType::And, new BinaryOperatorParselet(3, false));//and
-
+	this->Register(TokenType::Xor, new BinaryOperatorParselet(3, false));
+	this->Register(TokenType::LeftShift, new BinaryOperatorParselet(3, false));
+	this->Register(TokenType::RightShift, new BinaryOperatorParselet(3, false));
 
 	//add parser for includes k
 	//function stuff
