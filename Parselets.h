@@ -182,7 +182,7 @@ namespace Jet
 
 		int getPrecedence()
 		{
-			return 2;//maybe?
+			return 3;//maybe?
 		}
 	};
 

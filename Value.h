@@ -236,14 +236,15 @@ namespace Jet
 			if (type == ValueType::Number)
 				return (int)value;
 
-			return 0;
+			throw RuntimeException("Cannot convert type " + (std::string)ValueTypes[(int)this->type] + " to int!");
 		};
 
 		operator double()
 		{
 			if (type == ValueType::Number)
 				return value;
-			return 0;
+			
+			throw RuntimeException("Cannot convert type " + (std::string)ValueTypes[(int)this->type] + " to double!");
 		}
 
 		_JetObject* GetPrototype()

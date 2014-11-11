@@ -3,6 +3,8 @@
 
 An easy to integrate scripting language written in C++.
 
+[Try Jet!](http://subopti.ml/)
+
 ### Example
 ```cpp
 fun fibo(n)
@@ -51,9 +53,10 @@ obj = {};
 obj.apple = 2;
 obj["apple2"] = 3;
 ```
-- Arrays - a map like type that only works with numbers
+- Arrays - a contiguous array of values with a set size
 ```cpp
 arr = [];
+arr:resize(2);
 arr[0] = 255;
 arr[1] = "Apples";
 ```

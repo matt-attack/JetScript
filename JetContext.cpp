@@ -16,7 +16,7 @@ using namespace Jet;
 
 void Jet::gc(JetContext* context,Value* args, int numargs) 
 { 
-	context->RunGC2();
+	context->RunGC();
 };
 
 void Jet::print(JetContext* context,Value* args, int numargs) 
@@ -426,7 +426,7 @@ public:
 	}
 };
 
-void JetContext::RunGC2()
+void JetContext::RunGC()
 {
 	//printf("Running GC: %d Greys, %d Globals, %d Stack\n%d Closures, %d Arrays, %d Objects, %d Userdata\n", this->greys.size(), this->vars.size(), 0, this->closures.size(), this->arrays.size(), this->objects.size(), this->userdata.size());
 #ifdef JET_TIME_EXECUTION
@@ -435,7 +435,6 @@ void JetContext::RunGC2()
 	QueryPerformanceCounter( (LARGE_INTEGER *)&start );
 #endif
 	//add more write barriers to detect when objects are removed and what not
-	//currently incremental collections dont do anything!
 	//if flag is marked, then black
 	//if no flag and grey bit, then grey
 	//if no flag or grey bit, then white
@@ -448,7 +447,7 @@ void JetContext::RunGC2()
 		{
 			if (vars[i].type > ValueType::NativeFunction)
 			{
-				if (vars[i]._obj._object->mark == false && vars[i]._obj._object->grey == false)
+				if (/*vars[i]._obj._object->mark == false && */vars[i]._obj._object->grey == false)
 				{
 					this->vars[i]._obj._object->grey = true;
 					this->greys.Push(this->vars[i]);
@@ -457,11 +456,12 @@ void JetContext::RunGC2()
 		}
 	}
 
+	//get me working with strings
 	bool nextIncremental = ((this->collectionCounter+1)%GC_STEPS)!=0;
-	//if (this->collectionCounter % GC_STEPS == 0)
-	//printf("Full Collection!\n");
-	//else
-	//printf("Incremental Collection!\n");
+	/*if (this->collectionCounter % GC_STEPS == 0)
+	printf("Full Collection!\n");
+	else
+	printf("Incremental Collection!\n");*/
 
 	if (this->stack.size() > 0)
 	{
@@ -470,7 +470,7 @@ void JetContext::RunGC2()
 		{
 			if (stack.mem[i].type > ValueType::NativeFunction)
 			{
-				if (stack.mem[i]._obj._object->mark == false && stack.mem[i]._obj._object->grey == false)
+				if (/*stack.mem[i]._obj._object->mark == false &&*/ stack.mem[i]._obj._object->grey == false)
 				{
 					stack.mem[i]._obj._object->grey = true;
 					this->greys.Push(stack.mem[i]);
@@ -485,26 +485,48 @@ void JetContext::RunGC2()
 	{
 		StackProfile prof("Traverse/Mark Stack");
 		//printf("GC run at runtime!\n");
-		Closure* frame = this->curframe;
-		for (int i = fptr; i >= 0; i--)
+		//traverse all local vars
+		if (curframe->grey == false)
 		{
-			if (frame != 0)
-				frame->mark;//break;
+			curframe->grey = true;
+			this->greys.Push(Value(curframe));
+		}
 
-			//frame->mark = true;
-			//get actual number of locals here from current frame
-			for (int l = 0; l < this->frames[i].size; l++)
+		int sp = 0;
+		for (int i = 0; i < this->callstack.size(); i++)
+		{
+			auto closure = this->callstack[i].second;
+			if (closure->grey == false)
 			{
-				if (this->frames[i].locals[l].type > ValueType::NativeFunction)
+				closure->grey = true;
+				this->greys.Push(Value(closure));
+			}
+			int max = sp+closure->prototype->locals;
+			for (; sp < max; sp++)
+			{
+				if (this->localstack[sp].type > ValueType::NativeFunction)
 				{
-					if (this->frames[i].locals[l]._obj._object->mark == false && this->frames[i].locals[l]._obj._object->grey == false)
+					if (/*this->localstack[sp]._obj._object->mark == false &&*/ this->localstack[sp]._obj._object->grey == false)
 					{
-						this->frames[i].locals[l]._obj._object->grey = true;
-						this->greys.Push(this->frames[i].locals[l]);
+						this->localstack[sp]._obj._object->grey = true;
+						this->greys.Push(this->localstack[sp]);
 					}
 				}
 			}
-			frame = this->curframe->prev;
+		}
+
+		//mark curframe locals
+		int max = sp+curframe->prototype->locals;
+		for (; sp < max; sp++)
+		{
+			if (this->localstack[sp].type > ValueType::NativeFunction)
+			{
+				if (/*this->localstack[sp]._obj._object->mark == false &&*/ this->localstack[sp]._obj._object->grey == false)
+				{
+					this->localstack[sp]._obj._object->grey = true;
+					this->greys.Push(this->localstack[sp]);
+				}
+			}
 		}
 	}
 
@@ -519,12 +541,19 @@ void JetContext::RunGC2()
 			{
 			case ValueType::Object:
 				{
-					if (obj._obj.prototype)
+					if (obj._obj.prototype && obj._obj.prototype->grey == false)
 					{
+						obj._obj.prototype->grey = true;
 						obj._obj.prototype->mark = true;
 
 						for (auto ii: *obj._obj.prototype->ptr)
-							greys.Push(ii.second);
+						{
+							if (ii.second.type > ValueType::NativeFunction)
+							{
+								ii.second._obj._object->grey = true;
+								greys.Push(ii.second);
+							}
+						}
 					}
 
 					obj._obj._object->mark = true;
@@ -560,13 +589,23 @@ void JetContext::RunGC2()
 			case ValueType::Function:
 				{
 					obj._function->mark = true;
-
-					if (obj._function->prev)
-						obj._function->prev->mark = true;//make me loop through all parents
+					//printf("Function Marked\n");
+					if (obj._function->prev && obj._function->prev->grey == false)
+					{
+						obj._function->prev->grey = true;
+						greys.Push(Value(obj._function->prev));
+					}
 
 					for (int i = 0; i < obj._function->numupvals; i++)
 					{
-						greys.Push(obj._function->upvals[i]);
+						if (obj._function->upvals[i].type > ValueType::NativeFunction)
+						{
+							if (obj._function->upvals[i]._obj._object->grey == false)
+							{
+								obj._function->upvals[i]._obj._object->grey = true;
+								greys.Push(obj._function->upvals[i]);
+							}
+						}
 					}
 					break;
 				}
@@ -711,239 +750,8 @@ void JetContext::RunGC2()
 
 	printf("Took %lf seconds to collect garbage\n\n", dt);
 #endif
+	//this->StackTrace(curframe->prototype->ptr);
 	//printf("GC Complete: %d Greys, %d Globals, %d Stack\n%d Closures, %d Arrays, %d Objects, %d Userdata\n", this->greys.size(), this->vars.size(), 0, this->closures.size(), this->arrays.size(), this->objects.size(), this->userdata.size());
-}
-
-void JetContext::RunGC()
-{
-#ifdef JET_TIME_EXECUTION
-	INT64 start, rate, end;
-	QueryPerformanceFrequency( (LARGE_INTEGER *)&rate );
-	QueryPerformanceCounter( (LARGE_INTEGER *)&start );
-#endif
-
-	for (auto ii: this->gcObjects)
-		ii[0] = 0;
-
-	for (auto& ii: this->objects)
-		ii->mark = false;
-
-	for (auto& ii: this->arrays)
-		ii->mark = false;
-
-	for (auto& ii: this->userdata)
-		ii->mark = false;
-
-	for (auto& ii: this->closures)
-		ii->mark = false;
-
-	//mark stack and locals here
-	if (this->fptr >= 0)
-	{
-		//printf("GC run at runtime!\n");
-		Closure* frame = this->curframe;
-		for (int i = fptr; i >= 0; i--)
-		{
-			frame->mark = true;
-			//get actual number of locals here from current frame
-			for (int l = 0; l < frame->prototype->locals; l++)
-			{
-				if (this->frames[i].locals[l].type > ValueType::NativeFunction)
-					this->frames[i].locals[l]._obj._object->mark = true;
-
-				/*if (this->frames[i].locals[l].type == ValueType::Object)
-				{
-				this->frames[i].locals[l]._obj._object->mark = true;
-				}
-				else if (this->frames[i].locals[l].type == ValueType::Userdata)
-				{
-				this->frames[i].locals[l]._obj._userdata->mark = true;
-				}
-				else if (this->frames[i].locals[l].type == ValueType::Array)
-				{
-				this->frames[i].locals[l]._obj._array->mark = true;
-				}
-				else if (this->frames[i].locals[l].type == ValueType::Function)
-				{
-				this->frames[i].locals[l]._function->mark = true;
-				}*/
-				//else if (this->frames[i].locals[i].type == ValueType::String)
-				//this->frames[i].locals[l]._obj._string->flag = true;
-			}
-			frame = this->curframe->prev;
-		}
-	}
-
-	for (auto v: this->vars)
-	{
-		std::stack<Value*> stack;
-		stack.push(&v);
-		while( !stack.empty() ) 
-		{
-			auto o = stack.top();
-			stack.pop();
-			switch (o->type)
-			{
-			case ValueType::Object:
-				{
-					if (o->_obj.prototype)
-					{
-						o->_obj.prototype->mark = true;
-
-						for (auto ii: *o->_obj.prototype->ptr)
-							stack.push(&ii.second);
-					}
-
-					o->_obj._object->mark = true;
-					for (auto ii: *o->_obj._object->ptr)
-						stack.push(&ii.second);
-					break;
-				}
-			case ValueType::Array:
-				{
-					o->_obj._array->mark = true;
-
-					for (auto ii: *o->_obj._array->ptr)
-						stack.push(&ii);
-
-					break;
-				}
-			case ValueType::String:
-				{
-					break;
-				}
-			case ValueType::Function:
-				{
-					o->_function->mark = true;
-
-					if (o->_function->prev)
-						o->_function->prev->mark = true;//make me loop through all parents
-
-					break;
-				}
-			case ValueType::Userdata:
-				{
-					o->_obj._userdata->mark = true;
-
-					if (o->_obj.prototype)
-					{
-						o->_obj.prototype->mark = true;
-
-						for (auto ii: *o->_obj.prototype->ptr)
-							stack.push(&ii.second);
-					}
-					break;
-				}
-			}
-		}
-	}
-
-	for (auto& ii: this->objects)
-	{
-		if (!ii->mark)
-		{
-			delete ii->ptr;
-			ii->ptr = 0;
-			delete ii;
-			ii = 0;
-		}
-	}
-
-	for (auto& ii: this->arrays)
-	{
-		if (!ii->mark)
-		{
-			delete ii->ptr;
-			ii->ptr = 0;
-			delete ii;
-			ii = 0;
-		}
-	}
-
-	auto clist = std::move(this->closures);
-	this->closures.clear();
-	for (auto ii: clist)
-	{
-		if (ii->mark)
-		{
-			this->closures.push_back(ii);
-		}
-		else
-		{
-			if (ii->numupvals)
-				delete[] ii->upvals;
-			delete ii;
-		}
-	}
-
-	//ok, need to be able to know the type of a gcobject, or just that its userdata
-	for (auto& ii: this->gcObjects)
-	{
-		if (ii[0] == 0)
-		{
-			//printf("gcObject needs deletion");
-		}
-	}
-
-	for (auto& ii: this->userdata)
-	{
-		if (!ii->mark)
-		{
-			if (ii->ptr.second)
-			{
-				Value ud = Value(ii, ii->ptr.second);
-				Value _gc = (*ii->ptr.second->ptr)["_gc"];
-				if (_gc.type == ValueType::NativeFunction)
-					_gc.func(this, &ud, 1);
-				else if (_gc.type != ValueType::Null)
-					throw RuntimeException("Not Implemented!");
-			}
-			delete ii;
-			ii = 0;
-		}
-	}
-
-	//compact object list here
-	auto list = std::move(this->objects);
-	this->objects.clear();
-	for (auto ii: list)
-	{
-		if (ii)
-		{
-			this->objects.push_back(ii);
-		}
-	}
-
-	//compact array list here
-	auto arrlist = std::move(this->arrays);
-	this->arrays.clear();
-	for (auto ii: arrlist)
-	{
-		if (ii)
-		{
-			this->arrays.push_back(ii);
-		}
-	}
-
-	//compact userdata list here
-	auto udlist = std::move(this->userdata);
-	this->userdata.clear();
-	for (auto ii: udlist)
-	{
-		if (ii)
-		{
-			this->userdata.push_back(ii);
-		}
-	}
-
-#ifdef JET_TIME_EXECUTION
-	QueryPerformanceCounter( (LARGE_INTEGER *)&end );
-
-	INT64 diff = end - start;
-	double dt = ((double)diff)/((double)rate);
-
-	printf("Took %lf seconds to collect garbage\n\n", dt);
-#endif
 }
 
 Value JetContext::Execute(int iptr)
@@ -954,13 +762,12 @@ Value JetContext::Execute(int iptr)
 	QueryPerformanceCounter( (LARGE_INTEGER *)&start );
 #endif
 
-	//frame pointer reset
+	//frame and stack pointer reset
 	fptr = 0;
+	sptr = this->localstack;
 
 	callstack.Push(std::pair<unsigned int, Closure*>(123456789, curframe));//bad value to get it to return;
 	unsigned int startcallstack = this->callstack.size();
-
-	this->frames[0].size = curframe->prototype->locals;//used in gc
 
 	try
 	{
@@ -1145,7 +952,7 @@ Value JetContext::Execute(int iptr)
 				}
 			case InstructionType::LdNum:
 				{
-					stack.Push(in.value);
+					stack.Push(in.value2);
 					break;
 				}
 			case InstructionType::LdStr:
@@ -1155,37 +962,67 @@ Value JetContext::Execute(int iptr)
 				}
 			case InstructionType::Jump:
 				{
-					iptr = (int)in.value-1;
+					iptr = in.value-1;
 					break;
 				}
 			case InstructionType::JumpTrue:
 				{
 					auto temp = stack.Pop();
-					if ((int)temp)
-						iptr = (int)in.value-1;
+					switch (temp.type)
+					{
+					case ValueType::Number:
+						if (temp.value != 0.0)
+							iptr = in.value-1;
+						break;
+					case ValueType::Null:
+						break;
+					default:
+						iptr = in.value-1;
+					}
+					//if ((int)temp)
+					//	iptr = in.value-1;
 					break;
 				}
 			case InstructionType::JumpFalse:
 				{
 					auto temp = stack.Pop();
-					if (!(int)temp)
-						iptr = (int)in.value-1;
+					switch (temp.type)
+					{
+					case ValueType::Number:
+						if (temp.value == 0.0)
+							iptr = in.value-1;
+						break;
+					case ValueType::Null:
+						iptr = in.value-1;
+						break;
+					}
+					//if (!(int)temp)
+					//iptr = in.value-1;
 					break;
 				}
 			case InstructionType::Load:
 				{
-					stack.Push(vars[(int)in.value]);//uh do me
+					stack.Push(vars[in.value]);
 
+					break;
+				}
+			case InstructionType::Store:
+				{
+					auto temp = stack.Pop();
+					//store me
+					vars[in.value] = temp;
 					break;
 				}
 			case InstructionType::LLoad:
 				{
-					stack.Push(frames[fptr].locals[(unsigned int)in.value]);
+					//printf("Load at: Stack Ptr: %d\n", sptr - localstack + in.value);
+					stack.Push(sptr[in.value]);
 					break;
 				}
 			case InstructionType::LStore:
 				{
-					frames[fptr].locals[(unsigned int)in.value] = stack.Pop();
+					sptr[in.value] = stack.Pop();
+					//printf("Store at: Stack Ptr: %d\n", sptr - localstack + in.value);
 					break;
 				}
 			case InstructionType::CLoad:
@@ -1195,7 +1032,7 @@ Value JetContext::Execute(int iptr)
 					while ( index++ < 0)
 						frame = frame->prev;
 
-					stack.Push(frame->upvals[(int)in.value]);
+					stack.Push(frame->upvals[in.value]);
 					break;
 				}
 			case InstructionType::CStore:
@@ -1205,7 +1042,14 @@ Value JetContext::Execute(int iptr)
 					while ( index++ < 0)
 						frame = frame->prev;
 
-					frame->upvals[(int)in.value] = stack.Pop();
+					//write barrier
+					if (frame->grey == true)
+					{
+						frame->mark = false;
+						this->greys.Push(frame);
+					}
+
+					frame->upvals[in.value] = stack.Pop();
 					break;
 				}
 			case InstructionType::LoadFunction:
@@ -1213,6 +1057,7 @@ Value JetContext::Execute(int iptr)
 					//construct a new closure with the right number of upvalues
 					//from the Func* object
 					Closure* closure = new Closure;
+					closure->grey = closure->mark = false;
 					closure->prev = curframe;
 					closure->numupvals = in.func->upvals;
 					if (in.func->upvals)
@@ -1222,41 +1067,37 @@ Value JetContext::Execute(int iptr)
 					stack.Push(Value(closure));
 					break;
 				}
-			case InstructionType::Store:
-				{
-					auto temp = stack.Pop();
-					//store me
-					vars[(int)in.value] = temp;
-					break;
-				}
 			case InstructionType::Call:
 				{
-					//need to store how many args each function takes in the bytecode
-					//change function calls to automatically push args into locals, and take account for extra/missing values
-					if (vars[(int)in.value].type == ValueType::Function)
+					if (vars[in.value].type == ValueType::Function)
 					{
 						//store iptr on call stack
-						if (fptr > 38)
-							throw RuntimeException("Stack Overflow!");
+						if (fptr > JET_MAX_CALLDEPTH)
+							throw RuntimeException("Exceeded Max Call Depth!");
 
 						fptr++;
 
 						callstack.Push(std::pair<unsigned int, Closure*>(iptr, curframe));//callstack.Push(iptr);
 
-						curframe = vars[(int)in.value]._function;
+						this->sptr += curframe->prototype->locals;
 
-						frames[fptr].size = curframe->prototype->locals;
+						if ((sptr - localstack) >= JET_STACK_SIZE)
+							throw RuntimeException("Stack Overflow!");
 
-						Function* func = vars[(int)in.value]._function->prototype;
+						curframe = vars[in.value]._function;
+
+						//printf("Call: Stack Ptr At: %d\n", sptr - localstack);
+
+						Function* func = curframe->prototype;
 						//set all the locals
-						if (in.value2 <= func->args)
+						if ((unsigned int)in.value2 <= func->args)
 						{
 							for (int i = func->args-1; i >= 0; i--)
 							{
 								if (i < (int)in.value2)
-									frames[fptr].locals[i] = stack.Pop();
+									sptr[i] = stack.Pop();//frames[fptr].locals[i] = stack.Pop();
 								else
-									frames[fptr].locals[i] = Value();
+									sptr[i] = Value();//frames[fptr].locals[i] = Value();
 							}
 						}
 						else
@@ -1264,7 +1105,7 @@ Value JetContext::Execute(int iptr)
 							for (int i = (int)in.value2-1; i >= 0; i--)
 							{
 								if (i < func->args)
-									frames[fptr].locals[i] = stack.Pop();
+									sptr[i] = stack.Pop();//frames[fptr].locals[i] = stack.Pop();
 								else
 									stack.Pop();
 							}
@@ -1273,7 +1114,7 @@ Value JetContext::Execute(int iptr)
 						//go to function
 						iptr = func->ptr-1;
 					}
-					else if (vars[(int)in.value].type == ValueType::NativeFunction)
+					else if (vars[in.value].type == ValueType::NativeFunction)
 					{
 						unsigned int args = (unsigned int)in.value2;
 						Value* tmp = &stack.mem[stack.size()-args];
@@ -1285,7 +1126,7 @@ Value JetContext::Execute(int iptr)
 						callstack.Push(std::pair<unsigned int, Closure*>(123456789, curframe));//callstack.Push(123456789);
 						//to return something, push it to the stack
 						int s = stack.size();
-						(*vars[(int)in.value].func)(this,tmp,args);
+						(*vars[in.value].func)(this,tmp,args);
 
 						callstack.QuickPop(2);
 						if (stack.size() == s)//we didnt return anything
@@ -1297,7 +1138,7 @@ Value JetContext::Execute(int iptr)
 						std::string var;
 						for (auto ii: variables)
 						{
-							if (ii.second == (unsigned int)in.value)
+							if (ii.second == in.value)
 							{
 								var = ii.first;
 								break;
@@ -1313,43 +1154,47 @@ Value JetContext::Execute(int iptr)
 					Value fun = stack.Pop();
 					if (fun.type == ValueType::Function)
 					{
-						if (fptr > 38)
-							throw RuntimeException("Stack Overflow!");
+						if (fptr > JET_MAX_CALLDEPTH)
+							throw RuntimeException("Exceeded Max Call Depth!");
 
 						fptr++;
-						//callstack.Push(iptr);
-						callstack.Push(std::pair<unsigned int, Closure*>(iptr, curframe));
+
+						callstack.Push(std::pair<unsigned int, Closure*>(iptr, curframe));//callstack.Push(iptr);
+
+						sptr += curframe->prototype->locals;
+
+						if ((sptr - localstack) >= JET_STACK_SIZE)
+							throw RuntimeException("Stack Overflow!");
 
 						curframe = fun._function;
 
-						frames[fptr].size = curframe->prototype->locals;
+						//printf("ECall: Stack Ptr At: %d\n", sptr - localstack);
 
-						Function* func = fun._function->prototype;
+						Function* func = curframe->prototype;
 						//set all the locals
 						if (in.value <= func->args)
 						{
 							for (int i = func->args-1; i >= 0; i--)
 							{
-								if (i < (int)in.value)
-									frames[fptr].locals[i] = stack.Pop();
+								if (i < in.value)
+									sptr[i] = stack.Pop();//frames[fptr].locals[i] = stack.Pop();
 								else
-									frames[fptr].locals[i] = Value();
+									sptr[i] = Value();//frames[fptr].locals[i] = Value();
 							}
 						}
 						else
 						{
-							for (int i = (int)in.value-1; i >= 0; i--)
+							for (int i = in.value-1; i >= 0; i--)
 							{
 								if (i < func->args)
-									frames[fptr].locals[i] = stack.Pop();
+									sptr[i] = stack.Pop();//frames[fptr].locals[i] = stack.Pop();
 								else
 									stack.Pop();
 							}
 						}
-						//use the new Function* struct
+
 						//go to function
 						iptr = fun._function->prototype->ptr-1;
-						//iptr = fun.ptr-1;
 					}
 					else if (fun.type == ValueType::NativeFunction)
 					{
@@ -1381,6 +1226,8 @@ Value JetContext::Execute(int iptr)
 				{
 					auto oframe = callstack.Pop();//iptr = callstack.Pop();
 					iptr = oframe.first;
+					sptr -= oframe.second->prototype->locals;//curframe->prototype->locals;
+					//printf("Return: Stack Ptr At: %d\n", sptr - localstack);
 					curframe = oframe.second;
 
 					fptr--;
@@ -1425,6 +1272,7 @@ Value JetContext::Execute(int iptr)
 
 						if (loc.type == ValueType::Array)
 						{
+							//gc bug apparant in benchmark.txt.txt fixme
 							if ((int)index >= loc._obj._array->ptr->size() || (int)index < 0)
 								throw RuntimeException("Array index out of range!");
 							(*loc._obj._array->ptr)[(int)index] = val;
@@ -1529,33 +1377,29 @@ Value JetContext::Execute(int iptr)
 				}
 			case InstructionType::NewArray:
 				{
-					//need to call gc sometime
 					auto arr = new GCVal<std::vector<Value>*>(new std::vector<Value>(in.value));//new std::map<int, Value>;
-					arr->grey = false;
-					arr->mark = false;
+					arr->grey = arr->mark = false;
 					this->arrays.push_back(arr);
-					for (int i = (int)in.value-1; i >= 0; i--)
+					for (int i = in.value-1; i >= 0; i--)
 						(*arr->ptr)[i] = stack.Pop();
 					stack.Push(Value(arr));
 
 					if (allocationCounter++%GC_INTERVAL == 0)
-						this->RunGC2();
+						this->RunGC();
 
 					break;
 				}
 			case InstructionType::NewObject:
 				{
-					//need to call gc sometime
 					auto obj = new GCVal<std::map<std::string, Value>*>(new std::map<std::string, Value>);
-					obj->grey = false;
-					obj->mark = false;
+					obj->grey = obj->mark = false;
 					this->objects.push_back(obj);
-					for (int i = (int)in.value-1; i >= 0; i--)
+					for (int i = in.value-1; i >= 0; i--)
 						(*obj->ptr)[stack.Pop().ToString()] = stack.Pop();
 					stack.Push(Value(obj));
 
 					if (allocationCounter++%GC_INTERVAL == 0)
-						this->RunGC2();
+						this->RunGC();
 
 					break;
 				}
@@ -1580,7 +1424,7 @@ Value JetContext::Execute(int iptr)
 		{
 			for (int i = 0; i < curframe->prototype->locals; i++)
 			{
-				Value v = frames[fptr].locals[i];
+				Value v = this->sptr[i];
 				if (v.type >= ValueType(0))
 					printf("%d = %s\n", i, v.ToString().c_str());
 			}
@@ -1628,7 +1472,8 @@ Value JetContext::Execute(int iptr)
 
 		//ok, need to properly roll back callstack
 		this->callstack.QuickPop(this->callstack.size()-startcallstack);
-
+		this->stack.QuickPop(this->stack.size());
+		
 		if (this->callstack.size() == 1 && this->callstack.Peek().first == 123456789)
 			this->callstack.Pop();
 	}
@@ -1676,6 +1521,8 @@ void JetContext::GetCode(int ptr, std::string& ret, unsigned int& line)
 	}
 #undef min
 	int index = std::min(imin, imax);
+	if (index < 0)
+		index = 0;
 	ret = this->debuginfo[index].file;
 	line = this->debuginfo[index].line;
 }
@@ -1742,6 +1589,9 @@ Value JetContext::Assemble(const std::vector<IntermediateInstruction>& code)
 			}
 		case InstructionType::Function:
 			{
+				//clear label array for each function
+				//labels.clear();
+
 				//do something with argument and local counts
 				Function* func = new Function;
 				func->args = inst.a;
@@ -1813,44 +1663,56 @@ Value JetContext::Assemble(const std::vector<IntermediateInstruction>& code)
 				ins.value = inst.first;
 				ins.value2 = inst.second;
 
-				if (inst.type == InstructionType::Store)
+				switch (inst.type)
 				{
-					if (variables.find(inst.string) == variables.end())
+				case InstructionType::Store:
 					{
-						//add it
-						variables[inst.string] = variables.size();
-						vars.push_back(Value());
+						if (variables.find(inst.string) == variables.end())
+						{
+							//add it
+							variables[inst.string] = variables.size();
+							vars.push_back(Value());
+						}
+						ins.value = variables[inst.string];
+						break;
 					}
-					ins.value = variables[inst.string];
-				}
-				else if (inst.type == InstructionType::Load)
-				{
-					if (variables.find(inst.string) == variables.end())
+				case InstructionType::Load:
 					{
-						//add it
-						variables[inst.string] = variables.size();
-						vars.push_back(Value());
+						if (variables.find(inst.string) == variables.end())
+						{
+							//add it
+							variables[inst.string] = variables.size();
+							vars.push_back(Value());
+						}
+						ins.value = variables[inst.string];
+						break;
 					}
-					ins.value = variables[inst.string];
-				}
-				else if (inst.type == InstructionType::LoadFunction)
-				{
-					ins.func = functions[inst.string];
-				}
-				else if (inst.type == InstructionType::Call)
-				{
-					if (variables.find(inst.string) == variables.end())
+				case InstructionType::LoadFunction:
 					{
-						//add it
-						variables[inst.string] = variables.size();
-						vars.push_back(Value());
+						ins.func = functions[inst.string];
+						break;
 					}
-					//make sure to point to the right variable
-					ins.value = variables[inst.string];
-				}
-				else if (inst.type == InstructionType::Jump || inst.type == InstructionType::JumpFalse || inst.type == InstructionType::JumpTrue)
-				{
-					ins.value = labels[inst.string];
+				case InstructionType::Call:
+					{
+						if (variables.find(inst.string) == variables.end())
+						{
+							//add it
+							variables[inst.string] = variables.size();
+							vars.push_back(Value());
+						}
+						//make sure to point to the right variable
+						ins.value = variables[inst.string];
+						break;
+					}
+				case InstructionType::Jump:
+				case InstructionType::JumpFalse:
+				case InstructionType::JumpTrue:
+					{
+						if (labels.find(inst.string) == labels.end())
+							throw RuntimeException("Label '" + (std::string)inst.string + "' does not exist!");
+						ins.value = labels[inst.string];
+						break;
+					}
 				}
 
 				this->ins.push_back(ins);

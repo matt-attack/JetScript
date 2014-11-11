@@ -29,7 +29,7 @@ namespace Jet
 		double second;
 		};*/
 		char* string;
-		double first;
+		int first;
 		union
 		{
 			double second;
@@ -141,7 +141,7 @@ namespace Jet
 				if (ins.string)
 					printf("\n[%d]\t%-15s %-5.0lf %s", index++, Instructions[(int)ins.type], ins.second, ins.string);
 				else
-					printf("\n[%d]\t%-15s %-5.0lf %.0lf", index++, Instructions[(int)ins.type], ins.first, ins.second);
+					printf("\n[%d]\t%-15s %-5d %.0lf", index++, Instructions[(int)ins.type], ins.first, ins.second);
 
 				if (i+1 < this->out.size() && out[i+1].type == InstructionType::DebugLine)
 				{
@@ -288,7 +288,7 @@ namespace Jet
 		}
 		void Number(double value)
 		{
-			out.push_back(IntermediateInstruction(InstructionType::LdNum, value));
+			out.push_back(IntermediateInstruction(InstructionType::LdNum, (double)0, value));
 		}
 
 		void String(std::string string)

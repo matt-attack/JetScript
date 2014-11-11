@@ -55,6 +55,14 @@ namespace Jet
 			_size -= times;
 		}
 
+		T& operator[](unsigned int pos)
+		{
+			if (pos >= this->_size)
+				throw RuntimeException("Bad Stack Index");
+
+			return mem[pos];
+		}
+
 		T Peek()
 		{
 			return mem[_size-1];
