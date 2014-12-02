@@ -93,6 +93,8 @@ void Lexer::Init()
 	operators["<>"] = TokenType::Swap;
 	operators["\""] = TokenType::String;
 
+	operators["..."] = TokenType::Ellipses;
+
 	//comments
 	operators["//"] = TokenType::LineComment;
 	operators["-[["] = TokenType::CommentBegin;
@@ -120,6 +122,8 @@ void Lexer::Init()
 	keywords["romper"/*"parar"*/] = TokenType::Break;
 	keywords["continue"] = TokenType::Continue;
 	keywords["continuar"] = TokenType::Continue;
+
+	keywords["const"] = TokenType::Const;
 
 	for (auto ii = operators.begin(); ii != operators.end(); ii++)
 	{

@@ -137,7 +137,7 @@ void FunctionExpression::Compile(CompilerContext* context)
 	else
 		fname = "_lambda_id_"+context->GetUUID();//todo generate id
 
-	CompilerContext* function = context->AddFunction(fname, this->args->size());
+	CompilerContext* function = context->AddFunction(fname, this->args->size(), "test");
 
 	//ok push locals, in opposite order
 	for (int i = 0; i < this->args->size(); i++)
@@ -145,6 +145,8 @@ void FunctionExpression::Compile(CompilerContext* context)
 		auto aname = dynamic_cast<NameExpression*>((*this->args)[i]);
 		function->RegisterLocal(aname->GetName());
 	}
+	if (this->varargs)
+		function->RegisterLocal(this->varargs->GetName());
 	block->Compile(function);
 
 	//if last instruction was a return, dont insert another one

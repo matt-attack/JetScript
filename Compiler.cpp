@@ -15,6 +15,7 @@ using namespace Jet;
 
 CompilerContext::CompilerContext(void)
 {
+	this->vararg = false;
 	this->closures = 0;
 	this->parent = 0;
 	uuid = 0;
@@ -48,7 +49,7 @@ std::vector<IntermediateInstruction> CompilerContext::Compile(BlockExpression* e
 	try
 	{
 		//may want to correct number of locals here
-		this->FunctionLabel("{Entry Point}", 0, 0, 0);
+		this->FunctionLabel("{Entry Point}", 0, 0, 0, this->vararg);
 
 		expr->Compile(this);
 
@@ -56,6 +57,11 @@ std::vector<IntermediateInstruction> CompilerContext::Compile(BlockExpression* e
 		this->Return();
 
 		this->Compile();
+		
+		if (localindex > 255)
+			throw CompilerException("Compiler", 0, "Too many locals: over 256 locals in function!");
+		if (closures > 255)
+			throw CompilerException("Compiler", 0, "Too many closures: over 256 closures in function!");
 
 		//modify the entry point with number of locals
 		this->out[0].b = this->localindex;
@@ -88,8 +94,6 @@ std::vector<IntermediateInstruction> CompilerContext::Compile(BlockExpression* e
 		throw e;
 	}
 
-	//printf("Compile Output:\n%s\n\n", this->output.c_str());
-
 	if (this->scope)
 	{
 		auto next = this->scope->next;
@@ -100,8 +104,8 @@ std::vector<IntermediateInstruction> CompilerContext::Compile(BlockExpression* e
 			delete next;
 			next = tmp;
 		}
+		this->scope->localvars.clear();
 	}
-	this->scope->localvars.clear();
 
 	for (auto ii: this->functions)
 		delete ii.second;

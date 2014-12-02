@@ -108,6 +108,8 @@ Parser::Parser(Lexer* l)
 
 	this->Register(TokenType::Break, new BreakParselet());
 	this->Register(TokenType::Continue, new ContinueParselet());
+
+	this->Register(TokenType::Const, new ConstParselet());
 }
 
 Parser::~Parser()

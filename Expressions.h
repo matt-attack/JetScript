@@ -972,23 +972,26 @@ namespace Jet
 	class FunctionExpression: public Expression
 	{
 		Expression* name;
-		::std::vector<Expression*>* args;
+		std::vector<Expression*>* args;
 		ScopeExpression* block;
 		Token token;
+		NameExpression* varargs;
 	public:
 
-		FunctionExpression(Token token, Expression* name, ::std::vector<Expression*>* args, ScopeExpression* block)
+		FunctionExpression(Token token, Expression* name, std::vector<Expression*>* args, ScopeExpression* block, NameExpression* varargs = 0)
 		{
 			this->args = args;
 			this->block = block;
 			this->name = name;
 			this->token = token;
+			this->varargs = varargs;
 		}
 
 		~FunctionExpression()
 		{
 			delete block;
 			delete name;
+			delete varargs;
 
 			if (args)
 			{

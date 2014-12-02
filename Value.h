@@ -62,6 +62,7 @@ namespace Jet
 	{
 		unsigned int ptr;
 		unsigned int args, locals, upvals;
+		bool vararg;
 		std::string name;
 	};
 
@@ -94,7 +95,7 @@ namespace Jet
 					_JetUserdata* _userdata;
 				};
 				_JetObject* prototype;
-			} _obj;
+			};
 
 			struct
 			{
@@ -118,20 +119,20 @@ namespace Jet
 				return;
 			type = ValueType::String;
 
-			_obj._string = (char*)str;
+			_string = (char*)str;
 		}
 
 		Value(_JetObject* obj)
 		{
 			this->type = ValueType::Object;
-			this->_obj._object = obj;
-			this->_obj.prototype = 0;
+			this->_object = obj;
+			this->prototype = 0;
 		}
 
 		Value(_JetArray* arr)
 		{
 			type = ValueType::Array;
-			this->_obj._array = arr;
+			this->_array = arr;
 		}
 
 		Value(double val)
@@ -161,13 +162,13 @@ namespace Jet
 		explicit Value(_JetUserdata* userdata, _JetObject* prototype)
 		{
 			this->type = ValueType::Userdata;
-			this->_obj._userdata = userdata;
-			this->_obj.prototype = prototype;
+			this->_userdata = userdata;
+			this->prototype = prototype;
 		}
 
 		void SetPrototype(_JetObject* obj)
 		{
-			_obj.prototype = obj;
+			prototype = obj;
 		}
 
 		std::string ToString()
@@ -179,16 +180,16 @@ namespace Jet
 			case ValueType::Number:
 				return ::std::to_string(this->value);
 			case ValueType::String:
-				return this->_obj._string;
+				return this->_string;
 			case ValueType::Function:
 				return "[Function "+this->_function->prototype->name+"]";//"[Function "+::std::to_string(this->_function->prototype->ptr)+"]";//"[Function "+this->_function->prototype->name+"]";
 			case ValueType::NativeFunction:
 				return "[NativeFunction "+::std::to_string((unsigned int)this->func)+"]";
 			case ValueType::Array:
 				{
-					std::string str = "[Array " + std::to_string((int)this->_obj._array)+"]";//"[\n";
+					std::string str = "[Array " + std::to_string((int)this->_array)+"]";//"[\n";
 					/*int i = 0;
-					for (auto ii: *this->_obj._array->ptr)
+					for (auto ii: *this->_array->ptr)
 					{
 					str += "\t";
 					str += ::std::to_string(i++);
@@ -200,7 +201,7 @@ namespace Jet
 				}
 			case ValueType::Object:
 				{
-					std::string str = "[Object " + std::to_string((int)this->_obj._object)+"]";
+					std::string str = "[Object " + std::to_string((int)this->_object)+"]";
 					/*for (auto ii: *this->_obj->ptr)
 					{
 					str += "\t";
@@ -213,7 +214,7 @@ namespace Jet
 				}
 			case ValueType::Userdata:
 				{
-					return "[Userdata "+std::to_string((int)this->_obj._userdata)+"]";
+					return "[Userdata "+std::to_string((int)this->_userdata)+"]";
 				}
 			default:
 				return "";
@@ -223,7 +224,7 @@ namespace Jet
 		template<class T>
 		inline T*& GetUserdata()
 		{
-			return (T*&)this->_obj._userdata->ptr.first;
+			return (T*&)this->_userdata->ptr.first;
 		}
 
 		const char* Type()
@@ -255,11 +256,11 @@ namespace Jet
 			case ValueType::Array:
 				return 0;
 			case ValueType::Object:
-				return this->_obj.prototype;
+				return this->prototype;
 			case ValueType::String:
 				return 0;
 			case ValueType::Userdata:
-				return this->_obj.prototype;
+				return this->prototype;
 			default:
 				return 0;
 			}
@@ -311,9 +312,9 @@ namespace Jet
 		Value operator[] (int index)
 		{
 			if (this->type == ValueType::Array)
-				return (*this->_obj._array->ptr)[index];
+				return (*this->_array->ptr)[index];
 			else if (this->type == ValueType::Object)
-				return (*this->_obj._object->ptr)[std::to_string(index)];
+				return (*this->_object->ptr)[std::to_string(index)];
 			return Value(0);
 		};
 
@@ -323,11 +324,11 @@ namespace Jet
 			{
 			case ValueType::Array:
 				{
-					return (*this->_obj._array->ptr)[(int)key.value];
+					return (*this->_array->ptr)[(int)key.value];
 				}
 			case ValueType::Object:
 				{
-					return (*this->_obj._object->ptr)[key.ToString()];
+					return (*this->_object->ptr)[key.ToString()];
 				}
 			default:
 				throw RuntimeException("Cannot index type " + (std::string)ValueTypes[(int)this->type]);

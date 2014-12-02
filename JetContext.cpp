@@ -47,7 +47,7 @@ JetContext::JetContext()
 		if (v->type == ValueType::Object && (v+1)->type == ValueType::Object)
 		{
 			Value val = *v;
-			val._obj.prototype = (v+1)->_obj._object;
+			val.prototype = (v+1)->_object;
 			context->Return(val);
 		}
 		else
@@ -112,7 +112,7 @@ JetContext::JetContext()
 	(*this->string.ptr)["length"] = Value([](JetContext* context, Value* v, int args)
 	{
 		if (args == 1)
-			context->Return(Value((double)strlen(v->_obj._string)));
+			context->Return(Value((double)strlen(v->_string)));
 		else
 			throw RuntimeException("bad length call!");
 	});
@@ -122,8 +122,8 @@ JetContext::JetContext()
 	{
 		if (args == 2)
 		{
-			(v+1)->_obj._array->ptr->push_back(*v);
-			//(*(v+1)->_obj._array->ptr)[(v+1)->_obj._array->ptr->size()] = *(v);
+			(v+1)->_array->ptr->push_back(*v);
+			//(*(v+1)->_array->ptr)[(v+1)->_array->ptr->size()] = *(v);
 		}
 		else
 			throw RuntimeException("Invalid add call!!");
@@ -132,7 +132,7 @@ JetContext::JetContext()
 	{
 		//how do I get access to the array from here?
 		if (args == 1)
-			context->Return((int)v->_obj._array->ptr->size());
+			context->Return((int)v->_array->ptr->size());
 		else
 			throw RuntimeException("Invalid size call!!");
 	});
@@ -140,7 +140,7 @@ JetContext::JetContext()
 	{
 		//how do I get access to the array from here?
 		if (args == 2)
-			(v+1)->_obj._array->ptr->resize((*v).value);
+			(v+1)->_array->ptr->resize((*v).value);
 		else
 			throw RuntimeException("Invalid size call!!");
 	});
@@ -155,8 +155,8 @@ JetContext::JetContext()
 				std::vector<Value>::iterator iterator;
 			};
 			iter* it = new iter;
-			it->container = v->_obj._array->ptr;
-			it->iterator = v->_obj._array->ptr->begin();
+			it->container = v->_array->ptr;
+			it->iterator = v->_array->ptr->begin();
 			context->Return(context->NewUserdata(it, &context->arrayiter));
 			return;
 		}
@@ -167,7 +167,7 @@ JetContext::JetContext()
 	{
 		//how do I get access to the array from here?
 		if (args == 1)
-			context->Return((int)v->_obj._object->ptr->size());
+			context->Return((int)v->_object->ptr->size());
 		else
 			throw RuntimeException("Invalid size call!!");
 	});
@@ -182,8 +182,8 @@ JetContext::JetContext()
 				std::map<std::string, Value>::iterator iterator;
 			};
 			iter2* it = new iter2;
-			it->container = v->_obj._object->ptr;
-			it->iterator = v->_obj._object->ptr->begin();
+			it->container = v->_object->ptr;
+			it->iterator = v->_object->ptr->begin();
 			context->Return(context->NewUserdata(it, &context->objectiter));
 			return;
 		}
@@ -447,9 +447,9 @@ void JetContext::RunGC()
 		{
 			if (vars[i].type > ValueType::NativeFunction)
 			{
-				if (/*vars[i]._obj._object->mark == false && */vars[i]._obj._object->grey == false)
+				if (/*vars[i]._object->mark == false && */vars[i]._object->grey == false)
 				{
-					this->vars[i]._obj._object->grey = true;
+					this->vars[i]._object->grey = true;
 					this->greys.Push(this->vars[i]);
 				}
 			}
@@ -470,9 +470,9 @@ void JetContext::RunGC()
 		{
 			if (stack.mem[i].type > ValueType::NativeFunction)
 			{
-				if (/*stack.mem[i]._obj._object->mark == false &&*/ stack.mem[i]._obj._object->grey == false)
+				if (stack.mem[i]._object->grey == false)
 				{
-					stack.mem[i]._obj._object->grey = true;
+					stack.mem[i]._object->grey = true;
 					this->greys.Push(stack.mem[i]);
 				}
 			}
@@ -506,9 +506,9 @@ void JetContext::RunGC()
 			{
 				if (this->localstack[sp].type > ValueType::NativeFunction)
 				{
-					if (/*this->localstack[sp]._obj._object->mark == false &&*/ this->localstack[sp]._obj._object->grey == false)
+					if (this->localstack[sp]._object->grey == false)
 					{
-						this->localstack[sp]._obj._object->grey = true;
+						this->localstack[sp]._object->grey = true;
 						this->greys.Push(this->localstack[sp]);
 					}
 				}
@@ -521,9 +521,9 @@ void JetContext::RunGC()
 		{
 			if (this->localstack[sp].type > ValueType::NativeFunction)
 			{
-				if (/*this->localstack[sp]._obj._object->mark == false &&*/ this->localstack[sp]._obj._object->grey == false)
+				if (this->localstack[sp]._object->grey == false)
 				{
-					this->localstack[sp]._obj._object->grey = true;
+					this->localstack[sp]._object->grey = true;
 					this->greys.Push(this->localstack[sp]);
 				}
 			}
@@ -541,27 +541,27 @@ void JetContext::RunGC()
 			{
 			case ValueType::Object:
 				{
-					if (obj._obj.prototype && obj._obj.prototype->grey == false)
+					if (obj.prototype && obj.prototype->grey == false)
 					{
-						obj._obj.prototype->grey = true;
-						obj._obj.prototype->mark = true;
+						obj.prototype->grey = true;
+						obj.prototype->mark = true;
 
-						for (auto ii: *obj._obj.prototype->ptr)
+						for (auto ii: *obj.prototype->ptr)
 						{
 							if (ii.second.type > ValueType::NativeFunction)
 							{
-								ii.second._obj._object->grey = true;
+								ii.second._object->grey = true;
 								greys.Push(ii.second);
 							}
 						}
 					}
 
-					obj._obj._object->mark = true;
-					for (auto ii: *obj._obj._object->ptr)
+					obj._object->mark = true;
+					for (auto ii: *obj._object->ptr)
 					{
-						if (ii.second.type > ValueType::NativeFunction && ii.second._obj._object->grey == false)
+						if (ii.second.type > ValueType::NativeFunction && ii.second._object->grey == false)
 						{
-							ii.second._obj._object->grey = true;
+							ii.second._object->grey = true;
 							greys.Push(ii.second);
 						}
 					}
@@ -569,13 +569,13 @@ void JetContext::RunGC()
 				}
 			case ValueType::Array:
 				{
-					obj._obj._array->mark = true;
+					obj._array->mark = true;
 
-					for (auto ii: *obj._obj._array->ptr)
+					for (auto ii: *obj._array->ptr)
 					{
-						if (ii.type > ValueType::NativeFunction && ii._obj._object->grey == false)
+						if (ii.type > ValueType::NativeFunction && ii._object->grey == false)
 						{
-							ii._obj._object->grey = true;
+							ii._object->grey = true;
 							greys.Push(ii);
 						}
 					}
@@ -600,9 +600,9 @@ void JetContext::RunGC()
 					{
 						if (obj._function->upvals[i].type > ValueType::NativeFunction)
 						{
-							if (obj._function->upvals[i]._obj._object->grey == false)
+							if (obj._function->upvals[i]._object->grey == false)
 							{
-								obj._function->upvals[i]._obj._object->grey = true;
+								obj._function->upvals[i]._object->grey = true;
 								greys.Push(obj._function->upvals[i]);
 							}
 						}
@@ -611,13 +611,13 @@ void JetContext::RunGC()
 				}
 			case ValueType::Userdata:
 				{
-					obj._obj._userdata->mark = true;
+					obj._userdata->mark = true;
 
-					if (obj._obj.prototype)
+					if (obj.prototype)
 					{
-						obj._obj.prototype->mark = true;
+						obj.prototype->mark = true;
 
-						for (auto ii: *obj._obj.prototype->ptr)
+						for (auto ii: *obj.prototype->ptr)
 							greys.Push(ii.second);
 					}
 					break;
@@ -768,6 +768,7 @@ Value JetContext::Execute(int iptr)
 
 	callstack.Push(std::pair<unsigned int, Closure*>(123456789, curframe));//bad value to get it to return;
 	unsigned int startcallstack = this->callstack.size();
+	unsigned int startstack = this->stack.size();
 
 	try
 	{
@@ -1095,9 +1096,22 @@ Value JetContext::Execute(int iptr)
 							for (int i = func->args-1; i >= 0; i--)
 							{
 								if (i < (int)in.value2)
-									sptr[i] = stack.Pop();//frames[fptr].locals[i] = stack.Pop();
+									sptr[i] = stack.Pop();
 								else
-									sptr[i] = Value();//frames[fptr].locals[i] = Value();
+									sptr[i] = Value();
+							}
+						}
+						else if (func->vararg)
+						{
+							sptr[func->locals-1] = this->NewArray();
+							auto arr = sptr[func->locals-1]._array->ptr;
+							arr->resize(in.value2 - func->args);
+							for (int i = (int)in.value2-1; i >= 0; i--)
+							{
+								if (i < func->args)
+									sptr[i] = stack.Pop();
+								else
+									(*arr)[i] = stack.Pop();
 							}
 						}
 						else
@@ -1177,9 +1191,22 @@ Value JetContext::Execute(int iptr)
 							for (int i = func->args-1; i >= 0; i--)
 							{
 								if (i < in.value)
-									sptr[i] = stack.Pop();//frames[fptr].locals[i] = stack.Pop();
+									sptr[i] = stack.Pop();
 								else
-									sptr[i] = Value();//frames[fptr].locals[i] = Value();
+									sptr[i] = Value();
+							}
+						}
+						else if (func->vararg)
+						{
+							sptr[func->locals-1] = this->NewArray();
+							auto arr = sptr[func->locals-1]._array->ptr;
+							arr->resize(in.value2 - func->args);
+							for (int i = (int)in.value2-1; i >= 0; i--)
+							{
+								if (i < func->args)
+									sptr[i] = stack.Pop();
+								else
+									(*arr)[i] = stack.Pop();
 							}
 						}
 						else
@@ -1251,15 +1278,15 @@ Value JetContext::Execute(int iptr)
 						Value val = stack.Pop();	
 
 						if (loc.type == ValueType::Object)
-							(*loc._obj._object->ptr)[in.string] = val;
+							(*loc._object->ptr)[in.string] = val;
 						else
 							throw RuntimeException("Could not index a non array/object value!");
 
-						if (loc._obj._object->mark)
+						if (loc._object->mark)
 						{
 							//reset to grey and push back for reprocessing
 							//printf("write barrier triggered!\n");
-							loc._obj._object->mark = false;
+							loc._object->mark = false;
 							this->greys.Push(loc);//push to grey stack
 						}
 						//write barrier
@@ -1273,29 +1300,29 @@ Value JetContext::Execute(int iptr)
 						if (loc.type == ValueType::Array)
 						{
 							//gc bug apparant in benchmark.txt.txt fixme
-							if ((int)index >= loc._obj._array->ptr->size() || (int)index < 0)
+							if ((int)index >= loc._array->ptr->size() || (int)index < 0)
 								throw RuntimeException("Array index out of range!");
-							(*loc._obj._array->ptr)[(int)index] = val;
+							(*loc._array->ptr)[(int)index] = val;
 
 							//write barrier
-							if (loc._obj._array->mark)
+							if (loc._array->mark)
 							{
 								//reset to grey and push back for reprocessing
 								//printf("write barrier triggered!\n");
-								loc._obj._array->mark = false;
+								loc._array->mark = false;
 								this->greys.Push(loc);//push to grey stack
 							}
 						}
 						else if (loc.type == ValueType::Object)
 						{
-							(*loc._obj._object->ptr)[index.ToString()] = val;
+							(*loc._object->ptr)[index.ToString()] = val;
 
 							//write barrier
-							if (loc._obj._object->mark)
+							if (loc._object->mark)
 							{
 								//reset to grey and push back for reprocessing
 								//printf("write barrier triggered!\n");
-								loc._obj._object->mark = false;
+								loc._object->mark = false;
 								this->greys.Push(loc);//push to grey stack
 							}
 						}
@@ -1314,13 +1341,13 @@ Value JetContext::Execute(int iptr)
 						if (loc.type == ValueType::Object)
 						{
 							Value v;
-							auto ii = loc._obj._object->ptr->find(in.string);
-							if (ii == loc._obj._object->ptr->end())
+							auto ii = loc._object->ptr->find(in.string);
+							if (ii == loc._object->ptr->end())
 							{
-								if (loc._obj.prototype)
+								if (loc.prototype)
 								{
-									ii = loc._obj.prototype->ptr->find(in.string);
-									if (ii == loc._obj.prototype->ptr->end())
+									ii = loc.prototype->ptr->find(in.string);
+									if (ii == loc.prototype->ptr->end())
 									{
 										ii = this->object.ptr->find(in.string);
 										if (ii != this->object.ptr->end())
@@ -1339,11 +1366,11 @@ Value JetContext::Execute(int iptr)
 							}
 							else
 								stack.Push(ii->second);
-							//Value v = (*loc._obj._object->ptr)[in.string];
+							//Value v = (*loc._object->ptr)[in.string];
 
 							//check meta table
-							//if (v.type == ValueType::Null && loc._obj.prototype)
-							//v = (*loc._obj.prototype->ptr)[in.string];
+							//if (v.type == ValueType::Null && loc.prototype)
+							//v = (*loc.prototype->ptr)[in.string];
 							//if (v.type == ValueType::Null)
 							//v = (*this->object.ptr)[in.string];
 							//stack.Push(v);
@@ -1353,7 +1380,7 @@ Value JetContext::Execute(int iptr)
 						else if (loc.type == ValueType::Array)
 							stack.Push((*this->Array.ptr)[in.string]);
 						else if (loc.type == ValueType::Userdata)
-							stack.Push((*loc._obj.prototype->ptr)[in.string]);
+							stack.Push((*loc.prototype->ptr)[in.string]);
 						else
 							throw RuntimeException("Could not index a non array/object value!");
 					}
@@ -1364,12 +1391,12 @@ Value JetContext::Execute(int iptr)
 
 						if (loc.type == ValueType::Array)
 						{
-							if ((int)index >= loc._obj._array->ptr->size())
+							if ((int)index >= loc._array->ptr->size())
 								throw RuntimeException("Array index out of range!");
-							stack.Push((*loc._obj._array->ptr)[(int)index]);
+							stack.Push((*loc._array->ptr)[(int)index]);
 						}
 						else if (loc.type == ValueType::Object)
-							stack.Push((*loc._obj._object->ptr)[index.ToString()]);
+							stack.Push((*loc._object->ptr)[index.ToString()]);
 						else
 							throw RuntimeException("Could not index a non array/object value!");
 					}
@@ -1450,8 +1477,11 @@ Value JetContext::Execute(int iptr)
 		fptr = -1;
 
 		//clear the stacks
-		this->stack.QuickPop(this->stack.size());
-		this->callstack.QuickPop(this->callstack.size());
+		this->callstack.QuickPop(this->callstack.size()-startcallstack);
+		this->stack.QuickPop(this->stack.size()-startstack);
+
+		//this->stack.QuickPop(this->stack.size());
+		//this->callstack.QuickPop(this->callstack.size());
 
 		//should rethrow here or pass
 		//to a handler or something
@@ -1472,8 +1502,8 @@ Value JetContext::Execute(int iptr)
 
 		//ok, need to properly roll back callstack
 		this->callstack.QuickPop(this->callstack.size()-startcallstack);
-		this->stack.QuickPop(this->stack.size());
-		
+		this->stack.QuickPop(this->stack.size()-startstack);
+
 		if (this->callstack.size() == 1 && this->callstack.Peek().first == 123456789)
 			this->callstack.Pop();
 	}
@@ -1599,6 +1629,7 @@ Value JetContext::Assemble(const std::vector<IntermediateInstruction>& code)
 				func->upvals = inst.c;
 				func->ptr = labelposition;
 				func->name = inst.string;
+				func->vararg = inst.d ? true : false;
 
 				if (functions.find(inst.string) == functions.end())
 					functions[inst.string] = func;
@@ -1753,7 +1784,7 @@ Value JetContext::Assemble(const std::vector<IntermediateInstruction>& code)
 Value JetContext::Call(const char* function, Value* args, unsigned int numargs)
 {
 	int iptr = 0;
-	printf("Calling: '%s'\n", function);
+	//printf("Calling: '%s'\n", function);
 	if (variables.find(function) == variables.end())
 	{
 		printf("ERROR: No variable named: '%s' to call\n", function);
@@ -1810,6 +1841,7 @@ std::string JetContext::Script(const std::string code, const std::string filenam
 	{
 		printf("Exception found:\n");
 		printf("%s (%d): %s\n", E.file.c_str(), E.line, E.ShowReason());
+		return "";
 	}
 }
 
@@ -1821,21 +1853,17 @@ Value JetContext::Script(const char* code, const char* filename)//compiles, asse
 
 	//this->RunGC();
 	if (this->labels.size() > 100000)
-		throw CompilerException("test", 5, "problem with lables!");
+		throw CompilerException("test", 5, "problem with labels!");
 	return v;
 }
 
 #ifdef EMSCRIPTEN
-#ifndef _HGUAD
-#define _HGUAD
 #include <emscripten/bind.h>
 using namespace emscripten;
-//using namespace std;
-
+using namespace std;
 EMSCRIPTEN_BINDINGS(Jet) {
 	class_<Jet::JetContext>("JetContext")
 		.constructor()
-		.function<std::string, std::string, std::string>("Script", &JetContext::Script);
+		.function<std::string, std::string, std::string>("Script", &Jet::JetContext::Script);
 }
-#endif
 #endif

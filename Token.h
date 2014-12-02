@@ -67,12 +67,15 @@ namespace Jet
 		Colon,
 		Semicolon,
 		Comma,
+		Ellipses,
 
 		Function,
 		For,
 		Local,
 		Break,
 		Continue,
+
+		Const,
 
 		Swap,
 

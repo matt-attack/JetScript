@@ -20,6 +20,11 @@
 
 namespace Jet
 {
+	//add custom operators
+	//add includes/modules
+	//parallelism maybe?
+	//add const
+	//allow recursive calling of Execute!!!
 	struct IntermediateInstruction
 	{
 		InstructionType type;
@@ -109,11 +114,11 @@ namespace Jet
 		};
 		Scope* scope;
 
+		bool vararg;
 		unsigned int closures;
 		unsigned int arguments;
 		CompilerContext* parent;
 	public:
-
 		::std::vector<IntermediateInstruction> out;
 
 		CompilerContext(void);
@@ -152,17 +157,17 @@ namespace Jet
 			printf("\n");
 		}
 
-		CompilerContext* AddFunction(::std::string name, unsigned int args)
+		CompilerContext* AddFunction(::std::string name, unsigned int args, bool vararg = false)
 		{
 			//push instruction that sets the function
 			//todo, may need to have functions in other instruction code sets
-
 			CompilerContext* newfun = new CompilerContext();
 			//insert this into my list of functions
 			std::string fname = name+this->GetUUID();
 			newfun->arguments = args;
 			newfun->uuid = this->uuid;
 			newfun->parent = this;
+			newfun->vararg = vararg;
 			this->functions[fname] = newfun;
 
 			//store the function in the variable
@@ -233,8 +238,11 @@ namespace Jet
 			if (this->scope && this->scope->previous)
 				this->scope = this->scope->previous;
 
-			delete this->scope->next;
-			this->scope->next = 0;
+			if (this->scope)
+			{
+				delete this->scope->next;
+				this->scope->next = 0;
+			}
 		}
 
 		void PushLoop(std::string Break, std::string Continue)
@@ -314,12 +322,13 @@ namespace Jet
 
 		//labels
 		//add count of locals used here
-		void FunctionLabel(std::string name, int args, int locals, int upvals)
+		void FunctionLabel(std::string name, int args, int locals, int upvals, bool vararg = false)
 		{
 			IntermediateInstruction ins = IntermediateInstruction(InstructionType::Function, name, args);
 			ins.a = args;
 			ins.b = locals;
 			ins.c = upvals;
+			ins.d = vararg ? 0 : 1;
 			out.push_back(ins);
 		}
 
@@ -478,7 +487,7 @@ namespace Jet
 							//exit the loops we found it
 							//comment/debug info
 							//this->output += ".local " + variable + " " + ::std::to_string(i) + ";\n";
-							
+
 							return true;
 						}
 					}

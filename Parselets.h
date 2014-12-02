@@ -299,6 +299,18 @@ namespace Jet
 
 		Expression* parse(Parser* parser, Token token);
 	};
+
+	//use me for parallelism
+	class ConstParselet: public StatementParselet
+	{
+	public:
+		ConstParselet()
+		{
+			this->TrailingSemicolon = true;
+		}
+
+		Expression* parse(Parser* parser, Token token);
+	};
 };
 
 #endif
