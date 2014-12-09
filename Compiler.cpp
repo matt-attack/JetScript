@@ -18,8 +18,9 @@ CompilerContext::CompilerContext(void)
 	this->vararg = false;
 	this->closures = 0;
 	this->parent = 0;
-	uuid = 0;
+	this->uuid = 0;
 	this->localindex = 0;
+	this->lastline = 0;
 	this->scope = new CompilerContext::Scope;
 	this->scope->level = 0;
 	this->scope->previous = this->scope->next = 0;
@@ -59,9 +60,9 @@ std::vector<IntermediateInstruction> CompilerContext::Compile(BlockExpression* e
 		this->Compile();
 		
 		if (localindex > 255)
-			throw CompilerException("Compiler", 0, "Too many locals: over 256 locals in function!");
+			throw CompilerException(this->lastfile, this->lastline, "Too many locals: over 256 locals in function!");
 		if (closures > 255)
-			throw CompilerException("Compiler", 0, "Too many closures: over 256 closures in function!");
+			throw CompilerException(this->lastfile, this->lastline, "Too many closures: over 256 closures in function!");
 
 		//modify the entry point with number of locals
 		this->out[0].b = this->localindex;
@@ -115,14 +116,14 @@ std::vector<IntermediateInstruction> CompilerContext::Compile(BlockExpression* e
 	this->localindex = 0;
 	this->closures = 0;
 
-	//this->ToString();
+	//this->PrintAssembly();
 
 	auto temp = std::move(this->out);
 	this->out.clear();
 	return std::move(temp);
 }
 
-bool CompilerContext::RegisterLocal(std::string name)
+bool CompilerContext::RegisterLocal(const std::string name)
 {
 	//neeed to store locals in a contiguous array, even with different scopes
 	for (unsigned int i = 0; i < this->scope->localvars.size(); i++)

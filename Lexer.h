@@ -8,21 +8,21 @@ namespace Jet
 	bool IsLetter(char c);
 	bool IsNumber(char c);
 
-	extern ::std::map<Jet::TokenType,::std::string> TokenToString; 
+	extern std::map<Jet::TokenType,std::string> TokenToString; 
 	class Lexer
 	{
 		unsigned int index;
-		::std::istream* stream;
+		std::istream* stream;
 
-		::std::string text;
-		::std::map<::std::string, Jet::TokenType> operators;
-		::std::map<::std::string, Jet::TokenType> keywords;
+		std::string text;
+		std::map<std::string, Jet::TokenType> operators;
+		std::map<std::string, Jet::TokenType> keywords;
 
 		unsigned int linenumber;
 		std::string filename;
 
 	public:
-		Lexer(::std::istream* input, std::string filename);
+		Lexer(std::istream* input, std::string filename);
 		Lexer(std::string text, std::string filename);
 
 		Token Next();

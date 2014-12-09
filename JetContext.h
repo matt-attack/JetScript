@@ -33,7 +33,7 @@
 
 #define JET_STACK_SIZE 800
 #define JET_MAX_CALLDEPTH 400
-
+//use the JetArray
 namespace Jet
 {
 	typedef std::function<void(Jet::JetContext*,Jet::Value*,int)> JetFunction;
@@ -41,9 +41,7 @@ namespace Jet
 	//void(*temp__bind_##fun)(Jet::JetContext*,Jet::Value*,int)> temp__bind_##fun = &[](Jet::JetContext* context,Jet::Value* args, int numargs) { context->Return(fun(args[0]));}; context[#fun] = &temp__bind_##fun;
 #define JetBind2(context, fun) 	auto temp__bind_##fun = [](Jet::JetContext* context,Jet::Value* args, int numargs) { context->Return(fun(args[0],args[1]));};context[#fun] = Jet::Value(temp__bind_##fun);
 #define JetBind2(context, fun, type) 	auto temp__bind_##fun = [](Jet::JetContext* context,Jet::Value* args, int numargs) { context->Return(fun((type)args[0],(type)args[1]));};context[#fun] = Jet::Value(temp__bind_##fun);
-	//improve instruction maybe?
-	//just have one double, since most things use integers
-	//and the most doubles used per instruction is 1
+	
 	struct Instruction
 	{
 		InstructionType instruction;
@@ -73,10 +71,10 @@ namespace Jet
 		//fix the labels, should only work with labels in the same function
 		//not just accumulate over the lifetime, so this should be cleared
 		//every function instruction
-		std::map<::std::string, unsigned int> labels;
-		std::map<::std::string, Function*> functions;
+		std::map<std::string, unsigned int> labels;
+		std::map<std::string, Function*> functions;
 		std::vector<Function*> entrypoints;
-		std::map<::std::string, unsigned int> variables;//mapping from string to location in vars array
+		std::map<std::string, unsigned int> variables;//mapping from string to location in vars array
 
 		//debug info
 		struct DebugInfo
@@ -104,8 +102,8 @@ namespace Jet
 
 	private:
 		//garbage collector stuff
-		std::vector<GCVal<std::vector<Value>*>*> arrays;
-		std::vector<GCVal<std::map<std::string, Value>*>*> objects;
+		std::vector<_JetArray*> arrays;
+		std::vector<_JetObject*> objects;
 		std::vector<GCVal<char*>*> strings;
 		std::vector<_JetUserdata*> userdata;
 
@@ -119,37 +117,10 @@ namespace Jet
 		VMStack<Value> greys;//stack of grey objects for processing
 	public:
 
-		Value NewObject()
-		{
-			auto v = new _JetObject;
-			v->grey = v->mark = false;
-			v->ptr = new std::map<std::string,Value>;
-			this->objects.push_back(v);
-			return Value(v);
-		}
-
-		Value NewArray()
-		{
-			auto a = new _JetArray;
-			a->grey = a->mark = false;
-			a->ptr = new std::vector<Value>;
-			this->arrays.push_back(a);
-			return Value(a);
-		}
-
-		Value NewUserdata(void* data, _JetObject* proto)
-		{
-			auto ud = new GCVal<std::pair<void*, _JetObject*>>(std::pair<void*, _JetObject*>(data, proto));
-			ud->grey = ud->mark = true;
-			this->userdata.push_back(ud);
-			return Value(ud, proto);
-		}
-
-		Value NewString(char* string)
-		{
-			this->strings.push_back(new GCVal<char*>(string));
-			return Value(string);
-		}
+		Value NewObject();
+		Value NewArray();
+		Value NewUserdata(void* data, _JetObject* proto);
+		Value NewString(char* string);
 
 	private:
 
@@ -204,48 +175,40 @@ namespace Jet
 		JetContext();
 		~JetContext();
 
-		//allows assignment and reading of variables stored
+		//allows assignment and reading of gobal variables
 		Value& operator[](const char* id);
 
-		std::string Script(const std::string code, const std::string filename = "file");
 
+		std::string Script(const std::string code, const std::string filename = "file");
 		Value Script(const char* code, const char* filename = "file");//compiles, assembles and executes the script
 
 
 		//compiles source code to ASM for the VM to read in
 		std::vector<IntermediateInstruction> Compile(const char* code, const char* filename = "file");
 
-
+		//executes global code and parses in ASM
 		Value Assemble(const std::vector<IntermediateInstruction>& code);
 
 		//executes a function in the VM context
 		Value Call(const char* function, Value* args = 0, unsigned int numargs = 0);
 
-		//need to be able to mark stuff held by native code for callbacks and what not
-		void RunGC();
+		void RunGC();//runs an iteration of the garbage collector
 
-		//these are to be used to return values from native functions
-		void Return(Value val)
-		{
-			this->stack.Push(val);
-		}
-
+		void Return(Value val);//returns value from native functions
+		
 	private:
 		int fptr;//frame pointer, not really used except in gc
 		Value* sptr;//stack pointer
 		Closure* curframe;
 		Value localstack[JET_STACK_SIZE];
 
-
 		//begin executing instructions at iptr index
 		Value Execute(int iptr);
 
-		//debug stuff
+		//debug functions
 		void GetCode(int ptr, std::string& ret, unsigned int& line);
-
 		void StackTrace(int curiptr);
 	};
-
 }
 
 #endif

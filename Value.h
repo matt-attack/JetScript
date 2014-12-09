@@ -6,6 +6,7 @@
 #include <string>
 #include <memory>
 #include <vector>
+#include <unordered_map>
 
 #include "JetExceptions.h"
 
@@ -30,14 +31,6 @@ namespace Jet
 
 	struct Value;
 
-	typedef GCVal<std::map<std::string, Value>*> _JetObject; 
-	typedef GCVal<std::vector<Value>* > _JetArray;//std::map<int, Value>*> _JetArray; 
-	typedef GCVal<std::pair<void*,_JetObject*> > _JetUserdata;
-	typedef char _JetString;//GCVal<char*> _JetString;
-
-	typedef void _JetFunction;
-	typedef void(*_JetNativeFunc)(JetContext*,Value*, int);
-	//typedef std::function<void(JetContext*,Value*,int)> _JetNativeFunc;
 
 	enum class ValueType
 	{
@@ -55,6 +48,29 @@ namespace Jet
 	};
 
 	static const char* ValueTypes[] = { "Null", "Number", "NativeFunction", "String" , "Object", "Array", "Function", "Userdata"};
+
+
+	class HashFunction {
+	public:
+		std::size_t operator ()(const Value &v) const;
+	};
+
+	typedef std::unordered_map<Value, Value, HashFunction> _JetObjectBacking;
+	//typedef GCVal<std::map<std::string, Value>*> _JetObject; 
+	typedef GCVal<_JetObjectBacking*> _JetObject; 
+	//typedef std::map<std::string, Value>::iterator _JetObjectIterator;
+	typedef _JetObjectBacking::iterator _JetObjectIterator;
+
+	typedef std::vector<Value> _JetArrayBacking;
+	typedef GCVal<_JetArrayBacking* > _JetArray;//std::map<int, Value>*> _JetArray;
+	typedef _JetArrayBacking::iterator _JetArrayIterator;
+
+	typedef GCVal<std::pair<void*,_JetObject*> > _JetUserdata;
+	typedef char _JetString;//GCVal<char*> _JetString;
+
+	typedef void _JetFunction;
+	typedef void(*_JetNativeFunc)(JetContext*,Value*, int);
+	//typedef std::function<void(JetContext*,Value*,int)> _JetNativeFunc;
 
 	class JetContext;
 
@@ -97,12 +113,7 @@ namespace Jet
 				_JetObject* prototype;
 			};
 
-			struct
-			{
-				Closure* _function;
-				//Function* _function;
-				//unsigned int ptr;//used for functions, points to code
-			};
+			Closure* _function;
 			_JetNativeFunc func;//native func
 		};
 
@@ -171,45 +182,53 @@ namespace Jet
 			prototype = obj;
 		}
 
-		std::string ToString()
+		std::string ToString(int depth = 0) const
 		{
 			switch(this->type)
 			{
 			case ValueType::Null:
 				return "Null";
 			case ValueType::Number:
-				return ::std::to_string(this->value);
+				return std::to_string(this->value);
 			case ValueType::String:
 				return this->_string;
 			case ValueType::Function:
 				return "[Function "+this->_function->prototype->name+"]";//"[Function "+::std::to_string(this->_function->prototype->ptr)+"]";//"[Function "+this->_function->prototype->name+"]";
 			case ValueType::NativeFunction:
-				return "[NativeFunction "+::std::to_string((unsigned int)this->func)+"]";
+				return "[NativeFunction "+std::to_string((unsigned int)this->func)+"]";
 			case ValueType::Array:
 				{
-					std::string str = "[Array " + std::to_string((int)this->_array)+"]";//"[\n";
-					/*int i = 0;
+					std::string str = "[\n";
+					
+					if (depth++ > 3)
+						return "[Array " + std::to_string((int)this->_array)+"]";
+
+					int i = 0;
 					for (auto ii: *this->_array->ptr)
 					{
-					str += "\t";
-					str += ::std::to_string(i++);
-					str += " = ";
-					str += ii.ToString() + "\n";
+						str += "\t";
+						str += std::to_string(i++);
+						str += " = ";
+						str += ii.ToString(depth) + "\n";
 					}
-					str += "]";*/
+					str += "]";
 					return str;
 				}
 			case ValueType::Object:
 				{
-					std::string str = "[Object " + std::to_string((int)this->_object)+"]";
-					/*for (auto ii: *this->_obj->ptr)
+					std::string str = "{\n";
+					
+					if (depth++ > 3)
+						return "[Object " + std::to_string((int)this->_object)+"]";
+
+					for (auto ii: *this->_object->ptr)
 					{
-					str += "\t";
-					str += ii.first;
-					str += " = ";
-					str += ii.second.ToString() + "\n";
+						str += "\t";
+						str += ii.first.ToString(depth);
+						str += " = ";
+						str += ii.second.ToString(depth) + "\n";
 					}
-					str += "}";*/
+					str += "}";
 					return str;
 				}
 			case ValueType::Userdata:
@@ -244,7 +263,7 @@ namespace Jet
 		{
 			if (type == ValueType::Number)
 				return value;
-			
+
 			throw RuntimeException("Cannot convert type " + (std::string)ValueTypes[(int)this->type] + " to double!");
 		}
 
@@ -314,7 +333,7 @@ namespace Jet
 			if (this->type == ValueType::Array)
 				return (*this->_array->ptr)[index];
 			else if (this->type == ValueType::Object)
-				return (*this->_object->ptr)[std::to_string(index)];
+				return (*this->_object->ptr)[index];
 			return Value(0);
 		};
 
@@ -328,10 +347,38 @@ namespace Jet
 				}
 			case ValueType::Object:
 				{
-					return (*this->_object->ptr)[key.ToString()];
+					return (*this->_object->ptr)[key];
 				}
 			default:
 				throw RuntimeException("Cannot index type " + (std::string)ValueTypes[(int)this->type]);
+			}
+		}
+
+		bool operator== (const Value& other) const
+		{
+			if (other.type != this->type)
+				return false;
+
+			switch (this->type)
+			{
+			case ValueType::Number:
+				return other.value == this->value;
+			case ValueType::Array:
+				return other._array == this->_array;
+			case ValueType::Function:
+				return other._function == this->_function;
+			case ValueType::NativeFunction:
+				return other.func == this->func;
+			case ValueType::String:
+				return strcmp(other._string, this->_string) == 0;
+			case ValueType::Null:
+				return true;
+			case ValueType::Object:
+				return other._object == this->_object;
+			case ValueType::Userdata:
+				return other._userdata == this->_userdata;
+			default:
+				break;
 			}
 		}
 

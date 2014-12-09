@@ -132,7 +132,7 @@ Expression* Parser::parseExpression(int precedence)
 	if (prefix == 0)
 	{
 		std::string str = "ParseExpression: No Parser Found for: " + token.getText();
-		throw ParserException(token.filename, token.line, str);//printf("Consume: TokenType not as expected!\n");
+		throw CompilerException(token.filename, token.line, str);//printf("Consume: TokenType not as expected!\n");
 	}
 
 	Expression* left = prefix->parse(this, token);
@@ -221,7 +221,7 @@ Token Parser::Consume(TokenType expected)
 	if (temp.getType() != expected)
 	{
 		std::string str = "Consume: TokenType not as expected! Expected: " + TokenToString[expected] + " Got: " + temp.text;
-		throw ParserException(temp.filename, temp.line, str);
+		throw CompilerException(temp.filename, temp.line, str);
 	}
 	mRead.pop_front();
 	return temp;

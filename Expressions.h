@@ -58,7 +58,7 @@ namespace Jet
 
 	class NameExpression: public Expression, public IStorableExpression
 	{
-		::std::string name;
+		std::string name;
 	public:
 		NameExpression(::std::string name)
 		{
@@ -227,14 +227,14 @@ namespace Jet
 
 	class StringExpression: public Expression
 	{
-		::std::string value;
+		std::string value;
 	public:
-		StringExpression(::std::string value)
+		StringExpression(std::string value)
 		{
 			this->value = value;
 		}
 
-		::std::string GetValue()
+		std::string GetValue()
 		{
 			return this->value;
 		}
@@ -537,13 +537,13 @@ namespace Jet
 	{
 
 	public:
-		::std::vector<Expression*>* statements;
-		BlockExpression(Token token, ::std::vector<Expression*>* statements)
+		std::vector<Expression*>* statements;
+		BlockExpression(Token token, std::vector<Expression*>* statements)
 		{
 			this->statements = statements;
 		}
 
-		BlockExpression(::std::vector<Expression*>* statements)
+		BlockExpression(std::vector<Expression*>* statements)
 		{
 			this->statements = statements;
 		}
@@ -715,7 +715,7 @@ namespace Jet
 		{
 			context->Line(token.filename, token.line);
 
-			::std::string uuid = context->GetUUID();
+			std::string uuid = context->GetUUID();
 			this->initial->Compile(context);
 			context->Label("forloopstart_"+uuid);
 			this->condition->Compile(context);
@@ -924,10 +924,10 @@ namespace Jet
 	{
 		Token token;
 		Expression* left;
-		::std::vector<Expression*>* args;
+		std::vector<Expression*>* args;
 	public:
 		friend class FunctionParselet;
-		CallExpression(Token token, Expression* left, ::std::vector<Expression*>* args)
+		CallExpression(Token token, Expression* left, std::vector<Expression*>* args)
 		{
 			this->token = token;
 			this->left = left;
@@ -1136,6 +1136,5 @@ namespace Jet
 			context->Continue();
 		}
 	};
-
 }
 #endif

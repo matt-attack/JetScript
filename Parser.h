@@ -40,10 +40,10 @@ namespace Jet
 	class Parser
 	{
 		Lexer* lexer;
-		::std::map<TokenType, InfixParselet*> mInfixParselets;
-		::std::map<TokenType, PrefixParselet*> mPrefixParselets;
-		::std::map<TokenType, StatementParselet*> mStatementParselets;
-		::std::list<Jet::Token> mRead;
+		std::map<TokenType, InfixParselet*> mInfixParselets;
+		std::map<TokenType, PrefixParselet*> mPrefixParselets;
+		std::map<TokenType, StatementParselet*> mStatementParselets;
+		std::list<Jet::Token> mRead;
 
 	public:
 		Parser(Lexer* l);

@@ -135,7 +135,7 @@ void FunctionExpression::Compile(CompilerContext* context)
 	if (name)
 		fname = dynamic_cast<NameExpression*>(name)->GetName();
 	else
-		fname = "_lambda_id_"+context->GetUUID();//todo generate id
+		fname = "_lambda_id_"+context->GetUUID();
 
 	CompilerContext* function = context->AddFunction(fname, this->args->size(), "test");
 
@@ -147,6 +147,7 @@ void FunctionExpression::Compile(CompilerContext* context)
 	}
 	if (this->varargs)
 		function->RegisterLocal(this->varargs->GetName());
+
 	block->Compile(function);
 
 	//if last instruction was a return, dont insert another one
@@ -184,7 +185,7 @@ void LocalExpression::Compile(CompilerContext* context)
 	//make sure to create identifier
 	for (auto _name: *this->_names)
 		if (context->RegisterLocal(_name.getText()) == false)
-			throw ParserException(_name.filename, _name.line, "Duplicate Local Variable '"+_name.text+"'");
+			throw CompilerException(_name.filename, _name.line, "Duplicate Local Variable '"+_name.text+"'");
 
 	//actually store if we have something to store
 	for (int i = _right->size()-1; i >= 0; i--)

@@ -96,38 +96,43 @@ namespace Jet
 
 	class CompilerContext
 	{
-		::std::map<::std::string, CompilerContext*> functions;
+		friend class CallExpression;
+		std::map<std::string, CompilerContext*> functions;
 
 		struct _LoopInfo
 		{
 			std::string Break;
 			std::string Continue;
 		};
-		::std::vector<_LoopInfo> _loops;
+		std::vector<_LoopInfo> _loops;
 
 		struct Scope
 		{
 			Scope* previous;
 			Scope* next;
 			int level;
-			::std::vector<triple<int,std::string,int>> localvars;
+			std::vector<triple<int,std::string,int>> localvars;
 		};
 		Scope* scope;
 
+		unsigned int localindex;
+		
 		bool vararg;
 		unsigned int closures;
 		unsigned int arguments;
 		CompilerContext* parent;
-	public:
-		::std::vector<IntermediateInstruction> out;
 
+		std::vector<IntermediateInstruction> out;
+
+	public:
+		
 		CompilerContext(void);
 		~CompilerContext(void);
 
-		void ToString()
+		void PrintAssembly()
 		{
 			int index = 0;
-			for (int i = 0; i < this->out.size(); i++)//auto ins: this->out)
+			for (int i = 0; i < this->out.size(); i++)
 			{
 				auto ins = this->out[i];
 				if (ins.type == InstructionType::Function)
@@ -157,7 +162,7 @@ namespace Jet
 			printf("\n");
 		}
 
-		CompilerContext* AddFunction(::std::string name, unsigned int args, bool vararg = false)
+		CompilerContext* AddFunction(std::string name, unsigned int args, bool vararg = false)
 		{
 			//push instruction that sets the function
 			//todo, may need to have functions in other instruction code sets
@@ -245,7 +250,7 @@ namespace Jet
 			}
 		}
 
-		void PushLoop(std::string Break, std::string Continue)
+		void PushLoop(const std::string Break, const std::string Continue)
 		{
 			_LoopInfo i;
 			i.Break = Break;
@@ -261,19 +266,18 @@ namespace Jet
 		void Break()
 		{
 			if (this->_loops.size() == 0)
-				throw CompilerException("test", 0, "Cannot use break outside of a loop!");
+				throw CompilerException(this->lastfile, this->lastline, "Cannot use break outside of a loop!");
 			this->Jump(_loops.back().Break.c_str());
 		}
 
 		void Continue()
 		{
 			if (this->_loops.size() == 0)
-				throw CompilerException("test", 0, "Cannot use continue outside of a loop!");
+				throw CompilerException(this->lastfile, this->lastline, "Cannot use continue outside of a loop!");
 			this->Jump(_loops.back().Continue.c_str());
 		}
 
-		unsigned int localindex;
-		bool RegisterLocal(std::string name);//returns success
+		bool RegisterLocal(const std::string name);//returns success
 
 		void BinaryOperation(TokenType operation);
 		void UnaryOperation(TokenType operation);
@@ -332,12 +336,12 @@ namespace Jet
 			out.push_back(ins);
 		}
 
-		void Label(std::string name)
+		void Label(const std::string name)
 		{
 			out.push_back(IntermediateInstruction(InstructionType::Label, name));
 		}
 
-		void Store(std::string variable)
+		void Store(const std::string variable)
 		{
 			//look up if I am a local or global
 			Scope* ptr = this->scope;
@@ -390,14 +394,14 @@ namespace Jet
 			out.push_back(IntermediateInstruction(InstructionType::Store, variable));
 		}
 
-		void StoreLocal(std::string variable)
+		void StoreLocal(const std::string variable)
 		{
 			//look up if I am local or global
 			this->Store(variable);
 		}
 
 		//this loads locals and globals atm
-		void Load(std::string variable)
+		void Load(const std::string variable)
 		{
 			Scope* ptr = this->scope;
 			while (ptr)
@@ -451,7 +455,7 @@ namespace Jet
 			out.push_back(IntermediateInstruction(InstructionType::Load, variable));
 		}
 
-		bool IsLocal(std::string variable)
+		bool IsLocal(const std::string variable)
 		{
 			Scope* ptr = this->scope;
 			while (ptr)
@@ -499,12 +503,12 @@ namespace Jet
 			return false;
 		}
 
-		void LoadFunction(::std::string name)
+		void LoadFunction(const std::string name)
 		{
 			out.push_back(IntermediateInstruction(InstructionType::LoadFunction, name));
 		}
 
-		void Call(::std::string function, unsigned int args)
+		void Call(const std::string function, unsigned int args)
 		{
 			out.push_back(IntermediateInstruction(InstructionType::Call, function, args));
 		}
@@ -541,7 +545,7 @@ namespace Jet
 
 		//debug info
 		std::string lastfile; unsigned int lastline;
-		void Line(std::string file, unsigned int line)
+		void Line(const std::string file, unsigned int line)
 		{
 			//need to avoid duplicates, because thats silly
 			if (lastline != line || lastfile != file)

@@ -24,7 +24,7 @@ Expression* AssignParselet::parse(Parser* parser, Expression* left, Token token)
 	Expression* right = parser->parseExpression(/*assignment prcedence -1 */);
 
 	if (dynamic_cast<IStorableExpression*>(left) == 0)
-		throw ParserException(token.filename, token.line, "AssignParselet: Left hand side must be a storable location!");
+		throw CompilerException(token.filename, token.line, "AssignParselet: Left hand side must be a storable location!");
 
 	return new AssignExpression(left, right);
 }
@@ -34,7 +34,7 @@ Expression* OperatorAssignParselet::parse(Parser* parser, Expression* left, Toke
 	Expression* right = parser->parseExpression(/*assignment prcedence -1 */);
 
 	if (dynamic_cast<IStorableExpression*>(left) == 0)
-		throw ParserException(token.filename, token.line, "OperatorAssignParselet: Left hand side must be a storable location!");
+		throw CompilerException(token.filename, token.line, "OperatorAssignParselet: Left hand side must be a storable location!");
 
 	return new OperatorAssignExpression(token, left, right);
 }
@@ -44,10 +44,10 @@ Expression* SwapParselet::parse(Parser* parser, Expression* left, Token token)
 	Expression* right = parser->parseExpression(/*assignment prcedence -1 */);
 
 	if (dynamic_cast<IStorableExpression*>(left) == 0)
-		throw ParserException(token.filename, token.line, "SwapParselet: Left hand side must be a storable location!");
+		throw CompilerException(token.filename, token.line, "SwapParselet: Left hand side must be a storable location!");
 
 	if (dynamic_cast<IStorableExpression*>(right) == 0)
-		throw ParserException(token.filename, token.line, "SwapParselet: Right hand side must be a storable location!");
+		throw CompilerException(token.filename, token.line, "SwapParselet: Right hand side must be a storable location!");
 
 	return new SwapExpression(left, right);
 }
@@ -56,7 +56,7 @@ Expression* PrefixOperatorParselet::parse(Parser* parser, Token token)
 {
 	Expression* right = parser->parseExpression(precedence);
 	if (right == 0)
-		throw ParserException(token.filename, token.line, "PrefixOperatorParselet: Right hand side missing!");
+		throw CompilerException(token.filename, token.line, "PrefixOperatorParselet: Right hand side missing!");
 
 	return new PrefixExpression(token, right);
 }
@@ -65,7 +65,7 @@ Expression* BinaryOperatorParselet::parse(Parser* parser, Expression* left, Toke
 {
 	Expression* right = parser->parseExpression(precedence - (isRight ? 1 : 0));
 	if (right == 0)
-		throw ParserException(token.filename, token.line, "BinaryOperatorParselet: Right hand side missing!");
+		throw CompilerException(token.filename, token.line, "BinaryOperatorParselet: Right hand side missing!");
 
 	return new OperatorExpression(left, token.getType(), right);
 }
@@ -112,11 +112,10 @@ Expression* ForParselet::parse(Parser* parser, Token token)
 			}
 		}
 	}
+	//closure program not working
 
 	auto initial = parser->ParseStatement(true);
-
 	auto condition = parser->ParseStatement(true);
-
 	auto increment = parser->parseExpression();
 
 	parser->Consume(TokenType::RightParen);
@@ -203,7 +202,7 @@ Expression* FunctionParselet::parse(Parser* parser, Token token)
 			else
 			{
 				std::string str = "Consume: TokenType not as expected! Expected: Name or Ellises Got: " + name.text;
-				throw ParserException(name.filename, name.line, str);
+				throw CompilerException(name.filename, name.line, str);
 			}
 		}
 		while(parser->MatchAndConsume(TokenType::Comma));
@@ -239,7 +238,7 @@ Expression* LambdaParselet::parse(Parser* parser, Token token)
 			else
 			{
 				std::string str = "Consume: TokenType not as expected! Expected: Name or Ellises Got: " + name.text;
-				throw ParserException(name.filename, name.line, str);
+				throw CompilerException(name.filename, name.line, str);
 			}
 		}
 		while(parser->MatchAndConsume(TokenType::Comma));
@@ -371,7 +370,7 @@ Expression* MemberParselet::parse(Parser* parser, Expression* left, Token token)
 	Expression* member = parser->parseExpression(9);
 	NameExpression* name = dynamic_cast<NameExpression*>(member);
 	if (name == 0)
-		throw ParserException(token.filename, token.line, "Cannot access member name that is not a string");
+		throw CompilerException(token.filename, token.line, "Cannot access member name that is not a string");
 
 	auto ret = new IndexExpression(left, new StringExpression(name->GetName()), token);
 	delete name;

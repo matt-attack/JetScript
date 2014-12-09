@@ -178,9 +178,8 @@ Token Lexer::Next()
 				while(n.type != TokenType::CommentEnd) 
 				{
 					if (n.type == TokenType::EoF)
-					{
-						throw ParserException(n.filename, n.line, "Missing end to comment block starting at line "+std::to_string(startline));
-					}
+						throw CompilerException(n.filename, n.line, "Missing end to comment block starting at line "+std::to_string(startline));
+					
 					n = this->Next();
 				}
 				continue;
@@ -219,7 +218,7 @@ Token Lexer::Next()
 								break;
 							}
 						default:
-							throw ParserException(filename, this->linenumber, "Unhandled Escape Sequence!");
+							throw CompilerException(filename, this->linenumber, "Unhandled Escape Sequence!");
 						}
 
 						index += 2;
