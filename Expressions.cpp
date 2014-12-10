@@ -135,9 +135,9 @@ void FunctionExpression::Compile(CompilerContext* context)
 	if (name)
 		fname = dynamic_cast<NameExpression*>(name)->GetName();
 	else
-		fname = "_lambda_id_"+context->GetUUID();
+		fname = "_lambda_id_";//+context->GetUUID();
 
-	CompilerContext* function = context->AddFunction(fname, this->args->size(), "test");
+	CompilerContext* function = context->AddFunction(fname, this->args->size(), this->varargs);
 
 	//ok push locals, in opposite order
 	for (int i = 0; i < this->args->size(); i++)

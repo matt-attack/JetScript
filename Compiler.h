@@ -332,7 +332,7 @@ namespace Jet
 			ins.a = args;
 			ins.b = locals;
 			ins.c = upvals;
-			ins.d = vararg ? 0 : 1;
+			ins.d = vararg ? 1 : 0;
 			out.push_back(ins);
 		}
 
