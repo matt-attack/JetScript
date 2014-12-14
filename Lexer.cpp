@@ -123,6 +123,7 @@ void Lexer::Init()
 	keywords["continue"] = TokenType::Continue;
 	keywords["continuar"] = TokenType::Continue;
 
+	keywords["null"] = TokenType::Null;
 	keywords["const"] = TokenType::Const;
 
 	for (auto ii = operators.begin(); ii != operators.end(); ii++)

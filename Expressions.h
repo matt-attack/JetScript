@@ -89,7 +89,6 @@ namespace Jet
 		}
 	};
 
-
 	class ArrayExpression: public Expression
 	{
 		std::vector<Expression*>* initializers;
@@ -225,6 +224,24 @@ namespace Jet
 		}
 	};
 
+	class NullExpression: public Expression
+	{
+	public:
+		NullExpression()
+		{
+		}
+
+		void print()
+		{
+			printf("Null");
+		}
+
+		void Compile(CompilerContext* context)
+		{
+			context->Null();
+		}
+	};
+
 	class StringExpression: public Expression
 	{
 		std::string value;
@@ -347,9 +364,9 @@ namespace Jet
 
 	class OperatorAssignExpression: public Expression
 	{
-		Expression* left;
-
 		Token token;
+
+		Expression* left;
 		Expression* right;
 	public:
 		OperatorAssignExpression(Token token, Expression* l, Expression* r)
@@ -783,7 +800,7 @@ namespace Jet
 			context->LoadIndex("getIterator");
 			context->ECall(1);
 			context->Store("_iter");
-			
+
 
 			context->Label("_foreachstart"+uuid);
 			context->Load("_iter");//this->container.text);
@@ -791,7 +808,7 @@ namespace Jet
 			context->LoadIndex("current");
 			context->ECall(1);
 			context->Store(this->name.text);
-			
+
 			context->PushLoop("_foreachend"+uuid, "_foreachstart"+uuid);
 			this->block->Compile(context);
 			context->PopLoop();

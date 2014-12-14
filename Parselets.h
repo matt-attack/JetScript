@@ -34,6 +34,15 @@ namespace Jet
 		}
 	};
 
+	class NullParselet: public PrefixParselet
+	{
+	public:
+		Expression* parse(Parser* parser, Token token)
+		{
+			return new NullExpression();
+		}
+	};
+
 	class LambdaParselet: public PrefixParselet
 	{
 	public:

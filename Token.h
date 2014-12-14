@@ -69,6 +69,8 @@ namespace Jet
 		Comma,
 		Ellipses,
 
+		Null,
+
 		Function,
 		For,
 		Local,
