@@ -10,7 +10,7 @@ namespace Jet
 	class VMStack
 	{
 		unsigned int _size;
-
+		
 	public:
 		T mem[5000];
 		VMStack()
@@ -70,6 +70,9 @@ namespace Jet
 
 		void Push(T item)
 		{
+			if (_size >= 5000)
+				throw RuntimeException("Stack overflow");
+
 			mem[_size++] = item;
 		}
 

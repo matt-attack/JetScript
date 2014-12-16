@@ -911,7 +911,7 @@ Value JetContext::Execute(int iptr)
 					Value one = stack.Pop();
 					Value two = stack.Pop();
 
-					if ((double)one == (double)two)
+					if (one == two)
 						stack.Push(Value(1));
 					else
 						stack.Push(Value(0));
@@ -923,7 +923,7 @@ Value JetContext::Execute(int iptr)
 					Value one = stack.Pop();
 					Value two = stack.Pop();
 
-					if ((double)one == (double)two)
+					if (one == two)
 						stack.Push(Value(0));
 					else
 						stack.Push(Value(1));
@@ -1369,7 +1369,7 @@ Value JetContext::Execute(int iptr)
 					if (in.string)
 					{
 						Value loc = stack.Pop();
-
+						//add metamethods
 						if (loc.type == ValueType::Object)
 						{
 							Value v;

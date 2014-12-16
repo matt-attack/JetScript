@@ -60,12 +60,12 @@ namespace Jet
 	{
 		std::string name;
 	public:
-		NameExpression(::std::string name)
+		NameExpression(std::string name)
 		{
 			this->name = name;
 		}
 
-		::std::string GetName()
+		std::string GetName()
 		{
 			return this->name;
 		}
@@ -75,12 +75,7 @@ namespace Jet
 			printf(name.c_str());
 		}
 
-		void Compile(CompilerContext* context)
-		{
-			//add load variable instruction
-			//todo make me detect if this is a local or not
-			context->Load(name);
-		}
+		void Compile(CompilerContext* context);
 
 		void CompileStore(CompilerContext* context)
 		{
@@ -112,19 +107,7 @@ namespace Jet
 			//printf(_name.getText().c_str());
 		}
 
-		void Compile(CompilerContext* context)
-		{
-			int count = 0;
-			if (this->initializers)
-			{
-				count = this->initializers->size();
-				for (auto i: *this->initializers)
-				{
-					i->Compile(context);
-				}
-			}
-			context->NewArray(count);
-		}
+		void Compile(CompilerContext* context);
 	};
 
 	class ObjectExpression: public Expression
@@ -149,21 +132,7 @@ namespace Jet
 			//printf(_name.getText().c_str());
 		}
 
-		void Compile(CompilerContext* context)
-		{
-			int count = 0;
-			if (this->inits)
-			{
-				//set these up
-				count = this->inits->size();
-				for (auto ii: *this->inits)
-				{
-					context->String(ii.first);
-					ii.second->Compile(context);
-				}
-			}
-			context->NewObject(count);
-		}
+		void Compile(CompilerContext* context);
 	};
 
 	class LocalExpression: public Expression
@@ -218,10 +187,7 @@ namespace Jet
 			printf("%f", this->value);
 		}
 
-		void Compile(CompilerContext* context)
-		{
-			context->Number(this->value);
-		}
+		void Compile(CompilerContext* context);
 	};
 
 	class NullExpression: public Expression
@@ -236,10 +202,7 @@ namespace Jet
 			printf("Null");
 		}
 
-		void Compile(CompilerContext* context)
-		{
-			context->Null();
-		}
+		void Compile(CompilerContext* context);
 	};
 
 	class StringExpression: public Expression
@@ -261,10 +224,7 @@ namespace Jet
 			printf("'%s'", this->value.c_str());
 		}
 
-		void Compile(CompilerContext* context)
-		{
-			context->String(this->value);
-		}
+		void Compile(CompilerContext* context);
 	};
 
 	class IndexExpression: public Expression, public IStorableExpression
@@ -292,40 +252,9 @@ namespace Jet
 			printf("]");
 		}
 
-		void Compile(CompilerContext* context)
-		{
-			context->Line(token.filename, token.line);
+		void Compile(CompilerContext* context);
 
-			//add load variable instruction
-			left->Compile(context);
-			//if the index is constant compile to a special instruction carying that constant
-			if (dynamic_cast<StringExpression*>(index))
-			{
-				context->LoadIndex(dynamic_cast<StringExpression*>(index)->GetValue().c_str());
-			}
-			else
-			{
-				index->Compile(context);
-				context->LoadIndex();
-			}
-		}
-
-		void CompileStore(CompilerContext* context)
-		{
-			context->Line(token.filename, token.line);
-
-			left->Compile(context);
-			//if the index is constant compile to a special instruction carying that constant
-			if (dynamic_cast<StringExpression*>(index))
-			{
-				context->StoreIndex(dynamic_cast<StringExpression*>(index)->GetValue().c_str());
-			}
-			else
-			{
-				index->Compile(context);
-				context->StoreIndex();
-			}
-		}
+		void CompileStore(CompilerContext* context);
 	};
 
 	class AssignExpression: public Expression
@@ -537,12 +466,7 @@ namespace Jet
 			printf(")");
 		}
 
-		void Compile(CompilerContext* context)
-		{
-			this->left->Compile(context);
-			this->right->Compile(context);
-			context->BinaryOperation(this->_operator);
-		}
+		void Compile(CompilerContext* context);
 	};
 
 	class StatementExpression: public Expression
@@ -710,8 +634,8 @@ namespace Jet
 		{
 			this->Parent = parent;
 			block->SetParent(this);
-			incr->SetParent(block);
-			condition->SetParent(block);
+			incr->SetParent(block);//block);
+			condition->SetParent(this);//block);
 			initial->SetParent(block);
 		}
 

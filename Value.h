@@ -381,6 +381,11 @@ namespace Jet
 				break;
 			}
 		}
+		
+		Value CallMetamethod(const char* name, const Value* self)
+		{
+			
+		}
 
 		Value operator+( const Value &other )
 		{
@@ -391,6 +396,10 @@ namespace Jet
 					return Value(value+other.value);
 			case ValueType::Object:
 				{
+					if (this->prototype)
+					{
+
+					}
 					//throw JetRuntimeException("Cannot Add A String");
 					//if (other.type == ValueType::String)
 					//return Value((std::string(other.string.data) + std::string(this->string.data)).c_str());

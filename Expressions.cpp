@@ -12,8 +12,107 @@ void PrefixExpression::Compile(CompilerContext* context)
 	context->UnaryOperation(this->_operator.type);
 	if (dynamic_cast<BlockExpression*>(this->Parent) == 0)
 		context->Duplicate();
+
 	if (dynamic_cast<IStorableExpression*>(this->right))
 		dynamic_cast<IStorableExpression*>(this->right)->CompileStore(context);
+}
+
+void IndexExpression::Compile(CompilerContext* context)
+{
+	context->Line(token.filename, token.line);
+
+	//add load variable instruction
+	left->Compile(context);
+	//if the index is constant compile to a special instruction carying that constant
+	if (dynamic_cast<StringExpression*>(index))
+	{
+		context->LoadIndex(dynamic_cast<StringExpression*>(index)->GetValue().c_str());
+	}
+	else
+	{
+		index->Compile(context);
+		context->LoadIndex();
+	}
+
+	if (dynamic_cast<BlockExpression*>(this->Parent) != 0)
+		context->Pop();
+}
+
+void IndexExpression::CompileStore(CompilerContext* context)
+{
+	context->Line(token.filename, token.line);
+
+	left->Compile(context);
+	//if the index is constant compile to a special instruction carying that constant
+	if (dynamic_cast<StringExpression*>(index))
+	{
+		context->StoreIndex(dynamic_cast<StringExpression*>(index)->GetValue().c_str());
+	}
+	else
+	{
+		index->Compile(context);
+		context->StoreIndex();
+	}
+}
+
+void ObjectExpression::Compile(CompilerContext* context)
+{
+	int count = 0;
+	if (this->inits)
+	{
+		//set these up
+		count = this->inits->size();
+		for (auto ii: *this->inits)
+		{
+			context->String(ii.first);
+			ii.second->Compile(context);
+		}
+	}
+	context->NewObject(count);
+
+	if (dynamic_cast<BlockExpression*>(this->Parent) != 0)
+		context->Pop();
+}
+
+void ArrayExpression::Compile(CompilerContext* context)
+{
+	int count = 0;
+	if (this->initializers)
+	{
+		count = this->initializers->size();
+		for (auto i: *this->initializers)
+		{
+			i->Compile(context);
+		}
+	}
+	context->NewArray(count);
+
+	if (dynamic_cast<BlockExpression*>(this->Parent) != 0)
+		context->Pop();
+}
+
+void StringExpression::Compile(CompilerContext* context)
+{
+	context->String(this->value);
+
+	if (dynamic_cast<BlockExpression*>(this->Parent) != 0)
+		context->Pop();
+}
+
+void NullExpression::Compile(CompilerContext* context)
+{
+	context->Null();
+
+	if (dynamic_cast<BlockExpression*>(this->Parent) != 0)
+		context->Pop();
+}
+
+void NumberExpression::Compile(CompilerContext* context)
+{
+	context->Number(this->value);
+
+	if (dynamic_cast<BlockExpression*>(this->Parent) != 0)
+		context->Pop();
 }
 
 void PostfixExpression::Compile(CompilerContext* context)
@@ -21,9 +120,12 @@ void PostfixExpression::Compile(CompilerContext* context)
 	context->Line(this->_operator.filename, this->_operator.line);
 
 	left->Compile(context);
+
 	if (dynamic_cast<BlockExpression*>(this->Parent) == 0)
 		context->Duplicate();
+
 	context->UnaryOperation(this->_operator.type);
+
 	if (dynamic_cast<IStorableExpression*>(this->left))
 		dynamic_cast<IStorableExpression*>(this->left)->CompileStore(context);
 }
@@ -103,12 +205,22 @@ void CallExpression::Compile(CompilerContext* context)
 	}
 	//else
 	//{
-		//throw ParserException(token.filename, token.line, "Error: Cannot call an expression that is not a name");
+	//throw ParserException(token.filename, token.line, "Error: Cannot call an expression that is not a name");
 	//}
 	//help, how should I handle this for multiple returns
 	//pop off return value if we dont need it
 	if (dynamic_cast<BlockExpression*>(this->Parent) != 0)
 		context->Pop();//if my parent is block expression, we dont the result, so pop it
+}
+
+void NameExpression::Compile(CompilerContext* context)
+{
+	//add load variable instruction
+	//todo make me detect if this is a local or not
+	context->Load(name);
+
+	if (dynamic_cast<BlockExpression*>(this->Parent) != 0)
+		context->Pop();
 }
 
 void OperatorAssignExpression::Compile(CompilerContext* context)
@@ -125,6 +237,17 @@ void OperatorAssignExpression::Compile(CompilerContext* context)
 
 	if (dynamic_cast<IStorableExpression*>(this->left))
 		dynamic_cast<IStorableExpression*>(this->left)->CompileStore(context);
+}
+
+void OperatorExpression::Compile(CompilerContext* context)
+{
+	this->left->Compile(context);
+	this->right->Compile(context);
+	context->BinaryOperation(this->_operator);
+
+	//fix these things in like if statements and for loops
+	if (dynamic_cast<BlockExpression*>(this->Parent) != 0)
+		context->Pop();
 }
 
 void FunctionExpression::Compile(CompilerContext* context)
