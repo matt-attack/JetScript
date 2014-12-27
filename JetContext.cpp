@@ -628,14 +628,17 @@ void JetContext::RunGC()
 						greys.Push(Value(obj._function->prev));
 					}
 
-					for (int i = 0; i < obj._function->numupvals; i++)
+					if (obj._function->closed)
 					{
-						if (obj._function->upvals[i].type > ValueType::NativeFunction)
+						for (int i = 0; i < obj._function->numupvals; i++)
 						{
-							if (obj._function->upvals[i]._object->grey == false)
+							if (obj._function->cupvals[i].type > ValueType::NativeFunction)
 							{
-								obj._function->upvals[i]._object->grey = true;
-								greys.Push(obj._function->upvals[i]);
+								if (obj._function->cupvals[i]._object->grey == false)
+								{
+									obj._function->cupvals[i]._object->grey = true;
+									greys.Push(obj._function->cupvals[i]);
+								}
 							}
 						}
 					}
@@ -1065,7 +1068,10 @@ Value JetContext::Execute(int iptr)
 					while ( index++ < 0)
 						frame = frame->prev;
 
-					stack.Push(frame->upvals[in.value]);
+					if (frame->closed)
+						stack.Push(frame->cupvals[in.value]);
+					else
+						stack.Push(*frame->upvals[in.value]);
 					break;
 				}
 			case InstructionType::CStore:
@@ -1082,7 +1088,10 @@ Value JetContext::Execute(int iptr)
 						this->greys.Push(frame);
 					}
 
-					frame->upvals[in.value] = stack.Pop();
+					if (frame->closed)
+						frame->cupvals[in.value] = stack.Pop();
+					else
+						*frame->upvals[in.value] = stack.Pop();
 					break;
 				}
 			case InstructionType::LoadFunction:
@@ -1093,11 +1102,40 @@ Value JetContext::Execute(int iptr)
 					closure->grey = closure->mark = false;
 					closure->prev = curframe;
 					closure->numupvals = in.func->upvals;
+					closure->closed = false;
+					closure->next = curframe->next;
 					if (in.func->upvals)
-						closure->upvals = new Value[in.func->upvals];
+						closure->upvals = new Value*[in.func->upvals];
 					closure->prototype = in.func;
 					this->closures.push_back(closure);
 					stack.Push(Value(closure));
+
+					curframe->next = closure;
+					break;
+				}
+			case InstructionType::CInit:
+				{
+					curframe->upvals[(unsigned int)in.value2] = &sptr[in.value];
+					
+					break;
+				}
+			case InstructionType::Close:
+				{
+					auto cur = curframe->next;
+					while (cur)
+					{
+						if (cur->numupvals)
+						{
+							auto tmp = new Value[cur->numupvals];
+							for (int i = 0; i < cur->numupvals; i++)
+								tmp[i] = *cur->upvals[i];
+							
+							delete[] cur->upvals;
+							cur->closed = true;
+							cur->cupvals = tmp;
+						}
+						cur = cur->next;
+					}
 					break;
 				}
 			case InstructionType::Call:
@@ -1801,10 +1839,12 @@ Value JetContext::Assemble(const std::vector<IntermediateInstruction>& code)
 
 	auto tmpframe = new Closure;
 	tmpframe->prev = 0;
+	tmpframe->next = 0;
+	tmpframe->closed = false;
 	tmpframe->prototype = this->functions["{Entry Point}"];
 	tmpframe->numupvals = tmpframe->prototype->upvals;
 	if (tmpframe->numupvals)
-		tmpframe->upvals = new Value[tmpframe->numupvals];
+		tmpframe->upvals = new Value*[tmpframe->numupvals];
 	else
 		tmpframe->upvals = 0;
 
@@ -1818,6 +1858,35 @@ Value JetContext::Assemble(const std::vector<IntermediateInstruction>& code)
 
 	return temp;
 };
+
+
+Value JetContext::Call(Value* func, Value* args, unsigned int numargs)
+{
+	if (func->type != ValueType::NativeFunction && func->type != ValueType::Function)
+	{
+		throw 7;
+	}
+	else if (func->type == ValueType::NativeFunction)
+	{
+		//call it
+		(*func->func)(this,args,numargs);
+		return this->stack.Pop();//Value(0);
+	}
+	unsigned int iptr = func->_function->prototype->ptr;
+
+	//push args onto stack
+	for (unsigned int i = 0; i < numargs; i++)
+	{
+		this->stack.Push(args[i]);
+	}
+
+	this->curframe = func->_function;
+
+	Value temp = this->Execute(iptr);
+	if (callstack.size() > 0)
+		callstack.Pop();
+	return temp;
+}
 
 //executes a function in the VM context
 Value JetContext::Call(const char* function, Value* args, unsigned int numargs)

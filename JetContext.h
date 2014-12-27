@@ -191,6 +191,7 @@ namespace Jet
 
 		//executes a function in the VM context
 		Value Call(const char* function, Value* args = 0, unsigned int numargs = 0);
+		Value Call(Value* function, Value* args = 0, unsigned int numargs = 0);
 
 		void RunGC();//runs an iteration of the garbage collector
 

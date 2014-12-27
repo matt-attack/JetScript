@@ -432,12 +432,12 @@ namespace Jet
 
 	class OperatorExpression: public Expression
 	{
-		TokenType _operator;
+		Token _operator;
 
 		Expression* left, *right;
 
 	public:
-		OperatorExpression(Expression* l, TokenType type, Expression* r)
+		OperatorExpression(Expression* l, Token type, Expression* r)
 		{
 			this->_operator = type;
 			this->left = l;
@@ -461,7 +461,7 @@ namespace Jet
 		{
 			printf("(");
 			left->print();
-			printf(" %s ", Operator(_operator));
+			printf(" %s ", Operator(_operator.type));
 			right->print();
 			printf(")");
 		}

@@ -47,6 +47,7 @@ namespace Jet
 		//captured vars
 		"CStore",
 		"CLoad",
+		"CInit",
 
 		//index functions
 		"LoadAt",
@@ -57,6 +58,7 @@ namespace Jet
 
 		"Call",
 		"Return",
+		"Close",
 
 		//dummy instructions for the assembler/debugging
 		"Label",
@@ -114,6 +116,7 @@ namespace Jet
 		//captured vars
 		CStore,
 		CLoad,
+		CInit, //to setup captures
 
 		//index functions
 		LoadAt,
@@ -124,6 +127,8 @@ namespace Jet
 
 		Call,
 		Return,
+
+		Close, //closes all opened closures in a function
 
 		//dummy instructions for the assembler/debugging
 		Label,

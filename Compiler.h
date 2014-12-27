@@ -18,6 +18,7 @@
 #include "JetInstructions.h"
 #include "JetExceptions.h"
 
+
 namespace Jet
 {
 	//add custom operators
@@ -106,17 +107,26 @@ namespace Jet
 		};
 		std::vector<_LoopInfo> _loops;
 
+		struct LocalVariable
+		{
+			LocalVariable() { this->uploaded = false; }
+			int local;
+			std::string name;
+			int capture;
+			bool uploaded;
+		};
+
 		struct Scope
 		{
 			Scope* previous;
 			Scope* next;
 			int level;
-			std::vector<triple<int,std::string,int>> localvars;
+			std::vector<LocalVariable> localvars;
 		};
 		Scope* scope;
 
 		unsigned int localindex;
-		
+
 		bool vararg;
 		unsigned int closures;
 		unsigned int arguments;
@@ -125,42 +135,11 @@ namespace Jet
 		std::vector<IntermediateInstruction> out;
 
 	public:
-		
+
 		CompilerContext(void);
 		~CompilerContext(void);
 
-		void PrintAssembly()
-		{
-			int index = 0;
-			for (int i = 0; i < this->out.size(); i++)
-			{
-				auto ins = this->out[i];
-				if (ins.type == InstructionType::Function)
-				{
-					printf("\n\nfunction %s definition\n%d arguments, %d locals, %d captures", ins.string, ins.a, ins.b, ins.c);
-					index = 0;
-
-					if (i+1 < this->out.size() && out[i+1].type == InstructionType::DebugLine)
-					{
-						++i;
-						printf(", %s line %.0lf", out[i].string, out[i].second);
-					}
-					continue;
-				}
-
-				if (ins.string)
-					printf("\n[%d]\t%-15s %-5.0lf %s", index++, Instructions[(int)ins.type], ins.second, ins.string);
-				else
-					printf("\n[%d]\t%-15s %-5d %.0lf", index++, Instructions[(int)ins.type], ins.first, ins.second);
-
-				if (i+1 < this->out.size() && out[i+1].type == InstructionType::DebugLine)
-				{
-					++i;
-					printf(" ; %s line %.0lf", out[i].string, out[i].second);
-				}
-			}
-			printf("\n");
-		}
+		void PrintAssembly();
 
 		CompilerContext* AddFunction(std::string name, unsigned int args, bool vararg = false)
 		{
@@ -190,16 +169,20 @@ namespace Jet
 			auto ptr = this->scope;
 			while (ptr)
 			{
+				//make sure this doesnt upload multiple times
 				//look for var in locals
 				for (unsigned int i = 0; i < ptr->localvars.size(); i++)
 				{
-					if (ptr->localvars[i].third >= 0)
+					if (ptr->localvars[i].capture >= 0 && ptr->localvars[i].uploaded == false)
 					{
 						//printf("We found use of a captured var: %s at level %d, index %d\n", ptr->localvars[i].second.c_str(), level, ptr->localvars[i].first);
 						//exit the loops we found it
+						ptr->localvars[i].uploaded = true;
 						//this->output += ".local " + variable + " " + ::std::to_string(i) + ";\n";
-						out.push_back(IntermediateInstruction(InstructionType::LLoad, ptr->localvars[i].first, 0));//i, ptr->level));
-						out.push_back(IntermediateInstruction(InstructionType::CStore, ptr->localvars[i].third, level));//i, ptr->level));
+						out.push_back(IntermediateInstruction(InstructionType::CInit,ptr->localvars[i].local, ptr->localvars[i].capture));
+						//push instruction to set closure location
+						//out.push_back(IntermediateInstruction(InstructionType::LLoad, ptr->localvars[i].first, 0));//i, ptr->level));
+						//out.push_back(IntermediateInstruction(InstructionType::CStore, ptr->localvars[i].third, level));//i, ptr->level));
 					}
 				}
 				if (ptr)
@@ -350,12 +333,12 @@ namespace Jet
 				//look for var in locals
 				for (unsigned int i = 0; i < ptr->localvars.size(); i++)
 				{
-					if (ptr->localvars[i].second == variable)
+					if (ptr->localvars[i].name == variable)
 					{
 						//printf("We found storing of a local var: %s at level %d, index %d\n", variable.c_str(), ptr->level, ptr->localvars[i].first);
 						//exit the loops we found it
 						//this->output += ".local " + variable + " " + ::std::to_string(i) + ";\n";
-						out.push_back(IntermediateInstruction(InstructionType::LStore, ptr->localvars[i].first, 0));//i, ptr->level));
+						out.push_back(IntermediateInstruction(InstructionType::LStore, ptr->localvars[i].local, 0));//i, ptr->level));
 						return;
 					}
 				}
@@ -373,15 +356,15 @@ namespace Jet
 					//look for var in locals
 					for (unsigned int i = 0; i < ptr->localvars.size(); i++)
 					{
-						if (ptr->localvars[i].second == variable)
+						if (ptr->localvars[i].name == variable)
 						{
 							//printf("We found storing of a captured var: %s at level %d, index %d\n", variable.c_str(), level, ptr->localvars[i].first);
 							//exit the loops we found it
 							//this->output += ".local " + variable + " " + ::std::to_string(i) + ";\n";
-							if (ptr->localvars[i].third == -1)
-								ptr->localvars[i].third = cur->closures++;
+							if (ptr->localvars[i].capture == -1)
+								ptr->localvars[i].capture = cur->closures++;
 
-							out.push_back(IntermediateInstruction(InstructionType::CStore, ptr->localvars[i].third, level));//i, ptr->level));
+							out.push_back(IntermediateInstruction(InstructionType::CStore, ptr->localvars[i].capture, level));//i, ptr->level));
 							return;
 						}
 					}
@@ -409,13 +392,13 @@ namespace Jet
 				//look for var in locals
 				for (unsigned int i = 0; i < ptr->localvars.size(); i++)
 				{
-					if (ptr->localvars[i].second == variable)
+					if (ptr->localvars[i].name == variable)
 					{
 						//printf("We found loading of a local var: %s at level %d, index %d\n", variable.c_str(), ptr->level, ptr->localvars[i].first);
 						//exit the loops we found it
 						//comment/debug info
 						//this->output += ".local " + variable + " " + ::std::to_string(i) + ";\n";
-						out.push_back(IntermediateInstruction(InstructionType::LLoad, ptr->localvars[i].first, 0));//i, ptr->level));
+						out.push_back(IntermediateInstruction(InstructionType::LLoad, ptr->localvars[i].local, 0));//i, ptr->level));
 						return;
 					}
 				}
@@ -433,16 +416,16 @@ namespace Jet
 					//look for var in locals
 					for (unsigned int i = 0; i < ptr->localvars.size(); i++)
 					{
-						if (ptr->localvars[i].second == variable)
+						if (ptr->localvars[i].name == variable)
 						{
 							//printf("We found loading of a captured var: %s at level %d, index %d\n", variable.c_str(), level, ptr->localvars[i].first);
 							//exit the loops we found it
 							//comment/debug info
 							//this->output += ".local " + variable + " " + ::std::to_string(i) + ";\n";
-							if (ptr->localvars[i].third == -1)
-								ptr->localvars[i].third = cur->closures++;
+							if (ptr->localvars[i].capture == -1)
+								ptr->localvars[i].capture = cur->closures++;
 
-							out.push_back(IntermediateInstruction(InstructionType::CLoad, ptr->localvars[i].third, level));//i, ptr->level));
+							out.push_back(IntermediateInstruction(InstructionType::CLoad, ptr->localvars[i].capture, level));//i, ptr->level));
 							return;
 						}
 					}
@@ -463,7 +446,7 @@ namespace Jet
 				//look for var in locals
 				for (unsigned int i = 0; i < ptr->localvars.size(); i++)
 				{
-					if (ptr->localvars[i].second == variable)
+					if (ptr->localvars[i].name == variable)
 					{
 						//printf("We found loading of a local var: %s at level %d, index %d\n", variable.c_str(), ptr->level, ptr->localvars[i].first);
 						//exit the loops we found it
@@ -485,7 +468,7 @@ namespace Jet
 					//look for var in locals
 					for (unsigned int i = 0; i < ptr->localvars.size(); i++)
 					{
-						if (ptr->localvars[i].second == variable)
+						if (ptr->localvars[i].name == variable)
 						{
 							//printf("We found loading of a captured var: %s at level %d, index %d\n", variable.c_str(), level, ptr->localvars[i].first);
 							//exit the loops we found it
@@ -540,6 +523,9 @@ namespace Jet
 
 		void Return()
 		{
+			//push the close instruction here
+			if (this->closures > 0)//close all open closures
+				out.push_back(IntermediateInstruction(InstructionType::Close));
 			out.push_back(IntermediateInstruction(InstructionType::Return));
 		}
 

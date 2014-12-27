@@ -241,9 +241,11 @@ void OperatorAssignExpression::Compile(CompilerContext* context)
 
 void OperatorExpression::Compile(CompilerContext* context)
 {
+	context->Line(this->_operator.filename, this->_operator.line);
+
 	this->left->Compile(context);
 	this->right->Compile(context);
-	context->BinaryOperation(this->_operator);
+	context->BinaryOperation(this->_operator.type);
 
 	//fix these things in like if statements and for loops
 	if (dynamic_cast<BlockExpression*>(this->Parent) != 0)

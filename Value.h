@@ -86,11 +86,19 @@ namespace Jet
 	{
 		bool mark;
 		bool grey;
+		bool closed;
 		unsigned short numupvals;
-		Value* upvals;
 		Function* prototype;
 
-		Closure* prev;
+		union
+		{
+			Value* cupvals;
+			Value** upvals;
+		};
+
+		Closure* prev;//parent closure
+
+		Closure* next;//next in linked list of unclosed closures
 	};
 
 	struct Value
@@ -384,7 +392,13 @@ namespace Jet
 		
 		Value CallMetamethod(const char* name, const Value* self)
 		{
-			
+			JetContext* context;
+			auto iter = this->prototype->ptr->find(name);
+			if (iter != this->prototype->ptr->end())
+			{
+				//context->Call(
+				//return iter->second.
+			}
 		}
 
 		Value operator+( const Value &other )

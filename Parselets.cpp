@@ -67,7 +67,7 @@ Expression* BinaryOperatorParselet::parse(Parser* parser, Expression* left, Toke
 	if (right == 0)
 		throw CompilerException(token.filename, token.line, "BinaryOperatorParselet: Right hand side missing!");
 
-	return new OperatorExpression(left, token.getType(), right);
+	return new OperatorExpression(left, token, right);
 }
 
 Expression* GroupParselet::parse(Parser* parser, Token token)
