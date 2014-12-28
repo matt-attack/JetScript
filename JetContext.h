@@ -185,8 +185,8 @@ namespace Jet
 
 		//compiles source code to ASM for the VM to read in
 		std::vector<IntermediateInstruction> Compile(const char* code, const char* filename = "file");
-
-		//executes global code and parses in ASM
+		
+		//xecutes global code and parses in ASM
 		Value Assemble(const std::vector<IntermediateInstruction>& code);
 
 		//executes a function in the VM context

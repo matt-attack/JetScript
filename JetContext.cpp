@@ -1115,31 +1115,35 @@ Value JetContext::Execute(int iptr)
 				}
 			case InstructionType::CInit:
 				{
+					//whelp
 					curframe->upvals[(unsigned int)in.value2] = &sptr[in.value];
-					
+
 					break;
 				}
 			case InstructionType::Close:
 				{
-					auto cur = curframe->next;
+					auto cur = curframe;//->next;
 					while (cur)
 					{
-						if (cur->numupvals)
+						if (cur->numupvals && cur->closed == false)
 						{
 							auto tmp = new Value[cur->numupvals];
 							for (int i = 0; i < cur->numupvals; i++)
 								tmp[i] = *cur->upvals[i];
-							
+
 							delete[] cur->upvals;
 							cur->closed = true;
 							cur->cupvals = tmp;
 						}
 						cur = cur->next;
+						break;
 					}
+					curframe->next = 0;
 					break;
 				}
 			case InstructionType::Call:
 				{
+					//allocate capture area here
 					if (vars[in.value].type == ValueType::Function)
 					{
 						//store iptr on call stack
@@ -1157,6 +1161,24 @@ Value JetContext::Execute(int iptr)
 
 						curframe = vars[in.value]._function;
 
+						if (curframe->closed)
+						{
+							//allocate new local frame here
+							//curframe = 
+							Closure* closure = new Closure;
+							closure->grey = closure->mark = false;
+							closure->prev = curframe->prev;
+							closure->numupvals = curframe->numupvals;//in.func->upvals;
+							closure->closed = false;
+							closure->next = curframe->next;
+							if (closure->numupvals)
+								closure->upvals = new Value*[closure->numupvals];
+							closure->prototype = curframe->prototype;//in.func;
+							this->closures.push_back(closure);
+							//stack.Push(Value(closure));
+
+							curframe = closure;
+						}
 						//printf("Call: Stack Ptr At: %d\n", sptr - localstack);
 
 						Function* func = curframe->prototype;
@@ -1235,6 +1257,7 @@ Value JetContext::Execute(int iptr)
 				}
 			case InstructionType::ECall:
 				{
+					//allocate capture area here
 					Value fun = stack.Pop();
 					if (fun.type == ValueType::Function)
 					{
@@ -1252,6 +1275,24 @@ Value JetContext::Execute(int iptr)
 
 						curframe = fun._function;
 
+						if (curframe->closed)
+						{
+							//allocate new local frame here
+							//curframe = 
+							Closure* closure = new Closure;
+							closure->grey = closure->mark = false;
+							closure->prev = curframe->prev;
+							closure->numupvals = closure->numupvals;//in.func->upvals;
+							closure->closed = false;
+							closure->next = closure->next;//curframe->next;
+							if (closure->numupvals)//in.func->upvals)
+								closure->upvals = new Value*[closure->numupvals];
+							closure->prototype = curframe->prototype;//in.func;
+							this->closures.push_back(closure);
+							//stack.Push(Value(closure));
+
+							curframe = closure;
+						}
 						//printf("ECall: Stack Ptr At: %d\n", sptr - localstack);
 
 						Function* func = curframe->prototype;

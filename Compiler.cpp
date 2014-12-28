@@ -149,7 +149,7 @@ std::vector<IntermediateInstruction> CompilerContext::Compile(BlockExpression* e
 	this->localindex = 0;
 	this->closures = 0;
 
-	this->PrintAssembly();
+	//this->PrintAssembly();
 
 	auto temp = std::move(this->out);
 	this->out.clear();
@@ -164,6 +164,7 @@ bool CompilerContext::RegisterLocal(const std::string name)
 		if (this->scope->localvars[i].name == name)
 			return false;
 	}
+
 	LocalVariable var;
 	var.local = this->localindex++;
 	var.name = name;
