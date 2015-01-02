@@ -26,17 +26,18 @@
 
 namespace Jet
 {
-	/*public class Precedence {
-	// Ordered in increasing precedence.
-	public static final int ASSIGNMENT = 1;
-	public static final int CONDITIONAL = 2;
-	public static final int SUM = 3;
-	public static final int PRODUCT = 4;
-	public static final int EXPONENT = 5;
-	public static final int PREFIX = 6;
-	public static final int POSTFIX = 7;
-	public static final int CALL = 8;
-	}*/
+	enum Precedence {
+		// Ordered in increasing precedence.
+		ASSIGNMENT = 1,
+		CONDITIONAL = 2,
+		SUM = 3,
+		PRODUCT = 4,
+		EXPONENT = 5,
+		PREFIX = 6,
+		POSTFIX = 7,
+		CALL = 8,
+	};
+
 	class Parser
 	{
 		Lexer* lexer;
@@ -70,7 +71,7 @@ namespace Jet
 		void Register(TokenType token, StatementParselet* parselet);
 	};
 
-//#define EOF -1
+	//#define EOF -1
 
 }
 #endif

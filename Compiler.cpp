@@ -145,7 +145,7 @@ std::vector<IntermediateInstruction> CompilerContext::Compile(BlockExpression* e
 		delete ii.second;
 
 	this->functions.clear();
-
+	//add metamethods and custom operators
 	this->localindex = 0;
 	this->closures = 0;
 
@@ -248,5 +248,54 @@ void CompilerContext::UnaryOperation(TokenType operation)
 	case TokenType::BNot:
 		this->out.push_back(IntermediateInstruction(InstructionType::BNot));
 		break;
+	}
+}
+
+CompilerContext* CompilerContext::AddFunction(std::string name, unsigned int args, bool vararg)
+{
+	//push instruction that sets the function
+	//todo, may need to have functions in other instruction code sets
+	CompilerContext* newfun = new CompilerContext();
+	//insert this into my list of functions
+	std::string fname = name+this->GetUUID();
+	newfun->arguments = args;
+	newfun->uuid = this->uuid;
+	newfun->parent = this;
+	newfun->vararg = vararg;
+	this->functions[fname] = newfun;
+
+	//store the function in the variable
+	this->LoadFunction(fname);
+
+	return newfun;
+};
+
+void CompilerContext::FinalizeFunction(CompilerContext* c)
+{
+	this->uuid = c->uuid + 1;
+
+	//move upvalues
+	int level = 0;
+	auto ptr = this->scope;
+	while (ptr)
+	{
+		//make sure this doesnt upload multiple times
+		//look for var in locals
+		for (unsigned int i = 0; i < ptr->localvars.size(); i++)
+		{
+			if (ptr->localvars[i].capture >= 0 && ptr->localvars[i].uploaded == false)
+			{
+				//printf("We found use of a captured var: %s at level %d, index %d\n", ptr->localvars[i].second.c_str(), level, ptr->localvars[i].first);
+				//exit the loops we found it
+				ptr->localvars[i].uploaded = true;
+				//this->output += ".local " + variable + " " + ::std::to_string(i) + ";\n";
+				out.push_back(IntermediateInstruction(InstructionType::CInit,ptr->localvars[i].local, ptr->localvars[i].capture));
+				//push instruction to set closure location
+				//out.push_back(IntermediateInstruction(InstructionType::LLoad, ptr->localvars[i].first, 0));//i, ptr->level));
+				//out.push_back(IntermediateInstruction(InstructionType::CStore, ptr->localvars[i].third, level));//i, ptr->level));
+			}
+		}
+		if (ptr)
+			ptr = ptr->previous;
 	}
 }

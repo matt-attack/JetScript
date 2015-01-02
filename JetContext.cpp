@@ -37,6 +37,22 @@ Value JetContext::NewObject()
 	return Value(v);
 }
 
+_JetObject* JetContext::NewPrototype(const std::map<std::string, Value>& items, const char* Typename)
+{ 
+	auto v = new _JetObject;
+	v->grey = v->mark = false;
+	auto table = new _JetObjectBacking;
+	v->ptr = table;
+	for (auto ii: items)
+	{
+		char* str = new char[ii.first.size()+1];
+		ii.first.copy(str, ii.first.length());
+		str[ii.first.size()] = 0;
+		(*table)[str] = ii.second;
+	}
+	return v;
+}
+
 Value JetContext::NewArray()
 {
 	auto a = new _JetArray;
@@ -71,7 +87,7 @@ JetContext::JetContext()
 	//add more functions and junk
 	(*this)["print"] = print;
 	(*this)["gc"] = gc;
-	(*this)["setprototype"] = Value([](JetContext* context, Value* v, int args)
+	(*this)["setprototype"] = [](JetContext* context, Value* v, int args)
 	{
 		if (args != 2)
 			throw RuntimeException("Invalid Call, Improper Arguments!");
@@ -86,7 +102,34 @@ JetContext::JetContext()
 		{
 			throw RuntimeException("Improper arguments!");
 		}
-	});
+	};
+
+	(*this)["setprototype"] = [](JetContext* context, Value* v, int args)
+	{
+		if (args != 2)
+			throw RuntimeException("Invalid Call, Improper Arguments!");
+
+		if (v->type == ValueType::Object && (v+1)->type == ValueType::Object)
+		{
+			Value val = *v;
+			val.prototype = (v+1)->_object;
+			context->Return(val);
+		}
+		else
+		{
+			throw RuntimeException("Improper arguments!");
+		}
+	};
+
+	(*this)["getprototype"] = [](JetContext* context, Value* v, int args)
+	{
+		if (args == 1 && (v->type == ValueType::Object || v->type == ValueType::Userdata))
+		{
+			context->Return(v->GetPrototype());
+		}
+		else
+			throw RuntimeException("getprototype expected an object or userdata value!");
+	};
 
 
 	this->file.ptr = new _JetObjectBacking;//std::map<std::string, Value>;
@@ -1103,14 +1146,12 @@ Value JetContext::Execute(int iptr)
 					closure->prev = curframe;
 					closure->numupvals = in.func->upvals;
 					closure->closed = false;
-					closure->next = curframe->next;
 					if (in.func->upvals)
 						closure->upvals = new Value*[in.func->upvals];
 					closure->prototype = in.func;
 					this->closures.push_back(closure);
 					stack.Push(Value(closure));
 
-					curframe->next = closure;
 					break;
 				}
 			case InstructionType::CInit:
@@ -1122,23 +1163,18 @@ Value JetContext::Execute(int iptr)
 				}
 			case InstructionType::Close:
 				{
-					auto cur = curframe;//->next;
-					while (cur)
+					auto cur = curframe;
+					if (cur && cur->numupvals && cur->closed == false)
 					{
-						if (cur->numupvals && cur->closed == false)
-						{
-							auto tmp = new Value[cur->numupvals];
-							for (int i = 0; i < cur->numupvals; i++)
-								tmp[i] = *cur->upvals[i];
+						auto tmp = new Value[cur->numupvals];
+						for (int i = 0; i < cur->numupvals; i++)
+							tmp[i] = *cur->upvals[i];
 
-							delete[] cur->upvals;
-							cur->closed = true;
-							cur->cupvals = tmp;
-						}
-						cur = cur->next;
-						break;
+						delete[] cur->upvals;
+						cur->closed = true;
+						cur->cupvals = tmp;
 					}
-					curframe->next = 0;
+
 					break;
 				}
 			case InstructionType::Call:
@@ -1164,18 +1200,15 @@ Value JetContext::Execute(int iptr)
 						if (curframe->closed)
 						{
 							//allocate new local frame here
-							//curframe = 
 							Closure* closure = new Closure;
 							closure->grey = closure->mark = false;
 							closure->prev = curframe->prev;
 							closure->numupvals = curframe->numupvals;//in.func->upvals;
 							closure->closed = false;
-							closure->next = curframe->next;
 							if (closure->numupvals)
 								closure->upvals = new Value*[closure->numupvals];
 							closure->prototype = curframe->prototype;//in.func;
 							this->closures.push_back(closure);
-							//stack.Push(Value(closure));
 
 							curframe = closure;
 						}
@@ -1278,19 +1311,16 @@ Value JetContext::Execute(int iptr)
 						if (curframe->closed)
 						{
 							//allocate new local frame here
-							//curframe = 
 							Closure* closure = new Closure;
 							closure->grey = closure->mark = false;
 							closure->prev = curframe->prev;
-							closure->numupvals = closure->numupvals;//in.func->upvals;
+							closure->numupvals = closure->numupvals;
 							closure->closed = false;
-							closure->next = closure->next;//curframe->next;
-							if (closure->numupvals)//in.func->upvals)
+							if (closure->numupvals)
 								closure->upvals = new Value*[closure->numupvals];
-							closure->prototype = curframe->prototype;//in.func;
+							closure->prototype = curframe->prototype;
 							this->closures.push_back(closure);
-							//stack.Push(Value(closure));
-
+							
 							curframe = closure;
 						}
 						//printf("ECall: Stack Ptr At: %d\n", sptr - localstack);
@@ -1789,17 +1819,8 @@ Value JetContext::Assemble(const std::vector<IntermediateInstruction>& code)
 		switch (inst.type)
 		{
 		case InstructionType::Comment:
-			{
-				break;
-			}
 		case InstructionType::Function:
-			{
-				break;
-			}
 		case InstructionType::Label:
-			{
-				break;
-			}
 		case InstructionType::DebugLine:
 			{
 				break;
@@ -1814,17 +1835,8 @@ Value JetContext::Assemble(const std::vector<IntermediateInstruction>& code)
 
 				switch (inst.type)
 				{
+				case InstructionType::Call:
 				case InstructionType::Store:
-					{
-						if (variables.find(inst.string) == variables.end())
-						{
-							//add it
-							variables[inst.string] = variables.size();
-							vars.push_back(Value());
-						}
-						ins.value = variables[inst.string];
-						break;
-					}
 				case InstructionType::Load:
 					{
 						if (variables.find(inst.string) == variables.end())
@@ -1839,18 +1851,6 @@ Value JetContext::Assemble(const std::vector<IntermediateInstruction>& code)
 				case InstructionType::LoadFunction:
 					{
 						ins.func = functions[inst.string];
-						break;
-					}
-				case InstructionType::Call:
-					{
-						if (variables.find(inst.string) == variables.end())
-						{
-							//add it
-							variables[inst.string] = variables.size();
-							vars.push_back(Value());
-						}
-						//make sure to point to the right variable
-						ins.value = variables[inst.string];
 						break;
 					}
 				case InstructionType::Jump:
@@ -1880,7 +1880,7 @@ Value JetContext::Assemble(const std::vector<IntermediateInstruction>& code)
 
 	auto tmpframe = new Closure;
 	tmpframe->prev = 0;
-	tmpframe->next = 0;
+	//tmpframe->next = 0;
 	tmpframe->closed = false;
 	tmpframe->prototype = this->functions["{Entry Point}"];
 	tmpframe->numupvals = tmpframe->prototype->upvals;
@@ -1974,7 +1974,7 @@ Value& JetContext::operator[](const char* id)
 	{
 		//add it
 		variables[id] = variables.size();
-		vars.push_back(0);
+		vars.push_back(Value());
 	}
 	return vars[variables[id]];
 }

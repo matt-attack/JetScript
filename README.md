@@ -48,16 +48,51 @@ string = "hello";
 ```
 - Objects - a map like type
 ```cpp
+//how to define objects
 obj = {};
+obj2 = { hey = 1, apple = 2 };
 //two different ways to index items in the object
 obj.apple = 2;
 obj["apple2"] = 3;
 ```
 - Arrays - a contiguous array of values with a set size
 ```cpp
+//how to define arrays
 arr = [];
+arr2 = [1,2,3,4,5,6];
+
 arr:resize(2);
 arr[0] = 255;
 arr[1] = "Apples";
 ```
-- Userdata - used for user defined types, stores a void*
+- Userdata - used for native user defined types, stores a void*
+
+### C++ Bindings
+You can bind functions in C++ to Jet as well as bind native types through  userdata types and metatables.
+
+- Binding Functions
+```cpp
+Jet::JetContext context;
+context["myfunction"] = [](JetContext* context, Value* arguments, int numarguments)
+{
+	printf("Hello from C++!");
+};
+context.Script("myfunction();");
+```
+Outputs "Hello from C++!" to console.
+
+
+- Creating Userdata
+```cpp
+Jet::JetContext context;
+std::map<std::string, Value> map;//this is a list of all meta-methods you want to add
+map["t1"] = [](JetContext* context, Value* v, int args)
+{
+	printf("Hi from metatable!");
+};
+					
+auto meta = context.NewPrototype(map, "TypeName");
+context["x"] = context.NewUserdata(0/*any native data you want associated*/, meta);
+auto out = context.Script("x.t1();");
+```
+Outputs "Hi from metatable!" to the console.

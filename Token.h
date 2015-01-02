@@ -86,6 +86,8 @@ namespace Jet
 		Increment,
 		Decrement,
 
+		Operator,
+
 		LineComment,
 		CommentBegin,
 		CommentEnd,

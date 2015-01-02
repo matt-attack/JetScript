@@ -86,19 +86,18 @@ namespace Jet
 	{
 		bool mark;
 		bool grey;
-		bool closed;
+		bool closed;//marks if the closure has gone out of its parent scope and was closed
 		unsigned short numupvals;
+
 		Function* prototype;
 
 		union
 		{
-			Value* cupvals;
-			Value** upvals;
+			Value* cupvals;//captured values used while closed
+			Value** upvals;//captured values used while not closed
 		};
 
 		Closure* prev;//parent closure
-
-		Closure* next;//next in linked list of unclosed closures
 	};
 
 	struct Value
@@ -183,6 +182,11 @@ namespace Jet
 			this->type = ValueType::Userdata;
 			this->_userdata = userdata;
 			this->prototype = prototype;
+		}
+
+		Value& operator= (const _JetNativeFunc& func)
+		{
+			return *this = Value(func);
 		}
 
 		void SetPrototype(_JetObject* obj)

@@ -258,7 +258,7 @@ Expression* CallParselet::parse(Parser* parser, Expression* left, Token token)
 	{
 		do
 		{
-			arguments->push_back(parser->parseExpression(2));//ParseStatement(false));
+			arguments->push_back(parser->parseExpression(1));//ParseStatement(false));
 		}
 		while( parser->MatchAndConsume(TokenType::Comma));
 
@@ -272,7 +272,7 @@ Expression* ReturnParselet::parse(Parser* parser, Token token)
 {
 	Expression* right = 0;
 	if (parser->Match(TokenType::Semicolon) == false)
-		right = parser->parseExpression(2);//parser->ParseStatement(false);
+		right = parser->parseExpression(1);//parser->ParseStatement(false);
 
 	return new ReturnExpression(token, right);
 }

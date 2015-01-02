@@ -41,7 +41,7 @@ namespace Jet
 	//void(*temp__bind_##fun)(Jet::JetContext*,Jet::Value*,int)> temp__bind_##fun = &[](Jet::JetContext* context,Jet::Value* args, int numargs) { context->Return(fun(args[0]));}; context[#fun] = &temp__bind_##fun;
 #define JetBind2(context, fun) 	auto temp__bind_##fun = [](Jet::JetContext* context,Jet::Value* args, int numargs) { context->Return(fun(args[0],args[1]));};context[#fun] = Jet::Value(temp__bind_##fun);
 #define JetBind2(context, fun, type) 	auto temp__bind_##fun = [](Jet::JetContext* context,Jet::Value* args, int numargs) { context->Return(fun((type)args[0],(type)args[1]));};context[#fun] = Jet::Value(temp__bind_##fun);
-	
+
 	struct Instruction
 	{
 		InstructionType instruction;
@@ -121,6 +121,9 @@ namespace Jet
 		Value NewArray();
 		Value NewUserdata(void* data, _JetObject* proto);
 		Value NewString(char* string);
+		//a helper function for registering metatables, returns an object
+		//this doesnt get garbage collected and you must delete it yourself after done using it
+		_JetObject* NewPrototype(const std::map<std::string, Value>& items, const char* Typename);
 
 	private:
 
@@ -185,7 +188,7 @@ namespace Jet
 
 		//compiles source code to ASM for the VM to read in
 		std::vector<IntermediateInstruction> Compile(const char* code, const char* filename = "file");
-		
+
 		//xecutes global code and parses in ASM
 		Value Assemble(const std::vector<IntermediateInstruction>& code);
 
@@ -196,7 +199,7 @@ namespace Jet
 		void RunGC();//runs an iteration of the garbage collector
 
 		void Return(Value val);//returns value from native functions
-		
+
 	private:
 		int fptr;//frame pointer, not really used except in gc
 		Value* sptr;//stack pointer

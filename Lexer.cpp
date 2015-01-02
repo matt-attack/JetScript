@@ -16,7 +16,7 @@ bool Jet::IsNumber(char c)
 	return (c >= '0' && c <= '9');
 }
 
-Lexer::Lexer(::std::istream* input, std::string filename)
+Lexer::Lexer(std::istream* input, std::string filename)
 {
 	this->stream = input;
 	this->linenumber = 1;
@@ -26,7 +26,7 @@ Lexer::Lexer(::std::istream* input, std::string filename)
 	this->Init();
 }
 
-Lexer::Lexer(::std::string text, std::string filename)
+Lexer::Lexer(std::string text, std::string filename)
 {
 	this->stream = 0;
 	this->linenumber = 1;
@@ -126,10 +126,18 @@ void Lexer::Init()
 	keywords["null"] = TokenType::Null;
 	keywords["const"] = TokenType::Const;
 
+	//keywords["operator"] = TokenType::Operator;
+
 	for (auto ii = operators.begin(); ii != operators.end(); ii++)
 	{
 		TokenToString[ii->second] = ii->first;
 	}
+}
+
+//can move to functions at some point
+void ParseKeyword(const std::string& string)
+{
+
 }
 
 Token Lexer::Next()
@@ -141,14 +149,20 @@ Token Lexer::Next()
 		bool found = false; unsigned int len = 0;
 		for (auto ii: operators)
 		{
-			if (ii.first.length() <= (text.length()+1-index))//fixes crashes/overruns if input string too short like "+"
+			// make sure memcmp can't cause an overrun
+			if (ii.first.length() > (text.length()+1-index))
+				continue;
+
+			//pick the longest matching operator/keyword
+			if (ii.first.length() <= len)
+				continue;
+
+			//check if the characters match the operator/keyword
+			if(memcmp(ii.first.c_str(), &text.c_str()[index-1], ii.first.length()) == 0)
 			{
-				if(strncmp(ii.first.c_str(), &text.c_str()[index-1], ii.first.length()) == 0 && ii.first.length() > len)
-				{
-					len = ii.first.length();
-					str = ii.first;
-					found = true;
-				}
+				len = ii.first.length();
+				str = ii.first;
+				found = true;
 			}
 		}
 
@@ -180,7 +194,7 @@ Token Lexer::Next()
 				{
 					if (n.type == TokenType::EoF)
 						throw CompilerException(n.filename, n.line, "Missing end to comment block starting at line "+std::to_string(startline));
-					
+
 					n = this->Next();
 				}
 				continue;

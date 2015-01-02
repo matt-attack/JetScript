@@ -593,7 +593,7 @@ namespace Jet
 		{
 			context->Line(token.filename, token.line);
 
-			::std::string uuid = context->GetUUID();
+			std::string uuid = context->GetUUID();
 			context->Label("loopstart_"+uuid);
 			this->condition->Compile(context);
 			context->JumpFalse(("loopend_"+uuid).c_str());
