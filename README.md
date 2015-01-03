@@ -30,7 +30,7 @@ try
 {
 	Jet::Value return = context.Script("return 7;");
 }
-catch (ParserException e)
+catch (CompilerException e)
 {
 	//an exception occured while compiling
 }

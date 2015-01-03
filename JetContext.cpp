@@ -1320,7 +1320,7 @@ Value JetContext::Execute(int iptr)
 								closure->upvals = new Value*[closure->numupvals];
 							closure->prototype = curframe->prototype;
 							this->closures.push_back(closure);
-							
+
 							curframe = closure;
 						}
 						//printf("ECall: Stack Ptr At: %d\n", sptr - localstack);
@@ -1901,19 +1901,19 @@ Value JetContext::Assemble(const std::vector<IntermediateInstruction>& code)
 };
 
 
-Value JetContext::Call(Value* func, Value* args, unsigned int numargs)
+Value JetContext::Call(Value* fun, Value* args, unsigned int numargs)
 {
-	if (func->type != ValueType::NativeFunction && func->type != ValueType::Function)
+	if (fun->type != ValueType::NativeFunction && fun->type != ValueType::Function)
 	{
 		throw 7;
 	}
-	else if (func->type == ValueType::NativeFunction)
+	else if (fun->type == ValueType::NativeFunction)
 	{
 		//call it
-		(*func->func)(this,args,numargs);
+		(*fun->func)(this,args,numargs);
 		return this->stack.Pop();//Value(0);
 	}
-	unsigned int iptr = func->_function->prototype->ptr;
+	unsigned int iptr = fun->_function->prototype->ptr;
 
 	//push args onto stack
 	for (unsigned int i = 0; i < numargs; i++)
@@ -1921,7 +1921,42 @@ Value JetContext::Call(Value* func, Value* args, unsigned int numargs)
 		this->stack.Push(args[i]);
 	}
 
-	this->curframe = func->_function;
+	auto func = fun->_function;
+	if (numargs <= func->prototype->args)
+	{
+		for (int i = func->prototype->args-1; i >= 0; i--)
+		{
+			if (i < numargs)
+				sptr[i] = stack.Pop();
+			else
+				sptr[i] = Value();
+		}
+	}
+	else if (func->prototype->vararg)
+	{
+		sptr[func->prototype->locals-1] = this->NewArray();
+		auto arr = sptr[func->prototype->locals-1]._array->ptr;
+		arr->resize(numargs - func->prototype->args);
+		for (int i = numargs-1; i >= 0; i--)
+		{
+			if (i < func->prototype->args)
+				sptr[i] = stack.Pop();
+			else
+				(*arr)[i] = stack.Pop();
+		}
+	}
+	else
+	{
+		for (int i = numargs-1; i >= 0; i--)
+		{
+			if (i < func->prototype->args)
+				sptr[i] = stack.Pop();//frames[fptr].locals[i] = stack.Pop();
+			else
+				stack.Pop();
+		}
+	}
+
+	this->curframe = fun->_function;
 
 	Value temp = this->Execute(iptr);
 	if (callstack.size() > 0)
@@ -1940,19 +1975,19 @@ Value JetContext::Call(const char* function, Value* args, unsigned int numargs)
 		return Value(0);
 	}
 
-	Value func = vars[variables[function]];
-	if (func.type != ValueType::NativeFunction && func.type != ValueType::Function)
+	Value fun = vars[variables[function]];
+	if (fun.type != ValueType::NativeFunction && fun.type != ValueType::Function)
 	{
 		printf("ERROR: Variable '%s' is not a function\n", function);
 		return Value(0);
 	}
-	else if (func.type == ValueType::NativeFunction)
+	else if (fun.type == ValueType::NativeFunction)
 	{
 		//call it
-		(*func.func)(this,args,numargs);
+		(*fun.func)(this,args,numargs);
 		return Value(0);
 	}
-	iptr = func._function->prototype->ptr;
+	iptr = fun._function->prototype->ptr;
 
 	//push args onto stack
 	for (unsigned int i = 0; i < numargs; i++)
@@ -1960,7 +1995,42 @@ Value JetContext::Call(const char* function, Value* args, unsigned int numargs)
 		this->stack.Push(args[i]);
 	}
 
-	this->curframe = func._function;
+	auto func = fun._function;
+	if (numargs <= func->prototype->args)
+	{
+		for (int i = func->prototype->args-1; i >= 0; i--)
+		{
+			if (i < numargs)
+				sptr[i] = stack.Pop();
+			else
+				sptr[i] = Value();
+		}
+	}
+	else if (func->prototype->vararg)
+	{
+		sptr[func->prototype->locals-1] = this->NewArray();
+		auto arr = sptr[func->prototype->locals-1]._array->ptr;
+		arr->resize(numargs - func->prototype->args);
+		for (int i = numargs-1; i >= 0; i--)
+		{
+			if (i < func->prototype->args)
+				sptr[i] = stack.Pop();
+			else
+				(*arr)[i] = stack.Pop();
+		}
+	}
+	else
+	{
+		for (int i = numargs-1; i >= 0; i--)
+		{
+			if (i < func->prototype->args)
+				sptr[i] = stack.Pop();//frames[fptr].locals[i] = stack.Pop();
+			else
+				stack.Pop();
+		}
+	}
+
+	this->curframe = func;//fun._function;
 
 	Value temp = this->Execute(iptr);
 	if (callstack.size() > 0)
