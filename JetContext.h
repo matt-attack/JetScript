@@ -179,8 +179,9 @@ namespace Jet
 		~JetContext();
 
 		//allows assignment and reading of gobal variables
-		Value& operator[](const char* id);
-
+		Value& operator[](const std::string& id);
+		Value Get(const std::string& name);
+		void Set(const std::string& name, const Value& value);
 
 		std::string Script(const std::string code, const std::string filename = "file");
 		Value Script(const char* code, const char* filename = "file");//compiles, assembles and executes the script

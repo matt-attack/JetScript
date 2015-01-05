@@ -28,6 +28,50 @@ void Jet::print(JetContext* context,Value* args, int numargs)
 	printf("\n");
 };
 
+Value& JetContext::operator[](const std::string& id)
+{
+	auto iter = variables.find(id);
+	if (iter == variables.end())
+	{
+		//add it
+		variables[id] = variables.size();
+		vars.push_back(Value());
+		return vars[variables[id]];
+	}
+	else
+	{
+		return vars[(*iter).second];
+	}
+}
+
+Value JetContext::Get(const std::string& name)
+{
+	auto iter = variables.find(name);
+	if (iter == variables.end())
+	{
+		return Value();//return null
+	}
+	else
+	{
+		return vars[(*iter).second];
+	}
+}
+
+void JetContext::Set(const std::string& name, const Value& value)
+{
+	auto iter = variables.find(name);
+	if (iter == variables.end())
+	{
+		//add it
+		variables[name] = variables.size();
+		vars.push_back(value);
+	}
+	else
+	{
+		vars[(*iter).second] = value;
+	}
+}
+
 Value JetContext::NewObject()
 {
 	auto v = new _JetObject;
@@ -2038,16 +2082,6 @@ Value JetContext::Call(const char* function, Value* args, unsigned int numargs)
 	return temp;
 };
 
-Value& JetContext::operator[](const char* id)
-{
-	if (variables.find(id) == variables.end())
-	{
-		//add it
-		variables[id] = variables.size();
-		vars.push_back(Value());
-	}
-	return vars[variables[id]];
-}
 
 std::string JetContext::Script(const std::string code, const std::string filename)
 {
