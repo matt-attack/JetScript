@@ -1,6 +1,8 @@
 #ifndef _JET_EXCEPTIONS_HEADER
 #define _JET_EXCEPTIONS_HEADER
 
+#include <string>
+
 namespace Jet
 {
 	//exceptions

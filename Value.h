@@ -1,14 +1,14 @@
 #ifndef _VALUE_HEADER
 #define _VALUE_HEADER
 
+#include "JetExceptions.h"
+
 #include <map>
 #include <functional>
 #include <string>
 #include <memory>
 #include <vector>
 #include <unordered_map>
-
-#include "JetExceptions.h"
 
 namespace Jet
 {
@@ -49,10 +49,15 @@ namespace Jet
 
 	static const char* ValueTypes[] = { "Null", "Number", "NativeFunction", "String" , "Object", "Array", "Function", "Userdata"};
 
-
 	class HashFunction {
 	public:
 		std::size_t operator ()(const Value &v) const;
+	};
+
+	struct String
+	{
+		unsigned int length;
+		char* data;
 	};
 
 	typedef std::unordered_map<Value, Value, HashFunction> _JetObjectBacking;
@@ -111,13 +116,18 @@ namespace Jet
 			struct
 			{
 				union
-				{
+				{ //ok need to move string length out into the object itself 
+				//it would break the gc tho, so need to get alignment right	
 					_JetString* _string;
 					_JetObject* _object;
 					_JetArray* _array;
 					_JetUserdata* _userdata;
 				};
-				_JetObject* prototype;
+				union
+				{
+					unsigned int length;//used for strings
+					_JetObject* prototype;
+				};
 			};
 
 			Closure* _function;
@@ -128,16 +138,29 @@ namespace Jet
 		{
 			this->type = ValueType::Null;
 			//this->value = 0;
-		};
+		}
 
-		//plz dont delete my string
+		//move standard library to other file
 		Value(const char* str)
 		{
 			if (str == 0)
 				return;
-			type = ValueType::String;
 
+			type = ValueType::String;
+			length = strlen(str);
 			_string = (char*)str;
+		}
+
+		//plz dont delete my string
+		//crap, this is gonna be hell to figure out
+		Value(_JetString* str)
+		{
+			if (str == 0)
+				return;
+
+			type = ValueType::String;
+			length = strlen(str);
+			_string = str;
 		}
 
 		Value(_JetObject* obj)
@@ -211,7 +234,7 @@ namespace Jet
 			case ValueType::Array:
 				{
 					std::string str = "[\n";
-					
+
 					if (depth++ > 3)
 						return "[Array " + std::to_string((int)this->_array)+"]";
 
@@ -229,7 +252,7 @@ namespace Jet
 			case ValueType::Object:
 				{
 					std::string str = "{\n";
-					
+
 					if (depth++ > 3)
 						return "[Object " + std::to_string((int)this->_object)+"]";
 
@@ -340,16 +363,32 @@ namespace Jet
 		}*/
 
 
-		Value operator[] (int index)
+		/*Value& operator[] (int index)
 		{
 			if (this->type == ValueType::Array)
 				return (*this->_array->ptr)[index];
 			else if (this->type == ValueType::Object)
 				return (*this->_object->ptr)[index];
 			return Value(0);
-		};
+		};*/
+		//this massively redundant case is only here because
+		//c++ operator overloading resolution is dumb
+		//and wants to do integer[pointer-to-object]
+		//rather than value[(implicit value)const char*]
+		Value& operator[] (const char* key)
+		{
+			switch (type)
+			{
+			case ValueType::Object:
+				{
+					return (*this->_object->ptr)[key];
+				}
+			default:
+				throw RuntimeException("Cannot index type " + (std::string)ValueTypes[(int)this->type]);
+			}
+		}
 
-		Value operator[] (Value key)
+		Value& operator[] (const Value& key)
 		{
 			switch (type)
 			{
@@ -393,7 +432,7 @@ namespace Jet
 				break;
 			}
 		}
-		
+
 		Value CallMetamethod(const char* name, const Value* self)
 		{
 			JetContext* context;
@@ -548,6 +587,40 @@ namespace Jet
 
 			throw RuntimeException("Cannot binary complement non-numeric type! " + (std::string)ValueTypes[(int)this->type]);
 		};
+
+		Value operator-()
+		{
+			if (type == ValueType::Number)
+			{
+				return Value(-value);
+			}
+			else if (type == ValueType::Object)
+			{
+				//do metamethod
+			}
+
+			throw RuntimeException("Cannot negate non-numeric type! " + (std::string)ValueTypes[(int)this->type]);
+		}
+
+		//deletes all data associated
+		void Release()
+		{
+			switch (type)
+			{
+			case ValueType::Array:
+				delete this->_array->ptr;
+				delete this->_array;
+				break;
+			case ValueType::Object:
+				delete this->_object->ptr;
+				delete this->_object;
+				break;
+			case ValueType::String:
+				break;
+			case ValueType::Userdata:
+				break;
+			}
+		}
 	};
 }
 

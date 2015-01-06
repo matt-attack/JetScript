@@ -10,11 +10,21 @@ void PrefixExpression::Compile(CompilerContext* context)
 
 	right->Compile(context);
 	context->UnaryOperation(this->_operator.type);
-	if (dynamic_cast<BlockExpression*>(this->Parent) == 0)
-		context->Duplicate();
-
-	if (dynamic_cast<IStorableExpression*>(this->right))
-		dynamic_cast<IStorableExpression*>(this->right)->CompileStore(context);
+	switch (this->_operator.type)
+	{
+	case TokenType::BNot:
+	case TokenType::Minus:
+		if (dynamic_cast<BlockExpression*>(this->Parent))
+			context->Pop();
+		break;
+	default:
+		if (dynamic_cast<IStorableExpression*>(this->right))
+		{
+			if (dynamic_cast<BlockExpression*>(this->Parent) == 0)
+				context->Duplicate();
+			dynamic_cast<IStorableExpression*>(this->right)->CompileStore(context);
+		}
+	}
 }
 
 void IndexExpression::Compile(CompilerContext* context)
@@ -70,7 +80,7 @@ void ObjectExpression::Compile(CompilerContext* context)
 	}
 	context->NewObject(count);
 
-	if (dynamic_cast<BlockExpression*>(this->Parent) != 0)
+	if (dynamic_cast<BlockExpression*>(this->Parent))
 		context->Pop();
 }
 
@@ -87,7 +97,7 @@ void ArrayExpression::Compile(CompilerContext* context)
 	}
 	context->NewArray(count);
 
-	if (dynamic_cast<BlockExpression*>(this->Parent) != 0)
+	if (dynamic_cast<BlockExpression*>(this->Parent))
 		context->Pop();
 }
 
@@ -95,7 +105,7 @@ void StringExpression::Compile(CompilerContext* context)
 {
 	context->String(this->value);
 
-	if (dynamic_cast<BlockExpression*>(this->Parent) != 0)
+	if (dynamic_cast<BlockExpression*>(this->Parent))
 		context->Pop();
 }
 
@@ -103,7 +113,7 @@ void NullExpression::Compile(CompilerContext* context)
 {
 	context->Null();
 
-	if (dynamic_cast<BlockExpression*>(this->Parent) != 0)
+	if (dynamic_cast<BlockExpression*>(this->Parent))
 		context->Pop();
 }
 
@@ -111,7 +121,7 @@ void NumberExpression::Compile(CompilerContext* context)
 {
 	context->Number(this->value);
 
-	if (dynamic_cast<BlockExpression*>(this->Parent) != 0)
+	if (dynamic_cast<BlockExpression*>(this->Parent))
 		context->Pop();
 }
 
@@ -161,7 +171,7 @@ void CallExpression::Compile(CompilerContext* context)
 	context->Line(token.filename, token.line);
 
 	//need to check if left is a local, or a captured value before looking at globals
-	if (dynamic_cast<NameExpression*>(left) != 0 && context->IsLocal(dynamic_cast<NameExpression*>(left)->GetName()) == false)
+	if (dynamic_cast<NameExpression*>(left) && context->IsLocal(dynamic_cast<NameExpression*>(left)->GetName()) == false)
 	{
 		//push args onto stack
 		for (auto i: *args)
@@ -209,7 +219,7 @@ void CallExpression::Compile(CompilerContext* context)
 	//}
 	//help, how should I handle this for multiple returns
 	//pop off return value if we dont need it
-	if (dynamic_cast<BlockExpression*>(this->Parent) != 0)
+	if (dynamic_cast<BlockExpression*>(this->Parent))
 		context->Pop();//if my parent is block expression, we dont the result, so pop it
 }
 
@@ -219,7 +229,7 @@ void NameExpression::Compile(CompilerContext* context)
 	//todo make me detect if this is a local or not
 	context->Load(name);
 
-	if (dynamic_cast<BlockExpression*>(this->Parent) != 0)
+	if (dynamic_cast<BlockExpression*>(this->Parent))
 		context->Pop();
 }
 
@@ -247,8 +257,7 @@ void OperatorExpression::Compile(CompilerContext* context)
 	this->right->Compile(context);
 	context->BinaryOperation(this->_operator.type);
 
-	//fix these things in like if statements and for loops
-	if (dynamic_cast<BlockExpression*>(this->Parent) != 0)
+	if (dynamic_cast<BlockExpression*>(this->Parent))
 		context->Pop();
 }
 

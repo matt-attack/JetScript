@@ -12,6 +12,7 @@
 #include "Parser.h"
 #include "JetInstructions.h"
 #include "JetExceptions.h"
+#include "GarbageCollector.h"
 
 #ifdef _DEBUG
 #ifndef DBG_NEW      
@@ -64,6 +65,7 @@ namespace Jet
 
 	class JetContext
 	{
+		friend class GarbageCollector;
 		VMStack<Value> stack;
 		VMStack<std::pair<unsigned int, Closure*> > callstack;
 
@@ -102,78 +104,28 @@ namespace Jet
 
 	private:
 		//garbage collector stuff
-		std::vector<_JetArray*> arrays;
-		std::vector<_JetObject*> objects;
-		std::vector<GCVal<char*>*> strings;
-		std::vector<_JetUserdata*> userdata;
+		//std::vector<_JetArray*> arrays;
+		//std::vector<_JetObject*> objects;
+		//std::vector<GCVal<char*>*> strings;
+		//std::vector<_JetUserdata*> userdata;
+		//std::vector<Closure*> closures;
 
-		std::vector<Closure*> closures;
+		//manages memory
+		GarbageCollector gc;
 
-		std::vector<char*> gcObjects;//not used atm
-
-
-		int allocationCounter;//used to determine when to run the GC
-		int collectionCounter;
-		VMStack<Value> greys;//stack of grey objects for processing
+		//int allocationCounter;//used to determine when to run the GC
+		//int collectionCounter;
+		//VMStack<Value> greys;//stack of grey objects for processing
 	public:
 
 		Value NewObject();
 		Value NewArray();
-		Value NewUserdata(void* data, _JetObject* proto);
-		Value NewString(char* string);
+		Value NewUserdata(void* data, const Value& proto);
+		Value NewString(char* string, bool copy = true);
+
 		//a helper function for registering metatables, returns an object
 		//this doesnt get garbage collected and you must delete it yourself after done using it
-		_JetObject* NewPrototype(const std::map<std::string, Value>& items, const char* Typename);
-
-	private:
-
-		//must free with GCFree, pointer is a bit offset to leave room for the flag
-		template<class T> 
-		T* GCAllocate()
-		{
-#undef new
-			//need to call constructor
-			char* buf = new char[sizeof(T)+1];
-			this->gcObjects.push_back(buf);
-			new (buf+1) T();
-			return (T*)(buf+1);
-
-#ifdef _DEBUG
-#ifndef DBG_NEW      
-#define DBG_NEW new ( _NORMAL_BLOCK , __FILE__ , __LINE__ )     
-#define new DBG_NEW   
-#endif
-#endif
-		}
-
-		template<class T> 
-		T* GCAllocate2(unsigned int size)
-		{
-			return (T*)((new char[sizeof(T)+1])+1);
-		}
-
-		char* GCAllocate(unsigned int size)
-		{
-			//this leads to less indirection, and simplified cleanup
-			char* data = new char[size+1];//enough room for the flag
-			this->gcObjects.push_back(data);
-			return data+1;
-		}
-
-		//need to call destructor first
-		template<class T>
-		void GCFree(T* data)
-		{
-			data->~T();
-			delete[] (((char*)data)-1);
-		}
-
-		void GCFree(char* data)
-		{
-			delete[] (data-1);
-		}
-
-	public:
+		Value NewPrototype(const char* Typename);
 
 		JetContext();
 		~JetContext();

@@ -271,11 +271,13 @@
   <ItemGroup>
     <ClInclude Include="Compiler.h" />
     <ClInclude Include="Expressions.h" />
+    <ClInclude Include="GarbageCollector.h" />
     <ClInclude Include="JetArray.h" />
     <ClInclude Include="JetContext.h" />
     <ClInclude Include="JetExceptions.h" />
     <ClInclude Include="JetInstructions.h" />
     <ClInclude Include="Lexer.h" />
+    <ClInclude Include="Object.h" />
     <ClInclude Include="Parselets.h" />
     <ClInclude Include="Parser.h" />
     <ClInclude Include="stdafx.h" />
@@ -288,6 +290,7 @@
     <ClCompile Include="AsmVM.cpp" />
     <ClCompile Include="Compiler.cpp" />
     <ClCompile Include="Expressions.cpp" />
+    <ClCompile Include="GarbageCollector.cpp" />
     <ClCompile Include="JetContext.cpp" />
     <ClCompile Include="Lexer.cpp" />
     <ClCompile Include="Parselets.cpp" />
