@@ -85,13 +85,12 @@ Outputs "Hello from C++!" to console.
 - Creating Userdata
 ```cpp
 Jet::JetContext context;
-std::map<std::string, Value> map;//this is a list of all meta-methods you want to add
-map["t1"] = [](JetContext* context, Value* v, int args)
+auto meta = context.NewPrototype("TypeName");//this is a list of all meta-methods you want to add
+meta["t1"] = [](JetContext* context, Value* v, int args)
 {
 	printf("Hi from metatable!");
 };
-					
-auto meta = context.NewPrototype(map, "TypeName");
+
 context["x"] = context.NewUserdata(0/*any native data you want associated*/, meta);
 auto out = context.Script("x.t1();");
 ```
