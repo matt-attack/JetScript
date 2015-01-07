@@ -2,6 +2,7 @@
 #define _VALUE_HEADER
 
 #include "JetExceptions.h"
+//#include "Object.h"
 
 #include <map>
 #include <functional>

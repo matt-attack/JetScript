@@ -1256,7 +1256,11 @@ Value JetContext::Execute(int iptr)
 					obj->grey = obj->mark = false;
 					this->gc.objects.push_back(obj);
 					for (int i = in.value-1; i >= 0; i--)
-						(*obj->ptr)[stack.Pop()] = stack.Pop();
+					{
+						auto value = stack.Pop();
+						auto key = stack.Pop();
+						(*obj->ptr)[key] = value;
+					}
 					stack.Push(Value(obj));
 
 					if (gc.allocationCounter++%GC_INTERVAL == 0)
