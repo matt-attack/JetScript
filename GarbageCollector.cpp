@@ -9,14 +9,8 @@ GarbageCollector::GarbageCollector(JetContext* context) : context(context)
 	this->collectionCounter = 1;
 }
 
-GarbageCollector::~GarbageCollector(void)
+void GarbageCollector::Cleanup()
 {
-	for (auto ii: this->arrays)
-	{
-		delete ii->ptr;
-		delete ii;
-	}
-
 	for (auto ii: this->userdata)
 	{
 		if (ii->ptr.second)
@@ -25,23 +19,35 @@ GarbageCollector::~GarbageCollector(void)
 			Value _gc = (*ii->ptr.second->ptr)["_gc"];
 			if (_gc.type == ValueType::NativeFunction)
 				_gc.func(this->context, &ud, 1);
+			//else if (_gc.type == ValueType::Function)
+			//todo
 			else if (_gc.type != ValueType::Null)
 				throw RuntimeException("Non Native _gc Hooks Not Implemented!");
 		}
 		delete ii;
 	}
+	this->userdata.clear();
+
+	for (auto ii: this->arrays)
+	{
+		delete ii->ptr;
+		delete ii;
+	}
+	this->arrays.clear();
 
 	for (auto ii: this->objects)
 	{
 		delete ii->ptr;
 		delete ii;
 	}
+	this->objects.clear();
 
 	for (auto ii: this->strings)
 	{
 		delete ii->ptr;
 		delete ii;
 	}
+	this->strings.clear();
 
 	for (auto ii: this->closures)
 	{
@@ -49,6 +55,7 @@ GarbageCollector::~GarbageCollector(void)
 			delete[] ii->upvals;
 		delete ii;
 	}
+	this->closures.clear();
 }
 
 void GarbageCollector::Mark()

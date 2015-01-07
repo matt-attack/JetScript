@@ -75,7 +75,9 @@ namespace Jet
 		VMStack<Value> greys;//stack of grey objects for processing
 
 		GarbageCollector(JetContext* context);
-		~GarbageCollector(void);
+		//~GarbageCollector(void);
+
+		void Cleanup();
 
 		void Run();
 	private:

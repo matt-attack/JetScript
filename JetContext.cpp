@@ -137,7 +137,7 @@ JetContext::JetContext() : gc(this), stack(500000)
 
 		if (v->type == ValueType::Object && v[1].type == ValueType::Object)
 		{
-			Value val = *v;
+			Value val = v[0];
 			val.prototype = v[1]._object;
 			context->Return(val);
 		}
@@ -205,7 +205,7 @@ JetContext::JetContext() : gc(this), stack(500000)
 		if (args != 2)
 			throw RuntimeException("Invalid number of arguments to fopen!");
 
-		FILE* f = fopen(v->ToString().c_str(), (*(v+1)).ToString().c_str());
+		FILE* f = fopen(v->ToString().c_str(), v[1].ToString().c_str());
 		context->Return(context->NewUserdata(f, &context->file));
 	});
 
@@ -264,7 +264,7 @@ JetContext::JetContext() : gc(this), stack(500000)
 	{
 		//how do I get access to the array from here?
 		if (args == 2)
-			v[1]._array->ptr->resize((*v).value);
+			v[1]._array->ptr->resize(v->value);
 		else
 			throw RuntimeException("Invalid size call!!");
 	});
@@ -425,6 +425,8 @@ JetContext::JetContext() : gc(this), stack(500000)
 
 JetContext::~JetContext()
 {
+	this->gc.Cleanup();
+
 	for (auto ii: this->ins)
 		delete[] ii.string;
 
@@ -1066,9 +1068,8 @@ Value JetContext::Execute(int iptr)
 						//ok fix this to be cleaner and resolve stack printing
 						//should just push a value to indicate that we are in a native function call
 						callstack.Push(std::pair<unsigned int, Closure*>(iptr, curframe));
-						//callstack.Push(iptr);
 						callstack.Push(std::pair<unsigned int, Closure*>(123456789, curframe));
-						//callstack.Push(123456789);
+						
 						//to return something, push it to the stack
 						int s = stack.size();
 						(*fun.func)(this,tmp,args);

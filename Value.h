@@ -118,7 +118,7 @@ namespace Jet
 			{
 				union
 				{ //ok need to move string length out into the object itself 
-				//it would break the gc tho, so need to get alignment right	
+					//it would break the gc tho, so need to get alignment right	
 					_JetString* _string;
 					_JetObject* _object;
 					_JetArray* _array;
@@ -366,16 +366,33 @@ namespace Jet
 
 		/*Value& operator[] (int index)
 		{
-			if (this->type == ValueType::Array)
-				return (*this->_array->ptr)[index];
-			else if (this->type == ValueType::Object)
-				return (*this->_object->ptr)[index];
-			return Value(0);
+		if (this->type == ValueType::Array)
+		return (*this->_array->ptr)[index];
+		else if (this->type == ValueType::Object)
+		return (*this->_object->ptr)[index];
+		return Value(0);
 		};*/
 		//this massively redundant case is only here because
 		//c++ operator overloading resolution is dumb
 		//and wants to do integer[pointer-to-object]
 		//rather than value[(implicit value)const char*]
+		Value& operator[] (int key)
+		{
+			switch (type)
+			{
+			case ValueType::Array:
+				{
+					return (*this->_array->ptr)[key];
+				}
+			case ValueType::Object:
+				{
+					return (*this->_object->ptr)[key];
+				}
+			default:
+				throw RuntimeException("Cannot index type " + (std::string)ValueTypes[(int)this->type]);
+			}
+		}
+
 		Value& operator[] (const char* key)
 		{
 			switch (type)
