@@ -66,7 +66,7 @@ namespace Jet
 		"DebugLine",
 		"Function"
 	};
-	static enum class InstructionType
+	enum class InstructionType
 	{
 		Add,
 		Mul,

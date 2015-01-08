@@ -72,7 +72,7 @@ namespace Jet
 
 		void print()
 		{
-			printf(name.c_str());
+			printf("%s", name.c_str());
 		}
 
 		void Compile(CompilerContext* context);
