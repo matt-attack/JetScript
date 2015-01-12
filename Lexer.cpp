@@ -124,7 +124,7 @@ void Lexer::Init()
 	keywords["continuar"] = TokenType::Continue;
 
 	keywords["null"] = TokenType::Null;
-	keywords["const"] = TokenType::Const;
+	//keywords["const"] = TokenType::Const;
 
 	//keywords["operator"] = TokenType::Operator;
 
@@ -217,14 +217,19 @@ Token Lexer::Next()
 								txt.push_back('\n');
 								break;
 							}
-						case '\\':
+						case 'b':
 							{
-								txt.push_back('\\');
+								txt.push_back('\b');
 								break;
 							}
 						case 't':
 							{
 								txt.push_back('\t');
+								break;
+							}
+						case '\\':
+							{
+								txt.push_back('\\');
 								break;
 							}
 						case '"':
@@ -233,7 +238,7 @@ Token Lexer::Next()
 								break;
 							}
 						default:
-							throw CompilerException(filename, this->linenumber, "Unhandled Escape Sequence!");
+							throw CompilerException(filename, this->linenumber, "Invalid Escape Sequence '\\"+text.substr(index+1)+"'");
 						}
 
 						index += 2;
@@ -279,7 +284,7 @@ Token Lexer::Next()
 			int start = index-1;
 			while (index < text.length())
 			{
-				char c = text[index];
+				char c = this->PeekChar();
 				if (!(c == '.' || IsNumber(c)))
 					break;
 

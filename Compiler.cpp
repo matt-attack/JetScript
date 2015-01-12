@@ -88,7 +88,11 @@ std::vector<IntermediateInstruction> CompilerContext::Compile(BlockExpression* e
 		expr->Compile(this);
 
 		//add a return to signify end of global code
-		this->Return();
+		if (this->out[this->out.size()-1].type != InstructionType::Return)
+		{
+			this->Null();
+			this->Return();
+		}
 
 		this->Compile();
 
@@ -275,11 +279,9 @@ void CompilerContext::FinalizeFunction(CompilerContext* c)
 	this->uuid = c->uuid + 1;
 
 	//move upvalues
-	int level = 0;
 	auto ptr = this->scope;
 	while (ptr)
 	{
-		//make sure this doesnt upload multiple times
 		//look for var in locals
 		for (unsigned int i = 0; i < ptr->localvars.size(); i++)
 		{

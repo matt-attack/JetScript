@@ -102,7 +102,7 @@ Value JetContext::NewUserdata(void* data, const Value& proto)
 {
 	if (proto.type != ValueType::Object)
 		throw RuntimeException("NewUserdata: Prototype supplied was not of the type 'object'\n");
-	
+
 	auto ud = new GCVal<std::pair<void*, _JetObject*>>(std::pair<void*, _JetObject*>(data, proto._object));
 	ud->grey = ud->mark = true;
 	this->gc.userdata.push_back(ud);
@@ -125,8 +125,9 @@ Value JetContext::NewString(char* string, bool copy)
 JetContext::JetContext() : gc(this), stack(500000)
 {
 	this->labelposition = 0;
-	this->fptr = -1;
-	
+	this->fptr = 0;
+	this->sptr = this->localstack;
+
 	//add more functions and junk
 	(*this)["print"] = print;
 	(*this)["gc"] = ::gc;
@@ -225,10 +226,10 @@ JetContext::JetContext() : gc(this), stack(500000)
 		{
 			size_t len = v[0].length + v[1].length + 1;
 			char* text = new char[len];
-			memcpy(text, v[0]._string, v[0].length);
-			memcpy(text+v[0].length, v[1]._string, v[1].length);
+			memcpy(text, v[1]._string, v[1].length);
+			memcpy(text+v[1].length, v[0]._string, v[0].length);
 			text[len-1] = 0;
-			context->Return(text);
+			context->Return(context->NewString(text, false));
 		}
 		else
 			throw RuntimeException("bad append call!");
@@ -525,14 +526,16 @@ Value JetContext::Execute(int iptr)
 	QueryPerformanceFrequency( (LARGE_INTEGER *)&rate );
 	QueryPerformanceCounter( (LARGE_INTEGER *)&start );
 #endif
-
 	//frame and stack pointer reset
-	fptr = 0;
-	sptr = this->localstack;
+	fptr += 1;//this needs to disappear
 
-	callstack.Push(std::pair<unsigned int, Closure*>(123456789, curframe));//bad value to get it to return;
 	unsigned int startcallstack = this->callstack.size();
 	unsigned int startstack = this->stack.size();
+	auto startlocalstack = this->sptr;
+
+	callstack.Push(std::pair<unsigned int, Closure*>(123456789, 0));//bad value to get it to return;
+
+	//printf("Execute: Stack Ptr At: %d\n", sptr - localstack);
 
 	try
 	{
@@ -845,7 +848,7 @@ Value JetContext::Execute(int iptr)
 				}
 			case InstructionType::CInit:
 				{
-					//whelp
+					//allocate and add new upvalue
 					curframe->upvals[(unsigned int)in.value2] = &sptr[in.value];
 
 					break;
@@ -877,10 +880,17 @@ Value JetContext::Execute(int iptr)
 
 						fptr++;
 
-						callstack.Push(std::pair<unsigned int, Closure*>(iptr, curframe));//callstack.Push(iptr);
+						callstack.Push(std::pair<unsigned int, Closure*>(iptr, curframe));
 
 						this->sptr += curframe->prototype->locals;
 
+						//clean out the new stack for the gc
+						for (int i = 0; i < vars[in.value]._function->prototype->locals; i++)
+						{
+							sptr[i] = Value();
+						}
+
+						//need to reduce use of this if possible
 						if ((sptr - localstack) >= JET_STACK_SIZE)
 							throw RuntimeException("Stack Overflow!");
 
@@ -995,6 +1005,12 @@ Value JetContext::Execute(int iptr)
 
 						sptr += curframe->prototype->locals;
 
+						//clean out the new stack for the gc
+						for (int i = 0; i < fun._function->prototype->locals; i++)
+						{
+							sptr[i] = Value();
+						}
+
 						if ((sptr - localstack) >= JET_STACK_SIZE)
 							throw RuntimeException("Stack Overflow!");
 
@@ -1050,7 +1066,7 @@ Value JetContext::Execute(int iptr)
 							for (int i = in.value-1; i >= 0; i--)
 							{
 								if (i < func->args)
-									sptr[i] = stack.Pop();//frames[fptr].locals[i] = stack.Pop();
+									sptr[i] = stack.Pop();
 								else
 									stack.Pop();
 							}
@@ -1069,7 +1085,7 @@ Value JetContext::Execute(int iptr)
 						//should just push a value to indicate that we are in a native function call
 						callstack.Push(std::pair<unsigned int, Closure*>(iptr, curframe));
 						callstack.Push(std::pair<unsigned int, Closure*>(123456789, curframe));
-						
+
 						//to return something, push it to the stack
 						int s = stack.size();
 						(*fun.func)(this,tmp,args);
@@ -1088,7 +1104,19 @@ Value JetContext::Execute(int iptr)
 				{
 					auto oframe = callstack.Pop();//iptr = callstack.Pop();
 					iptr = oframe.first;
-					sptr -= oframe.second->prototype->locals;//curframe->prototype->locals;
+					if (oframe.first != 123456789)
+					{
+#ifdef _DEBUG
+						//this makes sure that the gc doesnt overrun its boundaries
+						for (int i = 0; i < oframe.second->prototype->locals; i++)
+						{
+							//need to mark stack with garbage values for error checking
+							sptr[i].type = ValueType::Object;
+							sptr[i]._object = (_JetObject*)0xcdcdcdcd;
+						}
+#endif
+						sptr -= oframe.second->prototype->locals;//curframe->prototype->locals;
+					}
 					//printf("Return: Stack Ptr At: %d\n", sptr - localstack);
 					curframe = oframe.second;
 
@@ -1280,52 +1308,51 @@ Value JetContext::Execute(int iptr)
 	}
 	catch(RuntimeException e)
 	{
-		printf("RuntimeException: %s\nCallstack:\n", e.reason.c_str());
-
-		//generate call stack
-		this->StackTrace(iptr);
-
-		printf("\nLocals:\n");
-		if (curframe)
+		if (e.processed == false)
 		{
-			for (int i = 0; i < curframe->prototype->locals; i++)
+			printf("RuntimeException: %s\nCallstack:\n", e.reason.c_str());
+
+			//generate call stack
+			this->StackTrace(iptr);
+
+			printf("\nLocals:\n");
+			if (curframe)
 			{
-				Value v = this->sptr[i];
-				if (v.type >= ValueType(0))
-					printf("%d = %s\n", i, v.ToString().c_str());
+				for (int i = 0; i < curframe->prototype->locals; i++)
+				{
+					Value v = this->sptr[i];
+					if (v.type >= ValueType(0))
+						printf("%d = %s\n", i, v.ToString().c_str());
+				}
 			}
-		}
 
-		printf("\nVariables:\n");
-		for (auto ii: variables)
-		{
-			if (vars[ii.second].type != ValueType::Null)
-				printf("%s = %s\n", ii.first.c_str(), vars[ii.second].ToString().c_str());
+			printf("\nVariables:\n");
+			for (auto ii: variables)
+			{
+				if (vars[ii.second].type != ValueType::Null)
+					printf("%s = %s\n", ii.first.c_str(), vars[ii.second].ToString().c_str());
+			}
+			e.processed = true;
 		}
 
 		//ok, need to properly roll back callstack
 		//this stuff is lets you call Jet functions from something that called Jet
-		/*this->callstack.QuickPop(this->callstack.size()-startcallstack);
-
-		if (this->callstack.size() == 1 && this->callstack.Peek() == 123456789)
-		this->callstack.Pop();*/
 
 		//make sure I reset everything in the event of an error
 
 		//reset fptr
-		fptr = -1;
+		fptr -= this->callstack.size()-startcallstack;
 
 		//clear the stacks
 		this->callstack.QuickPop(this->callstack.size()-startcallstack);
 		this->stack.QuickPop(this->stack.size()-startstack);
 
-		//this->stack.QuickPop(this->stack.size());
-		//this->callstack.QuickPop(this->callstack.size());
+		//reset the local variable stack
+		this->sptr = startlocalstack;
 
-		//should rethrow here or pass
-		//to a handler or something
-
-		//maybe add more details to the exception then rethrow
+		//ok add the exception details to the exception as a string or something rather than just printing them
+		//maybe add more details to the exception when rethrowing
+		throw e;
 	}
 	catch(...)
 	{
@@ -1339,12 +1366,15 @@ Value JetContext::Execute(int iptr)
 			printf("%s = %s\n", ii.first.c_str(), vars[ii.second].ToString().c_str());
 		}
 
+		//reset fptr
+		fptr -= this->callstack.size()-startcallstack;
+
 		//ok, need to properly roll back callstack
 		this->callstack.QuickPop(this->callstack.size()-startcallstack);
 		this->stack.QuickPop(this->stack.size()-startstack);
 
-		if (this->callstack.size() == 1 && this->callstack.Peek().first == 123456789)
-			this->callstack.Pop();
+		//reset the local variable stack
+		this->sptr = startlocalstack;
 	}
 
 
@@ -1357,7 +1387,17 @@ Value JetContext::Execute(int iptr)
 	printf("Took %lf seconds to execute\n\n", dt);
 #endif
 
-	this->fptr = -1;//set to invalid to indicate to the GC that we arent executing if it gets ran
+#ifdef _DEBUG
+	//debug checks for stack and what not
+	if (this->callstack.size() == 0)
+	{
+		if (this->sptr != this->localstack)
+			throw RuntimeException("FATAL ERROR: Local stack did not properly reset");
+
+		if (this->fptr != 0)
+			throw RuntimeException("FATAL ERROR: Frame pointer did not properly reset");
+	}
+#endif
 
 	if (stack.size() == 0)
 		return Value();
@@ -1441,6 +1481,7 @@ Value JetContext::Assemble(const std::vector<IntermediateInstruction>& code)
 	QueryPerformanceFrequency( (LARGE_INTEGER *)&rate );
 	QueryPerformanceCounter( (LARGE_INTEGER *)&start );
 #endif
+	std::map<std::string, unsigned int> labels;
 
 	for (auto inst: code)
 	{
@@ -1465,9 +1506,6 @@ Value JetContext::Assemble(const std::vector<IntermediateInstruction>& code)
 			}
 		case InstructionType::Function:
 			{
-				//clear label array for each function
-				//labels.clear();
-
 				//do something with argument and local counts
 				Function* func = new Function;
 				func->args = inst.a;
@@ -1493,9 +1531,9 @@ Value JetContext::Assemble(const std::vector<IntermediateInstruction>& code)
 			}
 		case InstructionType::Label:
 			{
-				if (this->labels.find(inst.string) == labels.end())
+				if (labels.find(inst.string) == labels.end())
 				{
-					this->labels[inst.string] = this->labelposition;
+					labels[inst.string] = this->labelposition;
 					delete[] inst.string;
 				}
 				else
@@ -1567,6 +1605,9 @@ Value JetContext::Assemble(const std::vector<IntermediateInstruction>& code)
 		}
 	}
 
+	if (labels.size() > 100000)
+		throw CompilerException("test", 5, "problem with labels!");
+
 #ifdef JET_TIME_EXECUTION
 	QueryPerformanceCounter( (LARGE_INTEGER *)&end );
 
@@ -1577,8 +1618,8 @@ Value JetContext::Assemble(const std::vector<IntermediateInstruction>& code)
 #endif
 
 	auto tmpframe = new Closure;
+	tmpframe->grey = tmpframe->mark = false;
 	tmpframe->prev = 0;
-	//tmpframe->next = 0;
 	tmpframe->closed = false;
 	tmpframe->prototype = this->functions["{Entry Point}"];
 	tmpframe->numupvals = tmpframe->prototype->upvals;
@@ -1591,11 +1632,11 @@ Value JetContext::Assemble(const std::vector<IntermediateInstruction>& code)
 
 	gc.closures.push_back(tmpframe);
 
-	Value temp = this->Execute(tmpframe->prototype->ptr);//run the static code
-	if (this->callstack.size() > 0)
-		this->callstack.Pop();
+	//reset stack for the gc
+	for (int i = 0; i < tmpframe->prototype->locals; i++)
+		sptr[i] = Value();
 
-	return temp;
+	return this->Execute(tmpframe->prototype->ptr);//run the static code
 };
 
 
@@ -1603,21 +1644,28 @@ Value JetContext::Call(Value* fun, Value* args, unsigned int numargs)
 {
 	if (fun->type != ValueType::NativeFunction && fun->type != ValueType::Function)
 	{
-		throw 7;
+		printf("ERROR: Variable is not a function\n");
+		return Value();
 	}
 	else if (fun->type == ValueType::NativeFunction)
 	{
 		//call it
+		int s = this->stack.size();
 		(*fun->func)(this,args,numargs);
-		return this->stack.Pop();//Value(0);
+		if (s == this->stack.size())
+			return Value();
+
+		return this->stack.Pop();
 	}
 	unsigned int iptr = fun->_function->prototype->ptr;
 
+	//clear stack values for the gc
+	for (int i = 0; i < fun->_function->prototype->locals; i++)
+		sptr[i] = Value();
+
 	//push args onto stack
 	for (unsigned int i = 0; i < numargs; i++)
-	{
 		this->stack.Push(args[i]);
-	}
 
 	auto func = fun->_function;
 	if (numargs <= func->prototype->args)
@@ -1648,7 +1696,7 @@ Value JetContext::Call(Value* fun, Value* args, unsigned int numargs)
 		for (int i = numargs-1; i >= 0; i--)
 		{
 			if (i < func->prototype->args)
-				sptr[i] = stack.Pop();//frames[fptr].locals[i] = stack.Pop();
+				sptr[i] = stack.Pop();
 			else
 				stack.Pop();
 		}
@@ -1656,10 +1704,7 @@ Value JetContext::Call(Value* fun, Value* args, unsigned int numargs)
 
 	this->curframe = fun->_function;
 
-	Value temp = this->Execute(iptr);
-	if (callstack.size() > 0)
-		callstack.Pop();
-	return temp;
+	return this->Execute(iptr);
 }
 
 //executes a function in the VM context
@@ -1679,63 +1724,9 @@ Value JetContext::Call(const char* function, Value* args, unsigned int numargs)
 		printf("ERROR: Variable '%s' is not a function\n", function);
 		return Value(0);
 	}
-	else if (fun.type == ValueType::NativeFunction)
-	{
-		//call it
-		(*fun.func)(this,args,numargs);
-		return Value(0);
-	}
-	iptr = fun._function->prototype->ptr;
 
-	//push args onto stack
-	for (unsigned int i = 0; i < numargs; i++)
-	{
-		this->stack.Push(args[i]);
-	}
-
-	auto func = fun._function;
-	if (numargs <= func->prototype->args)
-	{
-		for (int i = func->prototype->args-1; i >= 0; i--)
-		{
-			if (i < numargs)
-				sptr[i] = stack.Pop();
-			else
-				sptr[i] = Value();
-		}
-	}
-	else if (func->prototype->vararg)
-	{
-		sptr[func->prototype->locals-1] = this->NewArray();
-		auto arr = sptr[func->prototype->locals-1]._array->ptr;
-		arr->resize(numargs - func->prototype->args);
-		for (int i = numargs-1; i >= 0; i--)
-		{
-			if (i < func->prototype->args)
-				sptr[i] = stack.Pop();
-			else
-				(*arr)[i] = stack.Pop();
-		}
-	}
-	else
-	{
-		for (int i = numargs-1; i >= 0; i--)
-		{
-			if (i < func->prototype->args)
-				sptr[i] = stack.Pop();//frames[fptr].locals[i] = stack.Pop();
-			else
-				stack.Pop();
-		}
-	}
-
-	this->curframe = func;//fun._function;
-
-	Value temp = this->Execute(iptr);
-	if (callstack.size() > 0)
-		callstack.Pop();
-	return temp;
+	return this->Call(&fun, args, numargs);
 };
-
 
 std::string JetContext::Script(const std::string code, const std::string filename)
 {
@@ -1757,9 +1748,6 @@ Value JetContext::Script(const char* code, const char* filename)//compiles, asse
 	auto asmb = this->Compile(code, filename);
 
 	Value v = this->Assemble(asmb);
-
-	if (this->labels.size() > 100000)
-		throw CompilerException("test", 5, "problem with labels!");
 
 	return v;
 }

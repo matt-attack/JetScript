@@ -201,7 +201,7 @@ Expression* FunctionParselet::parse(Parser* parser, Token token)
 			}
 			else
 			{
-				std::string str = "Consume: TokenType not as expected! Expected: Name or Ellises Got: " + name.text;
+				std::string str = "Consume: TokenType not as expected! Expected Name or Ellises Got: " + name.text;
 				throw CompilerException(name.filename, name.line, str);
 			}
 		}
@@ -237,7 +237,7 @@ Expression* LambdaParselet::parse(Parser* parser, Token token)
 			}
 			else
 			{
-				std::string str = "Consume: TokenType not as expected! Expected: Name or Ellises Got: " + name.text;
+				std::string str = "Consume: TokenType not as expected! Expected Name or Ellises Got: " + name.text;
 				throw CompilerException(name.filename, name.line, str);
 			}
 		}
@@ -258,7 +258,7 @@ Expression* CallParselet::parse(Parser* parser, Expression* left, Token token)
 	{
 		do
 		{
-			arguments->push_back(parser->parseExpression(1));//ParseStatement(false));
+			arguments->push_back(parser->parseExpression(1));
 		}
 		while( parser->MatchAndConsume(TokenType::Comma));
 
@@ -272,7 +272,7 @@ Expression* ReturnParselet::parse(Parser* parser, Token token)
 {
 	Expression* right = 0;
 	if (parser->Match(TokenType::Semicolon) == false)
-		right = parser->parseExpression(1);//parser->ParseStatement(false);
+		right = parser->parseExpression(1);
 
 	return new ReturnExpression(token, right);
 }
@@ -310,9 +310,9 @@ Expression* LocalParselet::parse(Parser* parser, Token token)
 
 Expression* ConstParselet::parse(Parser* parser, Token token)
 {
-	throw 7;
-	std::vector<Token>* names = new std::vector<Token>;
+	throw CompilerException("", 0, "Const keyword not implemented!");
 
+	std::vector<Token>* names = new std::vector<Token>;
 	do
 	{
 		Token name = parser->Consume(TokenType::Name);

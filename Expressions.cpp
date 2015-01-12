@@ -285,9 +285,9 @@ void FunctionExpression::Compile(CompilerContext* context)
 	block->Compile(function);
 
 	//if last instruction was a return, dont insert another one
-	if (block->statements->size() > 0)
+	if (block->statements.size() > 0)
 	{
-		if (dynamic_cast<ReturnExpression*>(block->statements->at(block->statements->size()-1)) == 0)
+		if (dynamic_cast<ReturnExpression*>(block->statements.at(block->statements.size()-1)) == 0)
 		{
 			function->Null();//return nil
 			function->Return();

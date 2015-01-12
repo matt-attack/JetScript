@@ -478,26 +478,21 @@ namespace Jet
 	{
 
 	public:
-		std::vector<Expression*>* statements;
-		BlockExpression(Token token, std::vector<Expression*>* statements)
+		std::vector<Expression*> statements;
+		BlockExpression(Token token, std::vector<Expression*>&& statements)
 		{
 			this->statements = statements;
 		}
 
-		BlockExpression(std::vector<Expression*>* statements)
+		BlockExpression(std::vector<Expression*>&& statements)
 		{
 			this->statements = statements;
 		}
 
 		~BlockExpression()
 		{
-			if (this->statements)
-			{
-				for (auto ii: *this->statements)
-					delete ii;
-
-				delete this->statements;
-			}
+			for (auto ii: this->statements)
+				delete ii;
 		}
 
 		BlockExpression() { };
@@ -505,19 +500,19 @@ namespace Jet
 		void SetParent(Expression* parent)
 		{
 			this->Parent = parent;
-			for (auto ii: *statements)
+			for (auto ii: statements)
 				ii->SetParent(this);
 		}
 
 		void print()
 		{
-			for (auto ii: *statements)
+			for (auto ii: statements)
 				ii->print();
 		}
 
 		void Compile(CompilerContext* context)
 		{
-			for (auto ii: *statements)
+			for (auto ii: statements)
 				ii->Compile(context);
 		}
 	};
@@ -531,7 +526,7 @@ namespace Jet
 		ScopeExpression(BlockExpression* r)
 		{
 			this->statements = r->statements;
-			r->statements = 0;
+			r->statements.clear();
 			delete r;
 		}
 
@@ -829,7 +824,7 @@ namespace Jet
 			::std::string uuid = context->GetUUID();
 			::std::string bname = "ifstatement_" + uuid + "_I";
 			int pos = 0;
-			bool hasElse = this->Else ? this->Else->block->statements->size() > 0 : false;
+			bool hasElse = this->Else ? this->Else->block->statements.size() > 0 : false;
 			for (auto ii: *this->branches)
 			{
 				if (pos != 0)//no jump label needed on first one

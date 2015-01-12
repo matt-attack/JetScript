@@ -175,33 +175,33 @@ Expression* Parser::ParseStatement(bool takeTrailingSemicolon)//call this until 
 
 BlockExpression* Parser::parseBlock(bool allowsingle)
 {
-	std::vector<Expression*>* statements = new std::vector<Expression*>;
+	std::vector<Expression*> statements;
 
 	if (allowsingle && !Match(TokenType::LeftBrace))
 	{
-		statements->push_back(this->ParseStatement());
-		return new BlockExpression(statements);
+		statements.push_back(this->ParseStatement());
+		return new BlockExpression(std::move(statements));
 	}
 
 	Consume(TokenType::LeftBrace);
 
 	while (!Match(TokenType::RightBrace))
 	{
-		statements->push_back(this->ParseStatement());
+		statements.push_back(this->ParseStatement());
 	}
 
 	Consume(TokenType::RightBrace);
-	return new BlockExpression(statements);
+	return new BlockExpression(std::move(statements));
 }
 
 BlockExpression* Parser::parseAll()
 {
-	auto statements = new std::vector<Expression*>;
+	std::vector<Expression*> statements;
 	while (!Match(TokenType::EoF))
 	{
-		statements->push_back(this->ParseStatement());
+		statements.push_back(this->ParseStatement());
 	}
-	auto n = new BlockExpression(statements);
+	auto n = new BlockExpression(std::move(statements));
 	n->SetParent(0);//go through and setup parents
 	return n;
 }
@@ -212,7 +212,7 @@ Token Parser::Consume()
 
 	auto temp = mRead.front();
 	mRead.pop_front();
-	return temp;//mRead.remove(0);
+	return temp;
 }
 
 Token Parser::Consume(TokenType expected)

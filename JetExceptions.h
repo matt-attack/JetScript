@@ -25,10 +25,13 @@ namespace Jet
 
 	class RuntimeException
 	{
+		friend class JetContext;
+		bool processed;//indicates if we have a stack trace
 	public:
 		std::string reason;
 		RuntimeException(std::string reason)
 		{
+			this->processed = false;
 			this->reason = reason;
 		}
 	};

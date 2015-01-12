@@ -101,7 +101,7 @@ void GarbageCollector::Mark()
 
 
 	//this is really part of the sweep section
-	if (context->fptr >= 0)
+	if (context->callstack.size() > 0)
 	{
 		//StackProfile prof("Traverse/Mark Stack");
 		//printf("GC run at runtime!\n");
@@ -116,6 +116,9 @@ void GarbageCollector::Mark()
 		for (int i = 0; i < context->callstack.size(); i++)
 		{
 			auto closure = context->callstack[i].second;
+			if (closure == 0)
+				continue;
+
 			if (closure->grey == false)
 			{
 				closure->grey = true;
@@ -135,6 +138,7 @@ void GarbageCollector::Mark()
 			}
 		}
 
+		//sometimes curframe is also in the callstack
 		//mark curframe locals
 		int max = sp+context->curframe->prototype->locals;
 		for (; sp < max; sp++)
@@ -168,6 +172,11 @@ void GarbageCollector::Mark()
 
 						for (auto ii: *obj.prototype->ptr)
 						{
+							if (ii.first.type > ValueType::NativeFunction && ii.first._object->grey == false)
+							{
+								ii.first._object->grey = true;
+								greys.Push(ii.first);
+							}
 							if (ii.second.type > ValueType::NativeFunction)
 							{
 								ii.second._object->grey = true;
@@ -179,6 +188,11 @@ void GarbageCollector::Mark()
 					obj._object->mark = true;
 					for (auto ii: *obj._object->ptr)
 					{
+						if (ii.first.type > ValueType::NativeFunction && ii.first._object->grey == false)
+						{
+							ii.first._object->grey = true;
+							greys.Push(ii.first);
+						}
 						if (ii.second.type > ValueType::NativeFunction && ii.second._object->grey == false)
 						{
 							ii.second._object->grey = true;
@@ -236,8 +250,9 @@ void GarbageCollector::Mark()
 				{
 					obj._userdata->mark = true;
 
-					if (obj.prototype)
+					if (obj.prototype && obj.prototype->grey == false)
 					{
+						obj.prototype->grey = true;
 						obj.prototype->mark = true;
 
 						for (auto ii: *obj.prototype->ptr)

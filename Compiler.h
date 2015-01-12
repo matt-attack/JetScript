@@ -208,6 +208,16 @@ namespace Jet
 
 		void PopLoop()
 		{
+			//do a close if necessary
+			/*for (auto& ii : this->scope->localvars)
+			{
+				if (ii.capture >= 0)
+				{
+					out.push_back(IntermediateInstruction(InstructionType::CInit,ii.local, ii.capture));
+					out.push_back(IntermediateInstruction(InstructionType::Close));
+					ii.uploaded = true;
+				}
+			}*/
 			_loops.pop_back();
 		}
 

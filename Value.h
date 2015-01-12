@@ -35,17 +35,17 @@ namespace Jet
 
 	enum class ValueType
 	{
-		//keep all garbage collectable types towards the end after Object
+		//keep all garbage collectable types towards the end after NativeFunction
 		//this is used for the GC being able to tell what it is quickly
 		Null = 0,
 		Number,
 		NativeFunction,
 		String,//add more
-		Object,//todo
-		Array,//todo
+		Object,
+		Array,
 		Function,
 		//Closure,//an allocated one
-		Userdata,//kinda todo
+		Userdata,
 	};
 
 	static const char* ValueTypes[] = { "Null", "Number", "NativeFunction", "String" , "Object", "Array", "Function", "Userdata"};

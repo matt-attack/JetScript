@@ -69,11 +69,7 @@ namespace Jet
 		VMStack<Value> stack;
 		VMStack<std::pair<unsigned int, Closure*> > callstack;
 
-		//need to go through and find all labels/functions/variables
-		//fix the labels, should only work with labels in the same function
-		//not just accumulate over the lifetime, so this should be cleared
-		//every function instruction
-		std::map<std::string, unsigned int> labels;
+		//need to go through and find all functions/variables
 		std::map<std::string, Function*> functions;
 		std::vector<Function*> entrypoints;
 		std::map<std::string, unsigned int> variables;//mapping from string to location in vars array
@@ -102,20 +98,9 @@ namespace Jet
 		_JetObject arrayiter;
 		_JetObject objectiter;
 
-	private:
-		//garbage collector stuff
-		//std::vector<_JetArray*> arrays;
-		//std::vector<_JetObject*> objects;
-		//std::vector<GCVal<char*>*> strings;
-		//std::vector<_JetUserdata*> userdata;
-		//std::vector<Closure*> closures;
-
 		//manages memory
 		GarbageCollector gc;
 
-		//int allocationCounter;//used to determine when to run the GC
-		//int collectionCounter;
-		//VMStack<Value> greys;//stack of grey objects for processing
 	public:
 
 		Value NewObject();
