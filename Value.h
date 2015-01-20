@@ -119,7 +119,7 @@ namespace Jet
 				union
 				{
 					unsigned int length;//used for strings
-					JetObject* prototype;
+					//JetObject* prototype;
 				};
 			};
 
@@ -146,10 +146,7 @@ namespace Jet
 			return *this = Value(func);
 		}
 
-		void SetPrototype(JetObject* obj)
-		{
-			prototype = obj;
-		}
+		void SetPrototype(JetObject* obj);
 
 		std::string ToString(int depth = 0) const;
 
@@ -238,177 +235,32 @@ namespace Jet
 
 		bool operator== (const Value& other) const;
 
-		//add metamethods
+		Value operator+( const Value &other );
+
+		Value operator-( const Value &other );
+
+		Value operator*( const Value &other );
+
+		Value operator/( const Value &other );
+
+		Value operator%( const Value &other );
+
+		Value operator|( const Value &other );
+
+		Value operator&( const Value &other );
+
+		Value operator^( const Value &other );
+
+		Value operator<<( const Value &other );
+
+		Value operator>>( const Value &other );
+
+		Value operator~();
+
+		Value operator-();
+
+	private:
 		Value CallMetamethod(const char* name, const Value* other);
-
-
-		Value operator+( const Value &other )
-		{
-			switch(this->type)
-			{
-			case ValueType::Number:
-				if (other.type == ValueType::Number)
-					return Value(value+other.value);
-				break;
-			case ValueType::Object:
-				{
-					if (this->prototype)
-						return this->CallMetamethod("_add", &other);
-					//throw JetRuntimeException("Cannot Add A String");
-					//if (other.type == ValueType::String)
-					//return Value((std::string(other.string.data) + std::string(this->string.data)).c_str());
-					//else
-					//return Value((other.ToString() + std::string(this->string.data)).c_str());
-				}
-			}
-
-			throw RuntimeException("Cannot add two non-numeric types! " + (std::string)ValueTypes[(int)this->type] + " and " + (std::string)ValueTypes[(int)other.type]);
-		};
-
-		Value operator-( const Value &other )
-		{
-			if (type == ValueType::Number && other.type == ValueType::Number)
-				return Value(value-other.value);
-			else if (type == ValueType::Object)
-			{
-				if (this->prototype)
-					return this->CallMetamethod("_sub", &other);
-			}
-
-			throw RuntimeException("Cannot subtract two non-numeric types! " + (std::string)ValueTypes[(int)this->type] + " and " + (std::string)ValueTypes[(int)other.type]);
-		};
-
-		Value operator*( const Value &other )
-		{
-			if (type == ValueType::Number && other.type == ValueType::Number)
-				return Value(value*other.value);
-			else if (type == ValueType::Object)
-			{
-				if (this->prototype)
-					return this->CallMetamethod("_mul", &other);
-			}
-
-			throw RuntimeException("Cannot multiply two non-numeric types! " + (std::string)ValueTypes[(int)this->type] + " and " + (std::string)ValueTypes[(int)other.type]);
-		};
-
-		Value operator/( const Value &other )
-		{
-			if (type == ValueType::Number && other.type == ValueType::Number)
-				return Value(value/other.value);
-			else if (type == ValueType::Object)
-			{
-				if (this->prototype)
-					return this->CallMetamethod("_div", &other);
-			}
-
-			throw RuntimeException("Cannot divide two non-numeric types! " + (std::string)ValueTypes[(int)this->type] + " and " + (std::string)ValueTypes[(int)other.type]);
-		};
-
-		Value operator%( const Value &other )
-		{
-			if (type == ValueType::Number && other.type == ValueType::Number)
-				return Value((int)value%(int)other.value);
-			else if (type == ValueType::Object)
-			{
-				if (this->prototype)
-					return this->CallMetamethod("_mod", &other);
-			}
-
-			throw RuntimeException("Cannot modulus two non-numeric types! " + (std::string)ValueTypes[(int)this->type] + " and " + (std::string)ValueTypes[(int)other.type]);
-		};
-
-		Value operator|( const Value &other )
-		{
-			if (type == ValueType::Number && other.type == ValueType::Number)
-				return Value((int)value|(int)other.value);
-			else if (type == ValueType::Object)
-			{
-				if (this->prototype)
-					return this->CallMetamethod("_bor", &other);
-			}
-
-			throw RuntimeException("Cannot binary or two non-numeric types! " + (std::string)ValueTypes[(int)this->type] + " and " + (std::string)ValueTypes[(int)other.type]);
-		};
-
-		Value operator&( const Value &other )
-		{
-			if (type == ValueType::Number && other.type == ValueType::Number)
-				return Value((int)value&(int)other.value);
-			else if (type == ValueType::Object)
-			{
-				if (this->prototype)
-					return this->CallMetamethod("_band", &other);
-			}
-
-			throw RuntimeException("Cannot binary and two non-numeric types! " + (std::string)ValueTypes[(int)this->type] + " and " + (std::string)ValueTypes[(int)other.type]);
-		};
-
-		Value operator^( const Value &other )
-		{
-			if (type == ValueType::Number && other.type == ValueType::Number)
-				return Value((int)value^(int)other.value);
-			else if (type == ValueType::Object)
-			{
-				if (this->prototype)
-					return this->CallMetamethod("_xor", &other);
-			}
-
-			throw RuntimeException("Cannot xor two non-numeric types! " + (std::string)ValueTypes[(int)this->type] + " and " + (std::string)ValueTypes[(int)other.type]);
-		};
-
-		Value operator<<( const Value &other )
-		{
-			if (type == ValueType::Number && other.type == ValueType::Number)
-				return Value((int)value<<(int)other.value);
-			else if (type == ValueType::Object)
-			{
-				if (this->prototype)
-					return this->CallMetamethod("_ls", &other);
-			}
-
-			throw RuntimeException("Cannot left-shift two non-numeric types! " + (std::string)ValueTypes[(int)this->type] + " and " + (std::string)ValueTypes[(int)other.type]);
-		};
-
-		Value operator>>( const Value &other )
-		{
-			if (type == ValueType::Number && other.type == ValueType::Number)
-				return Value((int)value>>(int)other.value);
-			else if (type == ValueType::Object)
-			{
-				if (this->prototype)
-					return this->CallMetamethod("_rs", &other);
-			}
-
-			throw RuntimeException("Cannot right-shift two non-numeric types! " + (std::string)ValueTypes[(int)this->type] + " and " + (std::string)ValueTypes[(int)other.type]);
-		};
-
-		Value operator~()
-		{
-			if (type == ValueType::Number)
-				return Value(~(int)value);
-			else if (type == ValueType::Object)
-			{
-				if (this->prototype)
-					return this->CallMetamethod("_bnot", 0);
-			}
-
-			throw RuntimeException("Cannot binary complement non-numeric type! " + (std::string)ValueTypes[(int)this->type]);
-		};
-
-		Value operator-()
-		{
-			if (type == ValueType::Number)
-			{
-				return Value(-value);
-			}
-			else if (type == ValueType::Object)
-			{
-				if (this->prototype)
-					return this->CallMetamethod("_neg", 0);
-			}
-
-			throw RuntimeException("Cannot negate non-numeric type! " + (std::string)ValueTypes[(int)this->type]);
-		}
 	};
 
 
@@ -497,6 +349,7 @@ namespace Jet
 
 		JetContext* context;
 		ObjNode* nodes;
+		JetObject* prototype;
 
 		unsigned int Size;
 		unsigned int nodecount;

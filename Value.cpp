@@ -34,7 +34,7 @@ Value::Value(JetObject* obj)
 {
 	this->type = ValueType::Object;
 	this->_object = obj;
-	this->prototype = 0;
+	//this->prototype = 0;
 }
 
 Value::Value(JetArray* arr)
@@ -71,7 +71,7 @@ Value::Value(JetUserdata* userdata, JetObject* prototype)
 {
 	this->type = ValueType::Userdata;
 	this->_userdata = userdata;
-	this->prototype = prototype;
+	this->_userdata->ptr.second = prototype;
 }
 
 JetObject* Value::GetPrototype()
@@ -82,11 +82,11 @@ JetObject* Value::GetPrototype()
 	case ValueType::Array:
 		return 0;
 	case ValueType::Object:
-		return this->prototype;
+		return this->_object->prototype;
 	case ValueType::String:
 		return 0;
 	case ValueType::Userdata:
-		return this->prototype;
+		return this->_userdata->ptr.second;//prototype;
 	default:
 		return 0;
 	}
@@ -217,11 +217,35 @@ std::string Value::ToString(int depth) const
 	}
 }
 
+void Value::SetPrototype(JetObject* obj)
+{
+	switch (this->type)
+	{
+	case ValueType::Object:
+		this->_object->prototype = obj;
+	case ValueType::Userdata:
+		this->_userdata->ptr.second = obj;
+	default:
+		throw RuntimeException("Cannot set prototype of non-object or non-userdata!");
+	}
+}
+
 Value Value::CallMetamethod(const char* name, const Value* other)
 {
-	auto node = this->prototype->findNode(name);
+	auto node = this->_object->prototype->findNode(name);
 	if (node)
-		return this->prototype->context->Call(&node->second, (Value*)other, other ? 1 : 0);
+		return this->_object->prototype->context->Call(&node->second, (Value*)other, other ? 1 : 0);
+	else
+	{
+		auto obj = this->_object->prototype;
+		while(obj)
+		{
+			node = obj->findNode(name);
+			if (node)
+				return this->_object->prototype->context->Call(&node->second, (Value*)other, other ? 1 : 0);
+			obj = obj->prototype;
+		}
+	}
 
 	throw RuntimeException("Cannot " + (std::string)(name+1) + " two non-numeric types! " + (std::string)ValueTypes[(int)other->type] + " and " + (std::string)ValueTypes[(int)this->type]);
 }
@@ -297,4 +321,172 @@ Value& Value::operator[] (const Value& key)
 	default:
 		throw RuntimeException("Cannot index type " + (std::string)ValueTypes[(int)this->type]);
 	}
+}
+
+Value Value::operator+( const Value &other )
+{
+	switch(this->type)
+	{
+	case ValueType::Number:
+		if (other.type == ValueType::Number)
+			return Value(value+other.value);
+		break;
+	case ValueType::Object:
+		{
+			if (this->_object->prototype)
+				return this->CallMetamethod("_add", &other);
+			//throw JetRuntimeException("Cannot Add A String");
+			//if (other.type == ValueType::String)
+			//return Value((std::string(other.string.data) + std::string(this->string.data)).c_str());
+			//else
+			//return Value((other.ToString() + std::string(this->string.data)).c_str());
+		}
+	}
+
+	throw RuntimeException("Cannot add two non-numeric types! " + (std::string)ValueTypes[(int)this->type] + " and " + (std::string)ValueTypes[(int)other.type]);
+};
+
+Value Value::operator-( const Value &other )
+{
+	if (type == ValueType::Number && other.type == ValueType::Number)
+		return Value(value-other.value);
+	else if (type == ValueType::Object)
+	{
+		if (this->_object->prototype)
+			return this->CallMetamethod("_sub", &other);
+	}
+
+	throw RuntimeException("Cannot subtract two non-numeric types! " + (std::string)ValueTypes[(int)this->type] + " and " + (std::string)ValueTypes[(int)other.type]);
+};
+
+Value Value::operator*( const Value &other )
+{
+	if (type == ValueType::Number && other.type == ValueType::Number)
+		return Value(value*other.value);
+	else if (type == ValueType::Object)
+	{
+		if (this->_object->prototype)
+			return this->CallMetamethod("_mul", &other);
+	}
+
+	throw RuntimeException("Cannot multiply two non-numeric types! " + (std::string)ValueTypes[(int)this->type] + " and " + (std::string)ValueTypes[(int)other.type]);
+};
+
+Value Value::operator/( const Value &other )
+{
+	if (type == ValueType::Number && other.type == ValueType::Number)
+		return Value(value/other.value);
+	else if (type == ValueType::Object)
+	{
+		if (this->_object->prototype)
+			return this->CallMetamethod("_div", &other);
+	}
+
+	throw RuntimeException("Cannot divide two non-numeric types! " + (std::string)ValueTypes[(int)this->type] + " and " + (std::string)ValueTypes[(int)other.type]);
+};
+
+Value Value::operator%( const Value &other )
+{
+	if (type == ValueType::Number && other.type == ValueType::Number)
+		return Value((int)value%(int)other.value);
+	else if (type == ValueType::Object)
+	{
+		if (this->_object->prototype)
+			return this->CallMetamethod("_mod", &other);
+	}
+
+	throw RuntimeException("Cannot modulus two non-numeric types! " + (std::string)ValueTypes[(int)this->type] + " and " + (std::string)ValueTypes[(int)other.type]);
+};
+
+Value Value::operator|( const Value &other )
+{
+	if (type == ValueType::Number && other.type == ValueType::Number)
+		return Value((int)value|(int)other.value);
+	else if (type == ValueType::Object)
+	{
+		if (this->_object->prototype)
+			return this->CallMetamethod("_bor", &other);
+	}
+
+	throw RuntimeException("Cannot binary or two non-numeric types! " + (std::string)ValueTypes[(int)this->type] + " and " + (std::string)ValueTypes[(int)other.type]);
+};
+
+Value Value::operator&( const Value &other )
+{
+	if (type == ValueType::Number && other.type == ValueType::Number)
+		return Value((int)value&(int)other.value);
+	else if (type == ValueType::Object)
+	{
+		if (this->_object->prototype)
+			return this->CallMetamethod("_band", &other);
+	}
+
+	throw RuntimeException("Cannot binary and two non-numeric types! " + (std::string)ValueTypes[(int)this->type] + " and " + (std::string)ValueTypes[(int)other.type]);
+};
+
+Value Value::operator^( const Value &other )
+{
+	if (type == ValueType::Number && other.type == ValueType::Number)
+		return Value((int)value^(int)other.value);
+	else if (type == ValueType::Object)
+	{
+		if (this->_object->prototype)
+			return this->CallMetamethod("_xor", &other);
+	}
+
+	throw RuntimeException("Cannot xor two non-numeric types! " + (std::string)ValueTypes[(int)this->type] + " and " + (std::string)ValueTypes[(int)other.type]);
+};
+
+Value Value::operator<<( const Value &other )
+{
+	if (type == ValueType::Number && other.type == ValueType::Number)
+		return Value((int)value<<(int)other.value);
+	else if (type == ValueType::Object)
+	{
+		if (this->_object->prototype)
+			return this->CallMetamethod("_ls", &other);
+	}
+
+	throw RuntimeException("Cannot left-shift two non-numeric types! " + (std::string)ValueTypes[(int)this->type] + " and " + (std::string)ValueTypes[(int)other.type]);
+};
+
+Value Value::operator>>( const Value &other )
+{
+	if (type == ValueType::Number && other.type == ValueType::Number)
+		return Value((int)value>>(int)other.value);
+	else if (type == ValueType::Object)
+	{
+		if (this->_object->prototype)
+			return this->CallMetamethod("_rs", &other);
+	}
+
+	throw RuntimeException("Cannot right-shift two non-numeric types! " + (std::string)ValueTypes[(int)this->type] + " and " + (std::string)ValueTypes[(int)other.type]);
+};
+
+Value Value::operator~()
+{
+	if (type == ValueType::Number)
+		return Value(~(int)value);
+	else if (type == ValueType::Object)
+	{
+		if (this->_object->prototype)
+			return this->CallMetamethod("_bnot", 0);
+	}
+
+	throw RuntimeException("Cannot binary complement non-numeric type! " + (std::string)ValueTypes[(int)this->type]);
+};
+
+Value Value::operator-()
+{
+	if (type == ValueType::Number)
+	{
+		return Value(-value);
+	}
+	else if (type == ValueType::Object)
+	{
+		if (this->_object->prototype)
+			return this->CallMetamethod("_neg", 0);
+	}
+
+	throw RuntimeException("Cannot negate non-numeric type! " + (std::string)ValueTypes[(int)this->type]);
 }

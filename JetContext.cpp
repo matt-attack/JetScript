@@ -140,6 +140,7 @@ JetContext::JetContext() : gc(this), stack(500000)
 	//add more functions and junk
 	(*this)["print"] = print;
 	(*this)["gc"] = ::gc;
+
 	(*this)["setprototype"] = [](JetContext* context, Value* v, int args)
 	{
 		if (args != 2)
@@ -148,24 +149,7 @@ JetContext::JetContext() : gc(this), stack(500000)
 		if (v->type == ValueType::Object && v[1].type == ValueType::Object)
 		{
 			Value val = v[0];
-			val.prototype = v[1]._object;
-			context->Return(val);
-		}
-		else
-		{
-			throw RuntimeException("Improper arguments!");
-		}
-	};
-
-	(*this)["setprototype"] = [](JetContext* context, Value* v, int args)
-	{
-		if (args != 2)
-			throw RuntimeException("Invalid Call, Improper Arguments!");
-
-		if (v->type == ValueType::Object && v[1].type == ValueType::Object)
-		{
-			Value val = *v;
-			val.prototype = v[1]._object;
+			val._object->prototype = v[1]._object;
 			context->Return(val);
 		}
 		else
@@ -186,6 +170,7 @@ JetContext::JetContext() : gc(this), stack(500000)
 
 
 	this->file = new JetObject(this);
+	file->prototype = 0;
 	(*file)["read"] = Value([](JetContext* context, Value* v, int args)
 	{
 		if (args != 2)
@@ -229,6 +214,7 @@ JetContext::JetContext() : gc(this), stack(500000)
 
 	//setup the string and array tables
 	this->string = new JetObject(this);
+	this->string->prototype = 0;
 	(*this->string)["append"] = Value([](JetContext* context, Value* v, int args)
 	{
 		if (args == 2 && v[0].type == ValueType::String && v[1].type == ValueType::String)
@@ -252,6 +238,7 @@ JetContext::JetContext() : gc(this), stack(500000)
 	});
 
 	this->Array = new JetObject(this);
+	this->Array->prototype = 0;
 	(*this->Array)["add"] = Value([](JetContext* context, Value* v, int args)
 	{
 		if (args == 2)
@@ -297,6 +284,7 @@ JetContext::JetContext() : gc(this), stack(500000)
 		throw RuntimeException("Bad call to getIterator");
 	});
 	this->object = new JetObject(this);
+	this->object->prototype = 0;
 	(*this->object)["size"] = Value([](JetContext* context, Value* v, int args)
 	{
 		//how do I get access to the array from here?
@@ -324,6 +312,7 @@ JetContext::JetContext() : gc(this), stack(500000)
 		throw RuntimeException("Bad call to getIterator");
 	});
 	this->objectiter = new JetObject(this);
+	this->objectiter->prototype = 0;
 	(*this->objectiter)["next"] = Value([](JetContext* context, Value* v, int args)
 	{
 		struct iter2
@@ -378,6 +367,7 @@ JetContext::JetContext() : gc(this), stack(500000)
 		delete v->GetUserdata<iter2>();
 	});
 	this->arrayiter = new JetObject(this);
+	this->arrayiter->prototype = 0;
 	(*this->arrayiter)["next"] = Value([](JetContext* context, Value* v, int args)
 	{
 		struct iter
@@ -1211,51 +1201,34 @@ Value JetContext::Execute(int iptr)
 					if (in.string)
 					{
 						Value loc = stack.Pop();
-						//add metamethods
 						if (loc.type == ValueType::Object)
 						{
-							Value v;
-							//loc._object->findNode(in.string);
-							auto ii = loc._object->find(in.string);
-							if (ii == loc._object->end())
+							auto n = loc._object->findNode(in.string);
+							if (n)
 							{
-								if (loc.prototype)
-								{
-									ii = loc.prototype->find(in.string);
-									if (ii == loc.prototype->end())
-									{
-										ii = this->object->find(in.string);
-										if (ii != this->object->end())
-											v = ii->second;
-									}
-									else
-										v = ii->second;
-								}
-								else
-								{
-									ii = this->object->find(in.string);
-									if (ii != this->object->end())
-										v = ii->second;
-								}
-								stack.Push(v);
+								stack.Push(n->second);
 							}
 							else
-								stack.Push(ii->second);
-							//Value v = (*loc._object->ptr)[in.string];
-
-							//check meta table
-							//if (v.type == ValueType::Null && loc.prototype)
-							//v = (*loc.prototype->ptr)[in.string];
-							//if (v.type == ValueType::Null)
-							//v = (*this->object.ptr)[in.string];
-							//stack.Push(v);
+							{
+								auto obj = loc._object->prototype;
+								while (obj)
+								{
+									n = obj->findNode(in.string);
+									if (n)
+									{
+										stack.Push(n->second);
+										break;
+									}
+									obj = obj->prototype;
+								}
+							}
 						}
 						else if (loc.type == ValueType::String)
 							stack.Push((*this->string)[in.string]);
 						else if (loc.type == ValueType::Array)
 							stack.Push((*this->Array)[in.string]);
 						else if (loc.type == ValueType::Userdata)
-							stack.Push((*loc.prototype)[in.string]);
+							stack.Push((*loc._userdata->ptr.second)[in.string]);
 						else
 							throw RuntimeException("Could not index a non array/object value!");
 					}

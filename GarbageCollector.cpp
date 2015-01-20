@@ -182,24 +182,11 @@ void GarbageCollector::Mark()
 			{
 			case ValueType::Object:
 				{
-					if (obj.prototype && obj.prototype->grey == false)
+					if (obj._object->prototype && obj._object->prototype->grey == false)
 					{
-						obj.prototype->grey = true;
-						obj.prototype->mark = true;
+						obj._object->prototype->grey = true;
 
-						for (auto ii: *obj.prototype)
-						{
-							if (ii.first.type > ValueType::NativeFunction && ii.first._object->grey == false)
-							{
-								ii.first._object->grey = true;
-								greys.Push(ii.first);
-							}
-							if (ii.second.type > ValueType::NativeFunction && ii.second._object->grey == false)
-							{
-								ii.second._object->grey = true;
-								greys.Push(ii.second);
-							}
-						}
+						this->greys.Push(obj._object->prototype);
 					}
 
 					obj._object->mark = true;
@@ -269,16 +256,11 @@ void GarbageCollector::Mark()
 				{
 					obj._userdata->mark = true;
 
-					if (obj.prototype && obj.prototype->grey == false)
+					if (obj._userdata->ptr.second && obj._userdata->ptr.second->grey == false)
 					{
-						obj.prototype->grey = true;
-						obj.prototype->mark = true;
+						obj._userdata->ptr.second->grey = true;
 
-						for (auto ii: *obj.prototype)
-						{
-							greys.Push(ii.first);
-							greys.Push(ii.second);
-						}
+						greys.Push(obj._userdata->ptr.second);
 					}
 					break;
 				}

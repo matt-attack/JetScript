@@ -18,6 +18,7 @@ JetObject::JetObject(JetContext* jcontext)
 	grey = this->mark = false;
 	refcount = 0;
 
+	prototype = jcontext->object;
 	context = jcontext;
 	Size = 0;
 	nodecount = 2;
