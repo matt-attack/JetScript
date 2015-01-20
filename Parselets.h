@@ -9,6 +9,18 @@
 
 namespace Jet
 {
+	enum Precedence {
+		// Ordered in increasing precedence.
+		ASSIGNMENT = 1,
+		CONDITIONAL = 2,
+		BINARY = 3,
+		SUM = 4,
+		PRODUCT = 5,
+		PREFIX = 6,
+		POSTFIX = 7,
+		CALL = 9,//was 9 before
+	};
+
 	class Parser;
 	class Expression;
 
@@ -107,7 +119,7 @@ namespace Jet
 
 		int getPrecedence()
 		{
-			return 1;
+			return Precedence::ASSIGNMENT;
 		}
 	};
 
@@ -119,7 +131,7 @@ namespace Jet
 
 		int getPrecedence()
 		{
-			return 1;
+			return Precedence::ASSIGNMENT;
 		}
 	};
 
@@ -130,7 +142,7 @@ namespace Jet
 
 		int getPrecedence()
 		{
-			return 1;
+			return Precedence::ASSIGNMENT;
 		}
 	};
 
@@ -180,6 +192,7 @@ namespace Jet
 
 		int getPrecedence()
 		{
+			//replace precedence here
 			return 9;
 		}
 	};
@@ -191,6 +204,7 @@ namespace Jet
 
 		int getPrecedence()
 		{
+			//replace precedence here
 			return 3;//maybe?
 		}
 	};
@@ -203,7 +217,7 @@ namespace Jet
 
 		int getPrecedence()
 		{
-			return 9;//whatever postfix precedence is
+			return Precedence::CALL;//whatever postfix precedence is
 		}
 	};
 

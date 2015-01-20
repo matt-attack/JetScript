@@ -16,13 +16,13 @@ void GarbageCollector::Cleanup()
 		if (ii->ptr.second)
 		{
 			Value ud = Value(ii, ii->ptr.second);
-			Value _gc = (*ii->ptr.second->ptr)["_gc"];
+			Value _gc = (*ii->ptr.second)["_gc"];
 			if (_gc.type == ValueType::NativeFunction)
 				_gc.func(this->context, &ud, 1);
-			//else if (_gc.type == ValueType::Function)
-			//todo
+			else if (_gc.type == ValueType::Function)
+				throw RuntimeException("Non Native _gc Hooks Not Implemented!");//todo
 			else if (_gc.type != ValueType::Null)
-				throw RuntimeException("Non Native _gc Hooks Not Implemented!");
+				throw RuntimeException("Invalid _gc Hook!");
 		}
 		delete ii;
 	}
@@ -37,7 +37,6 @@ void GarbageCollector::Cleanup()
 
 	for (auto ii: this->objects)
 	{
-		delete ii->ptr;
 		delete ii;
 	}
 	this->objects.clear();
@@ -60,6 +59,25 @@ void GarbageCollector::Cleanup()
 
 void GarbageCollector::Mark()
 {
+	//mark basic types
+	this->greys.Push(context->Array);
+	this->greys.Push(context->arrayiter);
+	this->greys.Push(context->object);
+	this->greys.Push(context->objectiter);
+	this->greys.Push(context->string);
+	this->greys.Push(context->file);
+
+
+	//mark all objects being held by native code
+	for (int i = 0; i < this->nativeRefs.size(); i++)
+	{
+		if (this->nativeRefs[i]._object->grey == false)
+		{
+			this->nativeRefs[i]._object->grey = true;
+			this->greys.Push(this->nativeRefs[i]);
+		}
+	}
+
 	//add more write barriers to detect when objects are removed and what not
 	//if flag is marked, then black
 	//if no flag and grey bit, then grey
@@ -73,7 +91,7 @@ void GarbageCollector::Mark()
 		{
 			if (context->vars[i].type > ValueType::NativeFunction)
 			{
-				if (/*vars[i]._object->mark == false && */context->vars[i]._object->grey == false)
+				if (context->vars[i]._object->grey == false)
 				{
 					context->vars[i]._object->grey = true;
 					this->greys.Push(context->vars[i]);
@@ -138,7 +156,6 @@ void GarbageCollector::Mark()
 			}
 		}
 
-		//sometimes curframe is also in the callstack
 		//mark curframe locals
 		int max = sp+context->curframe->prototype->locals;
 		for (; sp < max; sp++)
@@ -170,14 +187,14 @@ void GarbageCollector::Mark()
 						obj.prototype->grey = true;
 						obj.prototype->mark = true;
 
-						for (auto ii: *obj.prototype->ptr)
+						for (auto ii: *obj.prototype)
 						{
 							if (ii.first.type > ValueType::NativeFunction && ii.first._object->grey == false)
 							{
 								ii.first._object->grey = true;
 								greys.Push(ii.first);
 							}
-							if (ii.second.type > ValueType::NativeFunction)
+							if (ii.second.type > ValueType::NativeFunction && ii.second._object->grey == false)
 							{
 								ii.second._object->grey = true;
 								greys.Push(ii.second);
@@ -186,7 +203,7 @@ void GarbageCollector::Mark()
 					}
 
 					obj._object->mark = true;
-					for (auto ii: *obj._object->ptr)
+					for (auto ii: *obj._object)
 					{
 						if (ii.first.type > ValueType::NativeFunction && ii.first._object->grey == false)
 						{
@@ -218,6 +235,8 @@ void GarbageCollector::Mark()
 				}
 			case ValueType::String:
 				{
+					obj._string->mark = true;
+
 					break;
 				}
 			case ValueType::Function:
@@ -255,8 +274,11 @@ void GarbageCollector::Mark()
 						obj.prototype->grey = true;
 						obj.prototype->mark = true;
 
-						for (auto ii: *obj.prototype->ptr)
+						for (auto ii: *obj.prototype)
+						{
+							greys.Push(ii.first);
 							greys.Push(ii.second);
+						}
 					}
 					break;
 				}
@@ -287,31 +309,11 @@ void GarbageCollector::Sweep()
 	//mark stack variables and globals
 	{
 		//StackProfile prof("Sweep");
-		auto olist = std::move(this->objects);
-		this->objects.clear();
-		for (auto ii: olist)
-		{
-			if (ii->mark)
-			{
-				if (nextIncremental == false)
-				{
-					ii->mark = false;
-					ii->grey = false;
-				}
-				this->objects.push_back(ii);
-			}
-			else
-			{
-				delete ii->ptr;
-				delete ii;
-			}
-		}
-
 		auto alist = std::move(this->arrays);
 		this->arrays.clear();
 		for (auto ii: alist)
 		{
-			if (ii->mark)
+			if (ii->mark || ii->refcount)
 			{
 				if (nextIncremental == false)
 				{
@@ -331,7 +333,7 @@ void GarbageCollector::Sweep()
 		this->closures.clear();
 		for (auto ii: clist)
 		{
-			if (ii->mark)
+			if (ii->mark || ii->refcount)
 			{
 				if (nextIncremental == false)
 				{
@@ -352,7 +354,7 @@ void GarbageCollector::Sweep()
 		this->userdata.clear();
 		for (auto ii: ulist)
 		{
-			if (ii->mark)
+			if (ii->mark || ii->refcount)
 			{
 				if (nextIncremental == false)
 				{
@@ -366,12 +368,51 @@ void GarbageCollector::Sweep()
 				if (ii->ptr.second)
 				{
 					Value ud = Value(ii, ii->ptr.second);
-					Value _gc = (*ii->ptr.second->ptr)["_gc"];
+					Value _gc = (*ii->ptr.second)["_gc"];
 					if (_gc.type == ValueType::NativeFunction)
 						_gc.func(this->context, &ud, 1);
 					else if (_gc.type != ValueType::Null)
-						throw RuntimeException("Not Implemented!");
+						throw RuntimeException("Non-native Userdata Finalizers Not Implemented!");
 				}
+				delete ii;
+			}
+		}
+
+		auto olist = std::move(this->objects);
+		this->objects.clear();
+		for (auto ii: olist)
+		{
+			if (ii->mark || ii->refcount)
+			{
+				if (nextIncremental == false)
+				{
+					ii->mark = false;
+					ii->grey = false;
+				}
+				this->objects.push_back(ii);
+			}
+			else
+			{
+				delete ii;
+			}
+		}
+
+		auto slist = std::move(this->strings);
+		this->strings.clear();
+		for (auto ii: slist)
+		{
+			if (ii->mark || ii->refcount)
+			{
+				if (nextIncremental == false)
+				{
+					ii->mark = false;
+					ii->grey = false;
+				}
+				this->strings.push_back(ii);
+			}
+			else
+			{
+				delete ii->ptr;
 				delete ii;
 			}
 		}
@@ -386,7 +427,6 @@ void GarbageCollector::Sweep()
 	//1. free the (unreachable) white objects, but don't flip the color of black objects before a minor collection. 
 	//2. The mark phase of the following minor collection then only traverses newly allocated blocks and objects written to (marked gray). 
 	//3. All other objects are assumed to be still reachable during a minor GC and are neither traversed, nor swept, nor are their marks changed (kept black). A regular sweep phase is used if a major collection is to follow.
-
 }
 
 void GarbageCollector::Run()
@@ -405,8 +445,9 @@ void GarbageCollector::Run()
 
 	this->collectionCounter++;//used to determine collection mode
 #ifdef JET_TIME_EXECUTION
+	INT64 rate;
 	QueryPerformanceCounter( (LARGE_INTEGER *)&end );
-
+	QueryPerformanceCounter((LARGE_INTEGER*)&rate);
 	INT64 diff = end - start;
 	double dt = ((double)diff)/((double)rate);
 

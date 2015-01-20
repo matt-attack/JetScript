@@ -26,25 +26,13 @@
 
 namespace Jet
 {
-	enum Precedence {
-		// Ordered in increasing precedence.
-		ASSIGNMENT = 1,
-		CONDITIONAL = 2,
-		SUM = 3,
-		PRODUCT = 4,
-		EXPONENT = 5,
-		PREFIX = 6,
-		POSTFIX = 7,
-		CALL = 8,
-	};
-
 	class Parser
 	{
 		Lexer* lexer;
 		std::map<TokenType, InfixParselet*> mInfixParselets;
 		std::map<TokenType, PrefixParselet*> mPrefixParselets;
 		std::map<TokenType, StatementParselet*> mStatementParselets;
-		std::list<Jet::Token> mRead;
+		std::list<Token> mRead;
 
 	public:
 		Parser(Lexer* l);
@@ -70,8 +58,5 @@ namespace Jet
 		void Register(TokenType token, PrefixParselet* parselet);
 		void Register(TokenType token, StatementParselet* parselet);
 	};
-
-	//#define EOF -1
-
 }
 #endif

@@ -262,7 +262,7 @@ Token Lexer::Next()
 		else if (IsLetter(c) || c == '_')//word
 		{
 			int start = index - 1;
-			while (index < text.length())
+			while (true)//index < text.length())
 			{
 				char c = this->PeekChar();
 				if (!(IsLetter(c) || c == '_'))
@@ -282,7 +282,7 @@ Token Lexer::Next()
 		else if (IsNumber(c))//number
 		{
 			int start = index-1;
-			while (index < text.length())
+			while (true)//index < text.length())
 			{
 				char c = this->PeekChar();
 				if (!(c == '.' || IsNumber(c)))
@@ -314,8 +314,10 @@ char Lexer::ConsumeChar()
 
 char Lexer::MatchAndConsumeChar(char c)
 {
-	char ch = text.at(index);
+	if (index >= text.size())
+		return 0;
 
+	char ch = text.at(index);
 	if (c == ch)
 	{
 		if (ch == '\n')
@@ -327,5 +329,8 @@ char Lexer::MatchAndConsumeChar(char c)
 
 char Lexer::PeekChar()
 {
+	if (index >= text.size())
+		return 0;
+
 	return text.at(index);
 }

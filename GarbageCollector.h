@@ -11,6 +11,7 @@ namespace Jet
 
 	class GarbageCollector
 	{
+		friend class Value;
 		//finish moving stuff over to me
 		//must free with GCFree, pointer is a bit offset to leave room for the flag
 		template<class T> 
@@ -61,14 +62,16 @@ namespace Jet
 		JetContext* context;
 	public:
 		//garbage collector stuff
-		std::vector<_JetArray*> arrays;
-		std::vector<_JetObject*> objects;
-		std::vector<GCVal<char*>*> strings;
-		std::vector<_JetUserdata*> userdata;
+		std::vector<JetArray*> arrays;
+		std::vector<JetObject*> objects;
+		std::vector<JetString*> strings;
+		std::vector<JetUserdata*> userdata;
 
 		std::vector<Closure*> closures;
 
 		std::vector<char*> gcObjects;//not used atm
+
+		std::vector<Value> nativeRefs;//a list of all objects stored natively to mark
 
 		int allocationCounter;//used to determine when to run the GC
 		int collectionCounter;

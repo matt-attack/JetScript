@@ -34,7 +34,7 @@
 
 #define JET_STACK_SIZE 800
 #define JET_MAX_CALLDEPTH 400
-//use the JetArray
+
 namespace Jet
 {
 	typedef std::function<void(Jet::JetContext*,Jet::Value*,int)> JetFunction;
@@ -56,7 +56,11 @@ namespace Jet
 			double value2;
 			//const char* string;
 		};
-		const char* string;
+		union
+		{
+			JetString* strlit;
+			const char* string;
+		};
 	};
 
 	//builtin function definitions
@@ -65,6 +69,8 @@ namespace Jet
 
 	class JetContext
 	{
+		friend class Value;
+		friend class JetObject;
 		friend class GarbageCollector;
 		VMStack<Value> stack;
 		VMStack<std::pair<unsigned int, Closure*> > callstack;
@@ -91,25 +97,25 @@ namespace Jet
 		CompilerContext compiler;//root compiler context
 
 		//core library prototypes
-		_JetObject string;
-		_JetObject Array;
-		_JetObject object;
-		_JetObject file;
-		_JetObject arrayiter;
-		_JetObject objectiter;
+		JetObject* string;
+		JetObject* Array;
+		JetObject* object;
+		JetObject* file;
+		JetObject* arrayiter;
+		JetObject* objectiter;
 
 		//manages memory
 		GarbageCollector gc;
 
 	public:
-
+		//these
 		Value NewObject();
 		Value NewArray();
 		Value NewUserdata(void* data, const Value& proto);
-		Value NewString(char* string, bool copy = true);
+		Value NewString(const char* string, bool copy = true);
 
 		//a helper function for registering metatables, returns an object
-		//this doesnt get garbage collected and you must delete it yourself after done using it
+		//automatically adds a reference to the object
 		Value NewPrototype(const char* Typename);
 
 		JetContext();
@@ -132,7 +138,7 @@ namespace Jet
 
 		//executes a function in the VM context
 		Value Call(const char* function, Value* args = 0, unsigned int numargs = 0);
-		Value Call(Value* function, Value* args = 0, unsigned int numargs = 0);
+		Value Call(const Value* function, Value* args = 0, unsigned int numargs = 0);
 
 		void RunGC();//runs an iteration of the garbage collector
 

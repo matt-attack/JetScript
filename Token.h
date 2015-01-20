@@ -95,21 +95,21 @@ namespace Jet
 		EoF
 	};
 
-	char* Operator(Jet::TokenType t);
+	char* Operator(TokenType t);
 
 	struct Token
 	{
-		Jet::TokenType type;
-		::std::string text;
+		TokenType type;
+		std::string text;
 		unsigned int line;
-		::std::string filename;
+		std::string filename;
 
 		Token()
 		{
 
 		}
 
-		Token(::std::string file, unsigned int line, TokenType type, ::std::string txt)
+		Token(std::string file, unsigned int line, TokenType type, std::string txt)
 		{
 			this->type = type;
 			this->text = txt;
@@ -122,7 +122,7 @@ namespace Jet
 			return type;
 		}
 
-		::std::string getText()
+		std::string getText()
 		{
 			return text;
 		}

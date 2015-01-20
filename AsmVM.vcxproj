@@ -305,7 +305,6 @@
     <ClInclude Include="JetExceptions.h" />
     <ClInclude Include="JetInstructions.h" />
     <ClInclude Include="Lexer.h" />
-    <ClInclude Include="Object.h" />
     <ClInclude Include="Parselets.h" />
     <ClInclude Include="Parser.h" />
     <ClInclude Include="stdafx.h" />
@@ -321,6 +320,7 @@
     <ClCompile Include="GarbageCollector.cpp" />
     <ClCompile Include="JetContext.cpp" />
     <ClCompile Include="Lexer.cpp" />
+    <ClCompile Include="Object.cpp" />
     <ClCompile Include="Parselets.cpp" />
     <ClCompile Include="Parser.cpp" />
     <ClCompile Include="stdafx.cpp" />

@@ -61,34 +61,34 @@ Parser::Parser(Lexer* l)
 
 
 	//prefix stuff
-	this->Register(TokenType::Increment, new PrefixOperatorParselet(6));
-	this->Register(TokenType::Decrement, new PrefixOperatorParselet(6));
-	this->Register(TokenType::Minus, new PrefixOperatorParselet(6));
-	this->Register(TokenType::BNot, new PrefixOperatorParselet(6));
+	this->Register(TokenType::Increment, new PrefixOperatorParselet(Precedence::PREFIX));
+	this->Register(TokenType::Decrement, new PrefixOperatorParselet(Precedence::PREFIX));
+	this->Register(TokenType::Minus, new PrefixOperatorParselet(Precedence::PREFIX));
+	this->Register(TokenType::BNot, new PrefixOperatorParselet(Precedence::PREFIX));
 
 	//postfix stuff
-	this->Register(TokenType::Increment, new PostfixOperatorParselet(7));
-	this->Register(TokenType::Decrement, new PostfixOperatorParselet(7));
+	this->Register(TokenType::Increment, new PostfixOperatorParselet(Precedence::POSTFIX));
+	this->Register(TokenType::Decrement, new PostfixOperatorParselet(Precedence::POSTFIX));
 
 	//boolean stuff
-	this->Register(TokenType::Equals, new BinaryOperatorParselet(2, false));
-	this->Register(TokenType::NotEqual, new BinaryOperatorParselet(2, false));
-	this->Register(TokenType::LessThan, new BinaryOperatorParselet(2, false));
-	this->Register(TokenType::GreaterThan, new BinaryOperatorParselet(2, false));
-	this->Register(TokenType::LessThanEqual, new BinaryOperatorParselet(2, false));
-	this->Register(TokenType::GreaterThanEqual, new BinaryOperatorParselet(2, false));
+	this->Register(TokenType::Equals, new BinaryOperatorParselet(Precedence::CONDITIONAL, false));
+	this->Register(TokenType::NotEqual, new BinaryOperatorParselet(Precedence::CONDITIONAL, false));
+	this->Register(TokenType::LessThan, new BinaryOperatorParselet(Precedence::CONDITIONAL, false));
+	this->Register(TokenType::GreaterThan, new BinaryOperatorParselet(Precedence::CONDITIONAL, false));
+	this->Register(TokenType::LessThanEqual, new BinaryOperatorParselet(Precedence::CONDITIONAL, false));
+	this->Register(TokenType::GreaterThanEqual, new BinaryOperatorParselet(Precedence::CONDITIONAL, false));
 
 	//math
-	this->Register(TokenType::Plus, new BinaryOperatorParselet(4, false));
-	this->Register(TokenType::Minus, new BinaryOperatorParselet(4, false));
-	this->Register(TokenType::Asterisk, new BinaryOperatorParselet(5, false));
-	this->Register(TokenType::Slash, new BinaryOperatorParselet(5, false));
-	this->Register(TokenType::Modulo, new BinaryOperatorParselet(5, false));
-	this->Register(TokenType::Or, new BinaryOperatorParselet(3, false));//or
-	this->Register(TokenType::And, new BinaryOperatorParselet(3, false));//and
-	this->Register(TokenType::Xor, new BinaryOperatorParselet(3, false));
-	this->Register(TokenType::LeftShift, new BinaryOperatorParselet(3, false));
-	this->Register(TokenType::RightShift, new BinaryOperatorParselet(3, false));
+	this->Register(TokenType::Plus, new BinaryOperatorParselet(Precedence::SUM, false));
+	this->Register(TokenType::Minus, new BinaryOperatorParselet(Precedence::SUM, false));
+	this->Register(TokenType::Asterisk, new BinaryOperatorParselet(Precedence::PRODUCT, false));
+	this->Register(TokenType::Slash, new BinaryOperatorParselet(Precedence::PRODUCT, false));
+	this->Register(TokenType::Modulo, new BinaryOperatorParselet(Precedence::PRODUCT, false));
+	this->Register(TokenType::Or, new BinaryOperatorParselet(Precedence::BINARY, false));//or
+	this->Register(TokenType::And, new BinaryOperatorParselet(Precedence::BINARY, false));//and
+	this->Register(TokenType::Xor, new BinaryOperatorParselet(Precedence::BINARY, false));
+	this->Register(TokenType::LeftShift, new BinaryOperatorParselet(Precedence::BINARY, false));
+	this->Register(TokenType::RightShift, new BinaryOperatorParselet(Precedence::BINARY, false));
 
 	//add parser for includes k
 	//function stuff

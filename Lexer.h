@@ -3,20 +3,21 @@
 
 #include "Token.h"
 #include <map>
+
 namespace Jet
 {
 	bool IsLetter(char c);
 	bool IsNumber(char c);
 
-	extern std::map<Jet::TokenType,std::string> TokenToString; 
+	extern std::map<TokenType,std::string> TokenToString; 
 	class Lexer
 	{
 		unsigned int index;
 		std::istream* stream;
 
 		std::string text;
-		std::map<std::string, Jet::TokenType> operators;
-		std::map<std::string, Jet::TokenType> keywords;
+		std::map<std::string, TokenType> operators;
+		std::map<std::string, TokenType> keywords;
 
 		unsigned int linenumber;
 		std::string filename;

@@ -36,18 +36,13 @@ namespace Jet
 
 		};
 
-		virtual void print() = 0;
-
 		Expression* Parent;
 		virtual void SetParent(Expression* parent)
 		{
 			this->Parent = parent;
 		}
 
-		virtual void Compile(CompilerContext* context) 
-		{
-
-		};
+		virtual void Compile(CompilerContext* context) = 0;
 	};
 
 	class IStorableExpression
@@ -68,11 +63,6 @@ namespace Jet
 		std::string GetName()
 		{
 			return this->name;
-		}
-
-		void print()
-		{
-			printf("%s", name.c_str());
 		}
 
 		void Compile(CompilerContext* context);
@@ -102,11 +92,6 @@ namespace Jet
 			delete this->initializers;
 		}
 
-		void print()
-		{
-			//printf(_name.getText().c_str());
-		}
-
 		void Compile(CompilerContext* context);
 	};
 
@@ -125,11 +110,6 @@ namespace Jet
 				for (auto ii: *this->inits)
 					delete ii.second;
 			delete this->inits;
-		}
-
-		void print()
-		{
-			//printf(_name.getText().c_str());
 		}
 
 		void Compile(CompilerContext* context);
@@ -155,16 +135,6 @@ namespace Jet
 			delete this->_names;
 		}
 
-		std::string GetName()
-		{
-			return "";//this->_name.getText();
-		}
-
-		void print()
-		{
-			//printf(_name.getText().c_str());
-		}
-
 		void Compile(CompilerContext* context);
 	};
 
@@ -180,11 +150,6 @@ namespace Jet
 		double GetValue()
 		{
 			return this->value;
-		}
-
-		void print()
-		{
-			printf("%f", this->value);
 		}
 
 		void Compile(CompilerContext* context);
@@ -219,11 +184,6 @@ namespace Jet
 			return this->value;
 		}
 
-		void print()
-		{
-			printf("'%s'", this->value.c_str());
-		}
-
 		void Compile(CompilerContext* context);
 	};
 
@@ -243,13 +203,6 @@ namespace Jet
 		{
 			delete left;
 			delete index;
-		}
-
-		void print()
-		{
-			printf("[");
-			index->print();
-			printf("]");
 		}
 
 		void Compile(CompilerContext* context);
@@ -279,13 +232,6 @@ namespace Jet
 			this->Parent = parent;
 			right->SetParent(this);
 			left->SetParent(this);
-		}
-
-		void print()
-		{
-			printf("(%s = ", "expr");//name.c_str());
-			right->print();
-			printf(")\n");
 		}
 
 		void Compile(CompilerContext* context);
@@ -318,15 +264,6 @@ namespace Jet
 			left->SetParent(this);
 		}
 
-		void print()
-		{
-			printf("(%s ", token.getText().c_str());
-			left->print();
-			printf(" ");
-			right->print();
-			printf(")\n");
-		}
-
 		void Compile(CompilerContext* context);
 	};
 
@@ -352,13 +289,6 @@ namespace Jet
 			this->Parent = parent;
 			right->SetParent(this);
 			left->SetParent(this);
-		}
-
-		void print()
-		{
-			printf("(%s swap ", "idk");//name.c_str());
-			right->print();
-			printf(")\n");
 		}
 
 		void Compile(CompilerContext* context);
@@ -387,13 +317,6 @@ namespace Jet
 			right->SetParent(this);
 		}
 
-		void print()
-		{
-			printf("(%s", Operator(_operator.type));
-			right->print();
-			printf(")");
-		}
-
 		void Compile(CompilerContext* context);
 	};
 
@@ -418,13 +341,6 @@ namespace Jet
 		{
 			this->Parent = parent;
 			left->SetParent(this);
-		}
-
-		void print()
-		{
-			printf("(");
-			left->print();
-			printf("%s)", Operator(_operator.type));
 		}
 
 		void Compile(CompilerContext* context);
@@ -455,15 +371,6 @@ namespace Jet
 			this->Parent = parent;
 			left->SetParent(this);
 			right->SetParent(this);
-		}
-
-		void print()
-		{
-			printf("(");
-			left->print();
-			printf(" %s ", Operator(_operator.type));
-			right->print();
-			printf(")");
 		}
 
 		void Compile(CompilerContext* context);
@@ -504,12 +411,6 @@ namespace Jet
 				ii->SetParent(this);
 		}
 
-		void print()
-		{
-			for (auto ii: statements)
-				ii->print();
-		}
-
 		void Compile(CompilerContext* context)
 		{
 			for (auto ii: statements)
@@ -519,7 +420,7 @@ namespace Jet
 
 	class ScopeExpression: public BlockExpression
 	{
-		//BlockExpression* block;
+
 	public:
 		//add a list of local variables here mayhaps?
 
@@ -530,17 +431,11 @@ namespace Jet
 			delete r;
 		}
 
-		/*~ScopeExpression()
-		{
-		//delete block;
-		}*/
-
 		void Compile(CompilerContext* context)
 		{
 			//push scope
 			context->PushScope();
 
-			//block->Compile(context);
 			BlockExpression::Compile(context);
 
 			//pop scope
@@ -573,15 +468,6 @@ namespace Jet
 			this->Parent = parent;
 			block->SetParent(this);
 			condition->SetParent(this);
-		}
-
-		void print()
-		{
-			printf("while(");
-			condition->print();
-			printf(") {\n");
-			block->print();
-			printf("\n}\n");
 		}
 
 		void Compile(CompilerContext* context)
@@ -634,19 +520,6 @@ namespace Jet
 			initial->SetParent(block);
 		}
 
-		void print()
-		{
-			printf("while(");
-			initial->print();
-			printf("; ");
-			condition->print();
-			printf("; ");
-			incr->print();
-			printf(") {\n");
-			block->print();
-			printf("\n}\n");
-		}
-
 		void Compile(CompilerContext* context)
 		{
 			context->Line(token.filename, token.line);
@@ -692,22 +565,8 @@ namespace Jet
 			block->SetParent(this);
 		}
 
-		void print()
-		{
-			/*printf("while(");
-			initial->print();
-			printf("; ");
-			condition->print();
-			printf("; ");
-			incr->print();
-			printf(") {\n");
-			block->print();
-			printf("\n}\n");*/
-		}
-
 		void Compile(CompilerContext* context)
 		{
-			//return;
 			context->PushScope();
 
 			auto uuid = context->GetUUID();
@@ -752,11 +611,11 @@ namespace Jet
 	};
 	class IfExpression: public Expression
 	{
-		::std::vector<Branch*>* branches;
+		std::vector<Branch*>* branches;
 		Branch* Else;
 		Token token;
 	public:
-		IfExpression(Token token, ::std::vector<Branch*>* branches, Branch* elseBranch)
+		IfExpression(Token token, std::vector<Branch*>* branches, Branch* elseBranch)
 		{
 			this->branches = branches;
 			this->Else = elseBranch;
@@ -791,29 +650,6 @@ namespace Jet
 			{
 				ii->block->SetParent(this);
 				ii->condition->SetParent(this);
-			}
-		}
-
-		void print()
-		{
-			int i = 0;
-			for (auto ii: *branches)
-			{
-				if (i == 0)
-					printf("if (");
-				else
-					printf("else if (");
-				ii->condition->print();
-				printf(") {\n");
-				ii->block->print();
-				printf("\n}\n");
-				i++;
-			}
-			if (Else)
-			{
-				printf("else {\n");
-				Else->block->print();
-				printf("\n}\n");
 			}
 		}
 
@@ -890,18 +726,6 @@ namespace Jet
 				ii->SetParent(this);
 		}
 
-		void print()
-		{
-			left->print();
-			printf("(");
-			for (auto i: *args)
-			{
-				i->print();
-				printf(", ");
-			}
-			printf(")");
-		}
-
 		void Compile(CompilerContext* context);
 	};
 
@@ -947,21 +771,6 @@ namespace Jet
 				ii->SetParent(this);
 		}
 
-		void print()
-		{
-			printf("Function ");
-			name->print();
-			printf("(");
-			for (auto i: *args)
-			{
-				i->print();
-				printf(", ");
-			}
-			printf(") {\n");
-			block->print();
-			printf("}\n");
-		}
-
 		void Compile(CompilerContext* context);
 	};
 
@@ -988,20 +797,6 @@ namespace Jet
 				this->right->SetParent(this);
 		}
 
-		void print()
-		{
-			if (right == 0)
-			{
-				printf("return;\n");
-			}
-			else
-			{
-				printf("return ");
-				right->print();
-				printf(";\n");
-			}
-		}
-
 		void Compile(CompilerContext* context)
 		{
 			context->Line(token.filename, token.line);
@@ -1018,24 +813,10 @@ namespace Jet
 	class BreakExpression: public Expression
 	{
 	public:
-		BreakExpression()
-		{
-
-		}
-
-		~BreakExpression()
-		{
-
-		}
 
 		void SetParent(Expression* parent)
 		{
 			this->Parent = parent;
-		}
-
-		void print()
-		{
-
 		}
 
 		void Compile(CompilerContext* context)
@@ -1047,24 +828,9 @@ namespace Jet
 	class ContinueExpression: public Expression
 	{
 	public:
-		ContinueExpression()
-		{
-
-		}
-
-		~ContinueExpression()
-		{
-
-		}
-
 		void SetParent(Expression* parent)
 		{
 			this->Parent = parent;
-		}
-
-		void print()
-		{
-
 		}
 
 		void Compile(CompilerContext* context)

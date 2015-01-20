@@ -2,7 +2,6 @@
 #define _VALUE_HEADER
 
 #include "JetExceptions.h"
-//#include "Object.h"
 
 #include <map>
 #include <functional>
@@ -20,6 +19,7 @@ namespace Jet
 	{
 		bool mark;
 		bool grey;
+		unsigned char refcount;//used for native functions
 		t ptr;
 
 		GCVal() { }
@@ -32,7 +32,6 @@ namespace Jet
 
 	struct Value;
 
-
 	enum class ValueType
 	{
 		//keep all garbage collectable types towards the end after NativeFunction
@@ -40,43 +39,35 @@ namespace Jet
 		Null = 0,
 		Number,
 		NativeFunction,
-		String,//add more
+		String,
 		Object,
 		Array,
 		Function,
-		//Closure,//an allocated one
 		Userdata,
 	};
 
 	static const char* ValueTypes[] = { "Null", "Number", "NativeFunction", "String" , "Object", "Array", "Function", "Userdata"};
 
-	class HashFunction {
-	public:
-		std::size_t operator ()(const Value &v) const;
-	};
-
 	struct String
 	{
+		bool mark, grey;
+		unsigned char refcount;
+
 		unsigned int length;
-		char* data;
+		unsigned int hash;
+		//string data would be stored after this point
 	};
 
-	typedef std::unordered_map<Value, Value, HashFunction> _JetObjectBacking;
-	//typedef GCVal<std::map<std::string, Value>*> _JetObject; 
-	typedef GCVal<_JetObjectBacking*> _JetObject; 
-	//typedef std::map<std::string, Value>::iterator _JetObjectIterator;
-	typedef _JetObjectBacking::iterator _JetObjectIterator;
-
+	class JetObject;
 	typedef std::vector<Value> _JetArrayBacking;
-	typedef GCVal<_JetArrayBacking* > _JetArray;//std::map<int, Value>*> _JetArray;
+	typedef GCVal<_JetArrayBacking* > JetArray;
 	typedef _JetArrayBacking::iterator _JetArrayIterator;
 
-	typedef GCVal<std::pair<void*,_JetObject*> > _JetUserdata;
-	typedef char _JetString;//GCVal<char*> _JetString;
+	typedef GCVal<std::pair<void*,JetObject*> > JetUserdata;
+	typedef GCVal<char*> JetString;
 
 	typedef void _JetFunction;
 	typedef void(*_JetNativeFunc)(JetContext*,Value*, int);
-	//typedef std::function<void(JetContext*,Value*,int)> _JetNativeFunc;
 
 	class JetContext;
 
@@ -92,8 +83,10 @@ namespace Jet
 	{
 		bool mark;
 		bool grey;
+		unsigned char refcount;
+
 		bool closed;//marks if the closure has gone out of its parent scope and was closed
-		unsigned short numupvals;
+		unsigned char numupvals;
 
 		Function* prototype;
 
@@ -106,175 +99,59 @@ namespace Jet
 		Closure* prev;//parent closure
 	};
 
+	struct _JetObject;
 	struct Value
 	{
 		ValueType type;
 		union
 		{
 			double value;
-			long long integer;//todo implement me
-			//this is the new main struct
+			//this is the main struct
 			struct
 			{
 				union
-				{ //ok need to move string length out into the object itself 
-					//it would break the gc tho, so need to get alignment right	
-					_JetString* _string;
-					_JetObject* _object;
-					_JetArray* _array;
-					_JetUserdata* _userdata;
+				{
+					JetString* _string;
+					JetObject* _object;
+					JetArray* _array;
+					JetUserdata* _userdata;
 				};
 				union
 				{
 					unsigned int length;//used for strings
-					_JetObject* prototype;
+					JetObject* prototype;
 				};
 			};
 
-			Closure* _function;
+			Closure* _function;//jet function
 			_JetNativeFunc func;//native func
 		};
 
-		Value()
-		{
-			this->type = ValueType::Null;
-			//this->value = 0;
-		}
+		Value();
 
-		//move standard library to other file
-		Value(const char* str)
-		{
-			if (str == 0)
-				return;
+		Value(JetString* str);
+		Value(JetObject* obj);
+		Value(JetArray* arr);
 
-			type = ValueType::String;
-			length = strlen(str);
-			_string = (char*)str;
-		}
+		Value(double val);
+		Value(int val);
 
-		//plz dont delete my string
-		//crap, this is gonna be hell to figure out
-		Value(_JetString* str)
-		{
-			if (str == 0)
-				return;
+		Value(_JetNativeFunc a);
+		Value(Closure* func);
 
-			type = ValueType::String;
-			length = strlen(str);
-			_string = str;
-		}
-
-		Value(_JetObject* obj)
-		{
-			this->type = ValueType::Object;
-			this->_object = obj;
-			this->prototype = 0;
-		}
-
-		Value(_JetArray* arr)
-		{
-			type = ValueType::Array;
-			this->_array = arr;
-		}
-
-		Value(double val)
-		{
-			type = ValueType::Number;
-			value = val;
-		}
-
-		Value(int val)
-		{
-			type = ValueType::Number;
-			value = val;
-		}
-
-		Value(_JetNativeFunc a)
-		{
-			type = ValueType::NativeFunction;
-			func = a;
-		}
-
-		Value(Closure* func)
-		{
-			type = ValueType::Function;
-			_function = func;
-		}
-
-		explicit Value(_JetUserdata* userdata, _JetObject* prototype)
-		{
-			this->type = ValueType::Userdata;
-			this->_userdata = userdata;
-			this->prototype = prototype;
-		}
+		explicit Value(JetUserdata* userdata, JetObject* prototype);
 
 		Value& operator= (const _JetNativeFunc& func)
 		{
 			return *this = Value(func);
 		}
 
-		void SetPrototype(_JetObject* obj)
+		void SetPrototype(JetObject* obj)
 		{
 			prototype = obj;
 		}
 
-		std::string ToString(int depth = 0) const
-		{
-			switch(this->type)
-			{
-			case ValueType::Null:
-				return "Null";
-			case ValueType::Number:
-				return std::to_string(this->value);
-			case ValueType::String:
-				return this->_string;
-			case ValueType::Function:
-				return "[Function "+this->_function->prototype->name+"]";//"[Function "+::std::to_string(this->_function->prototype->ptr)+"]";//"[Function "+this->_function->prototype->name+"]";
-			case ValueType::NativeFunction:
-				return "[NativeFunction "+std::to_string((unsigned int)this->func)+"]";
-			case ValueType::Array:
-				{
-					std::string str = "[\n";
-
-					if (depth++ > 3)
-						return "[Array " + std::to_string((int)this->_array)+"]";
-
-					int i = 0;
-					for (auto ii: *this->_array->ptr)
-					{
-						str += "\t";
-						str += std::to_string(i++);
-						str += " = ";
-						str += ii.ToString(depth) + "\n";
-					}
-					str += "]";
-					return str;
-				}
-			case ValueType::Object:
-				{
-					std::string str = "{\n";
-
-					if (depth++ > 3)
-						return "[Object " + std::to_string((int)this->_object)+"]";
-
-					for (auto ii: *this->_object->ptr)
-					{
-						str += "\t";
-						str += ii.first.ToString(depth);
-						str += " = ";
-						str += ii.second.ToString(depth) + "\n";
-					}
-					str += "}";
-					return str;
-				}
-			case ValueType::Userdata:
-				{
-					return "[Userdata "+std::to_string((int)this->_userdata)+"]";
-				}
-			default:
-				return "";
-			}
-		}
+		std::string ToString(int depth = 0) const;
 
 		template<class T>
 		inline T*& GetUserdata()
@@ -303,23 +180,11 @@ namespace Jet
 			throw RuntimeException("Cannot convert type " + (std::string)ValueTypes[(int)this->type] + " to double!");
 		}
 
-		_JetObject* GetPrototype()
-		{
-			//add defaults for string and array
-			switch (type)
-			{
-			case ValueType::Array:
-				return 0;
-			case ValueType::Object:
-				return this->prototype;
-			case ValueType::String:
-				return 0;
-			case ValueType::Userdata:
-				return this->prototype;
-			default:
-				return 0;
-			}
-		}
+		JetObject* GetPrototype();
+
+		//reference counting stuff
+		void AddRef();
+		void Release();
 
 		/*template<typename First, typename... Types>
 		Value operator() (First f, Types... args)
@@ -327,7 +192,7 @@ namespace Jet
 		print("hi");
 		//this->CallHelper(args...);
 		}*/
-		template<typename First, typename Second>
+		/*template<typename First, typename Second>
 		Value operator() (JetContext* context, First first, First second)
 		{
 
@@ -342,7 +207,7 @@ namespace Jet
 		Value operator() (JetContext* context)
 		{
 
-		}
+		}*/
 
 		/*template<typename First>
 		Value operator() (First f)
@@ -363,104 +228,19 @@ namespace Jet
 		//actually call
 		}*/
 
-
-		/*Value& operator[] (int index)
-		{
-		if (this->type == ValueType::Array)
-		return (*this->_array->ptr)[index];
-		else if (this->type == ValueType::Object)
-		return (*this->_object->ptr)[index];
-		return Value(0);
-		};*/
 		//this massively redundant case is only here because
 		//c++ operator overloading resolution is dumb
 		//and wants to do integer[pointer-to-object]
 		//rather than value[(implicit value)const char*]
-		Value& operator[] (int key)
-		{
-			switch (type)
-			{
-			case ValueType::Array:
-				{
-					return (*this->_array->ptr)[key];
-				}
-			case ValueType::Object:
-				{
-					return (*this->_object->ptr)[key];
-				}
-			default:
-				throw RuntimeException("Cannot index type " + (std::string)ValueTypes[(int)this->type]);
-			}
-		}
+		Value& operator[] (int key);
+		Value& operator[] (const char* key);
+		Value& operator[] (const Value& key);
 
-		Value& operator[] (const char* key)
-		{
-			switch (type)
-			{
-			case ValueType::Object:
-				{
-					return (*this->_object->ptr)[key];
-				}
-			default:
-				throw RuntimeException("Cannot index type " + (std::string)ValueTypes[(int)this->type]);
-			}
-		}
+		bool operator== (const Value& other) const;
 
-		Value& operator[] (const Value& key)
-		{
-			switch (type)
-			{
-			case ValueType::Array:
-				{
-					return (*this->_array->ptr)[(int)key.value];
-				}
-			case ValueType::Object:
-				{
-					return (*this->_object->ptr)[key];
-				}
-			default:
-				throw RuntimeException("Cannot index type " + (std::string)ValueTypes[(int)this->type]);
-			}
-		}
+		//add metamethods
+		Value CallMetamethod(const char* name, const Value* other);
 
-		bool operator== (const Value& other) const
-		{
-			if (other.type != this->type)
-				return false;
-
-			switch (this->type)
-			{
-			case ValueType::Number:
-				return other.value == this->value;
-			case ValueType::Array:
-				return other._array == this->_array;
-			case ValueType::Function:
-				return other._function == this->_function;
-			case ValueType::NativeFunction:
-				return other.func == this->func;
-			case ValueType::String:
-				return strcmp(other._string, this->_string) == 0;
-			case ValueType::Null:
-				return true;
-			case ValueType::Object:
-				return other._object == this->_object;
-			case ValueType::Userdata:
-				return other._userdata == this->_userdata;
-			default:
-				break;
-			}
-		}
-
-		Value CallMetamethod(const char* name, const Value* self)
-		{
-			JetContext* context;
-			auto iter = this->prototype->ptr->find(name);
-			if (iter != this->prototype->ptr->end())
-			{
-				//context->Call(
-				//return iter->second.
-			}
-		}
 
 		Value operator+( const Value &other )
 		{
@@ -469,12 +249,11 @@ namespace Jet
 			case ValueType::Number:
 				if (other.type == ValueType::Number)
 					return Value(value+other.value);
+				break;
 			case ValueType::Object:
 				{
 					if (this->prototype)
-					{
-
-					}
+						return this->CallMetamethod("_add", &other);
 					//throw JetRuntimeException("Cannot Add A String");
 					//if (other.type == ValueType::String)
 					//return Value((std::string(other.string.data) + std::string(this->string.data)).c_str());
@@ -483,7 +262,7 @@ namespace Jet
 				}
 			}
 
-			throw RuntimeException("Cannot add two non-numeric types! " + (std::string)ValueTypes[(int)other.type] + " and " + (std::string)ValueTypes[(int)this->type]);
+			throw RuntimeException("Cannot add two non-numeric types! " + (std::string)ValueTypes[(int)this->type] + " and " + (std::string)ValueTypes[(int)other.type]);
 		};
 
 		Value operator-( const Value &other )
@@ -492,7 +271,8 @@ namespace Jet
 				return Value(value-other.value);
 			else if (type == ValueType::Object)
 			{
-				//do metamethod
+				if (this->prototype)
+					return this->CallMetamethod("_sub", &other);
 			}
 
 			throw RuntimeException("Cannot subtract two non-numeric types! " + (std::string)ValueTypes[(int)this->type] + " and " + (std::string)ValueTypes[(int)other.type]);
@@ -504,7 +284,8 @@ namespace Jet
 				return Value(value*other.value);
 			else if (type == ValueType::Object)
 			{
-				//do metamethod
+				if (this->prototype)
+					return this->CallMetamethod("_mul", &other);
 			}
 
 			throw RuntimeException("Cannot multiply two non-numeric types! " + (std::string)ValueTypes[(int)this->type] + " and " + (std::string)ValueTypes[(int)other.type]);
@@ -516,7 +297,8 @@ namespace Jet
 				return Value(value/other.value);
 			else if (type == ValueType::Object)
 			{
-				//do metamethod
+				if (this->prototype)
+					return this->CallMetamethod("_div", &other);
 			}
 
 			throw RuntimeException("Cannot divide two non-numeric types! " + (std::string)ValueTypes[(int)this->type] + " and " + (std::string)ValueTypes[(int)other.type]);
@@ -528,7 +310,8 @@ namespace Jet
 				return Value((int)value%(int)other.value);
 			else if (type == ValueType::Object)
 			{
-				//do metamethod
+				if (this->prototype)
+					return this->CallMetamethod("_mod", &other);
 			}
 
 			throw RuntimeException("Cannot modulus two non-numeric types! " + (std::string)ValueTypes[(int)this->type] + " and " + (std::string)ValueTypes[(int)other.type]);
@@ -540,7 +323,8 @@ namespace Jet
 				return Value((int)value|(int)other.value);
 			else if (type == ValueType::Object)
 			{
-				//do metamethod
+				if (this->prototype)
+					return this->CallMetamethod("_bor", &other);
 			}
 
 			throw RuntimeException("Cannot binary or two non-numeric types! " + (std::string)ValueTypes[(int)this->type] + " and " + (std::string)ValueTypes[(int)other.type]);
@@ -552,7 +336,8 @@ namespace Jet
 				return Value((int)value&(int)other.value);
 			else if (type == ValueType::Object)
 			{
-				//do metamethod
+				if (this->prototype)
+					return this->CallMetamethod("_band", &other);
 			}
 
 			throw RuntimeException("Cannot binary and two non-numeric types! " + (std::string)ValueTypes[(int)this->type] + " and " + (std::string)ValueTypes[(int)other.type]);
@@ -564,7 +349,8 @@ namespace Jet
 				return Value((int)value^(int)other.value);
 			else if (type == ValueType::Object)
 			{
-				//do metamethod
+				if (this->prototype)
+					return this->CallMetamethod("_xor", &other);
 			}
 
 			throw RuntimeException("Cannot xor two non-numeric types! " + (std::string)ValueTypes[(int)this->type] + " and " + (std::string)ValueTypes[(int)other.type]);
@@ -576,7 +362,8 @@ namespace Jet
 				return Value((int)value<<(int)other.value);
 			else if (type == ValueType::Object)
 			{
-				//do metamethod
+				if (this->prototype)
+					return this->CallMetamethod("_ls", &other);
 			}
 
 			throw RuntimeException("Cannot left-shift two non-numeric types! " + (std::string)ValueTypes[(int)this->type] + " and " + (std::string)ValueTypes[(int)other.type]);
@@ -588,7 +375,8 @@ namespace Jet
 				return Value((int)value>>(int)other.value);
 			else if (type == ValueType::Object)
 			{
-				//do metamethod
+				if (this->prototype)
+					return this->CallMetamethod("_rs", &other);
 			}
 
 			throw RuntimeException("Cannot right-shift two non-numeric types! " + (std::string)ValueTypes[(int)this->type] + " and " + (std::string)ValueTypes[(int)other.type]);
@@ -600,7 +388,8 @@ namespace Jet
 				return Value(~(int)value);
 			else if (type == ValueType::Object)
 			{
-				//do metamethod
+				if (this->prototype)
+					return this->CallMetamethod("_bnot", 0);
 			}
 
 			throw RuntimeException("Cannot binary complement non-numeric type! " + (std::string)ValueTypes[(int)this->type]);
@@ -614,31 +403,166 @@ namespace Jet
 			}
 			else if (type == ValueType::Object)
 			{
-				//do metamethod
+				if (this->prototype)
+					return this->CallMetamethod("_neg", 0);
 			}
 
 			throw RuntimeException("Cannot negate non-numeric type! " + (std::string)ValueTypes[(int)this->type]);
 		}
+	};
 
-		//deletes all data associated
-		void Release()
+
+	struct ObjNode
+	{
+		Value first;
+		Value second;
+
+		ObjNode* next;
+	};
+
+	template <class T>
+	class ObjIterator
+	{
+		typedef ObjNode Node;
+		typedef ObjIterator<T> Iterator;
+		Node* ptr;
+		JetObject* parent;
+	public:
+		ObjIterator()
 		{
-			switch (type)
-			{
-			case ValueType::Array:
-				delete this->_array->ptr;
-				delete this->_array;
-				break;
-			case ValueType::Object:
-				delete this->_object->ptr;
-				delete this->_object;
-				break;
-			case ValueType::String:
-				break;
-			case ValueType::Userdata:
-				break;
-			}
+			this->parent = 0;
+			this->ptr = 0;
 		}
+
+		ObjIterator(JetObject* p)
+		{
+			this->parent = p;
+			this->ptr = 0;
+		}
+
+		ObjIterator(JetObject* p, Node* node)
+		{
+			this->parent = p;
+			this->ptr = node;
+		}
+
+		bool operator==(const Iterator& other)
+		{
+			return ptr == other.ptr;
+		}
+
+		bool operator!=(const Iterator& other)
+		{
+			return this->ptr != other.ptr;
+		}
+
+		Iterator& operator++()
+		{
+			if (ptr && (this->ptr-this->parent->nodes) < (this->parent->nodecount-1))
+			{
+				do
+				{
+					this->ptr++;
+					if (ptr->first.type != ValueType::Null)
+						return *this;
+				}
+				while ((this->ptr-this->parent->nodes) < (this->parent->nodecount-1));
+			}
+			this->ptr = 0;
+
+			return *this;
+		};
+
+		Node*& operator->() const
+		{	// return pointer to class object
+			return (Node*&)this->ptr;//this does pointer magic and gives a reference to the pair containing the key and value
+		}
+
+		Node& operator*()
+		{
+			return *this->ptr;
+		}
+	};
+
+	class JetContext;
+	class JetObject
+	{
+		friend class ObjIterator<Value>;
+		friend class Value;
+		friend class GarbageCollector;
+		friend class JetContext;
+
+		bool mark, grey;
+		unsigned char refcount;
+
+		JetContext* context;
+		ObjNode* nodes;
+
+		unsigned int Size;
+		unsigned int nodecount;
+	public:
+		typedef ObjIterator<Value> Iterator;
+
+		JetObject(JetContext* context);
+		~JetObject();
+
+		std::size_t key(const Value* v) const;
+
+		Iterator find(const Value& key)
+		{
+			ObjNode* node = this->findNode(&key);
+			return Iterator(this, node);
+		}
+
+		Iterator find(const char* key)
+		{
+			ObjNode* node = this->findNode(key);
+			return Iterator(this, node);
+		}
+
+		//just looks for a node
+		ObjNode* findNode(const Value* key);
+		ObjNode* findNode(const char* key);
+
+		//finds node for key or creates one if doesnt exist
+		ObjNode* getNode(const Value* key);
+		ObjNode* getNode(const char* key);
+
+		//try not to use these in the vm
+		Value& operator [](const Value& key);
+
+		//special operator for strings to deal with insertions
+		Value& operator [](const char* key);
+
+		Iterator end()
+		{
+			return Iterator(this);
+		}
+
+		Iterator begin()
+		{
+			for (int i = 0; i < this->nodecount; i++)
+				if (this->nodes[i].first.type != ValueType::Null)
+					return Iterator(this, &nodes[i]);
+			return end();
+		}
+
+		inline size_t size()
+		{
+			return this->Size;
+		}
+
+		void DebugPrint();
+
+	private:
+		//finds an open node in the table for inserting
+		ObjNode* getFreePosition();
+
+		//increases the size to fit new keys
+		void resize();
+
+		//memory barrier
+		void Barrier();
 	};
 }
 

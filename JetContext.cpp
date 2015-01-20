@@ -74,24 +74,28 @@ void JetContext::Set(const std::string& name, const Value& value)
 
 Value JetContext::NewObject()
 {
-	auto v = new _JetObject;
+	auto v = new JetObject(this);
+	v->refcount = 0;
 	v->grey = v->mark = false;
-	v->ptr = new _JetObjectBacking;
 	this->gc.objects.push_back(v);
 	return Value(v);
 }
 
 Value JetContext::NewPrototype(const char* Typename)
 {
-	auto v = new _JetObject;
+	auto v = new JetObject(this);
+	v->refcount = 0;
 	v->grey = v->mark = false;
-	v->ptr = new _JetObjectBacking;
-	return v;
+	this->gc.objects.push_back(v);
+	Value val(v);
+	val.AddRef();
+	return val;
 }
 
 Value JetContext::NewArray()
 {
-	auto a = new _JetArray;
+	auto a = new JetArray;
+	a->refcount = 0;
 	a->grey = a->mark = false;
 	a->ptr = new _JetArrayBacking;
 	this->gc.arrays.push_back(a);
@@ -103,23 +107,28 @@ Value JetContext::NewUserdata(void* data, const Value& proto)
 	if (proto.type != ValueType::Object)
 		throw RuntimeException("NewUserdata: Prototype supplied was not of the type 'object'\n");
 
-	auto ud = new GCVal<std::pair<void*, _JetObject*>>(std::pair<void*, _JetObject*>(data, proto._object));
-	ud->grey = ud->mark = true;
+	auto ud = new GCVal<std::pair<void*, JetObject*>>(std::pair<void*, JetObject*>(data, proto._object));
+	ud->grey = ud->mark = false;
+	ud->refcount = 0;
 	this->gc.userdata.push_back(ud);
 	return Value(ud, proto._object);
 }
 
-Value JetContext::NewString(char* string, bool copy)
+Value JetContext::NewString(const char* string, bool copy)
 {
 	if (copy)
 	{
 		size_t len = strlen(string);
-		auto temp = new char[len];
+		auto temp = new char[len+1];
 		memcpy(temp, string, len);
+		temp[len] = 0;
 		string = temp;
 	}
-	this->gc.strings.push_back(new GCVal<char*>(string));
-	return Value(string);
+	auto str = new GCVal<char*>((char*)string);
+	str->grey = str->mark = false;
+	str->refcount = 0;
+	this->gc.strings.push_back(str);
+	return Value(str);
 }
 
 JetContext::JetContext() : gc(this), stack(500000)
@@ -176,8 +185,8 @@ JetContext::JetContext() : gc(this), stack(500000)
 	};
 
 
-	this->file.ptr = new _JetObjectBacking;//std::map<std::string, Value>;
-	(*file.ptr)["read"] = Value([](JetContext* context, Value* v, int args)
+	this->file = new JetObject(this);
+	(*file)["read"] = Value([](JetContext* context, Value* v, int args)
 	{
 		if (args != 2)
 			throw RuntimeException("Invalid number of arguments to read!");
@@ -187,7 +196,7 @@ JetContext::JetContext() : gc(this), stack(500000)
 		out[(int)(v)->value] = 0;
 		context->Return(context->NewString(out, false));
 	});
-	(*file.ptr)["write"] = Value([](JetContext* context, Value* v, int args)
+	(*file)["write"] = Value([](JetContext* context, Value* v, int args)
 	{
 		if (args != 2)
 			throw RuntimeException("Invalid number of arguments to write!");
@@ -196,7 +205,7 @@ JetContext::JetContext() : gc(this), stack(500000)
 		fwrite(str.c_str(), 1, str.length(), v[1].GetUserdata<FILE>());
 	});
 	//this function is called when the value is garbage collected
-	(*file.ptr)["_gc"] = Value([](JetContext* context, Value* v, int args)
+	(*file)["_gc"] = Value([](JetContext* context, Value* v, int args)
 	{
 		fclose(v->GetUserdata<FILE>());
 	});
@@ -207,7 +216,7 @@ JetContext::JetContext() : gc(this), stack(500000)
 			throw RuntimeException("Invalid number of arguments to fopen!");
 
 		FILE* f = fopen(v->ToString().c_str(), v[1].ToString().c_str());
-		context->Return(context->NewUserdata(f, &context->file));
+		context->Return(context->NewUserdata(f, context->file));
 	});
 
 	(*this)["fclose"] = Value([](JetContext* context, Value* v, int args)
@@ -219,8 +228,8 @@ JetContext::JetContext() : gc(this), stack(500000)
 
 
 	//setup the string and array tables
-	this->string.ptr = new _JetObjectBacking;
-	(*this->string.ptr)["append"] = Value([](JetContext* context, Value* v, int args)
+	this->string = new JetObject(this);
+	(*this->string)["append"] = Value([](JetContext* context, Value* v, int args)
 	{
 		if (args == 2 && v[0].type == ValueType::String && v[1].type == ValueType::String)
 		{
@@ -234,16 +243,16 @@ JetContext::JetContext() : gc(this), stack(500000)
 		else
 			throw RuntimeException("bad append call!");
 	});
-	(*this->string.ptr)["length"] = Value([](JetContext* context, Value* v, int args)
+	(*this->string)["length"] = Value([](JetContext* context, Value* v, int args)
 	{
 		if (args == 1)
-			context->Return(Value((double)strlen(v->_string)));
+			context->Return(Value((double)v->length));
 		else
 			throw RuntimeException("bad length call!");
 	});
 
-	this->Array.ptr = new _JetObjectBacking;//std::map<std::string, Value>;
-	(*this->Array.ptr)["add"] = Value([](JetContext* context, Value* v, int args)
+	this->Array = new JetObject(this);
+	(*this->Array)["add"] = Value([](JetContext* context, Value* v, int args)
 	{
 		if (args == 2)
 		{
@@ -253,7 +262,7 @@ JetContext::JetContext() : gc(this), stack(500000)
 		else
 			throw RuntimeException("Invalid add call!!");
 	});
-	(*this->Array.ptr)["size"] = Value([](JetContext* context, Value* v, int args)
+	(*this->Array)["size"] = Value([](JetContext* context, Value* v, int args)
 	{
 		//how do I get access to the array from here?
 		if (args == 1)
@@ -261,7 +270,7 @@ JetContext::JetContext() : gc(this), stack(500000)
 		else
 			throw RuntimeException("Invalid size call!!");
 	});
-	(*this->Array.ptr)["resize"] = Value([](JetContext* context, Value* v, int args)
+	(*this->Array)["resize"] = Value([](JetContext* context, Value* v, int args)
 	{
 		//how do I get access to the array from here?
 		if (args == 2)
@@ -270,7 +279,7 @@ JetContext::JetContext() : gc(this), stack(500000)
 			throw RuntimeException("Invalid size call!!");
 	});
 
-	(*this->Array.ptr)["getIterator"] = Value([](JetContext* context, Value* v, int args)
+	(*this->Array)["getIterator"] = Value([](JetContext* context, Value* v, int args)
 	{
 		if (args == 1)
 		{
@@ -282,45 +291,45 @@ JetContext::JetContext() : gc(this), stack(500000)
 			iter* it = new iter;
 			it->container = v->_array->ptr;
 			it->iterator = v->_array->ptr->begin();
-			context->Return(context->NewUserdata(it, &context->arrayiter));
+			context->Return(context->NewUserdata(it, context->arrayiter));
 			return;
 		}
 		throw RuntimeException("Bad call to getIterator");
 	});
-	this->object.ptr = new _JetObjectBacking;//std::map<std::string, Value>;
-	(*this->object.ptr)["size"] = Value([](JetContext* context, Value* v, int args)
+	this->object = new JetObject(this);
+	(*this->object)["size"] = Value([](JetContext* context, Value* v, int args)
 	{
 		//how do I get access to the array from here?
 		if (args == 1)
-			context->Return((int)v->_object->ptr->size());
+			context->Return((int)v->_object->size());
 		else
 			throw RuntimeException("Invalid size call!!");
 	});
 
-	(*this->object.ptr)["getIterator"] = Value([](JetContext* context, Value* v, int args)
+	(*this->object)["getIterator"] = Value([](JetContext* context, Value* v, int args)
 	{
 		if (args == 1)
 		{
 			struct iter2
 			{
-				_JetObjectBacking* container;
-				_JetObjectIterator iterator;
+				JetObject* container;
+				JetObject::Iterator iterator;
 			};
 			iter2* it = new iter2;
-			it->container = v->_object->ptr;
-			it->iterator = v->_object->ptr->begin();
-			context->Return(context->NewUserdata(it, &context->objectiter));
+			it->container = v->_object;
+			it->iterator = v->_object->begin();
+			context->Return(context->NewUserdata(it, context->objectiter));
 			return;
 		}
 		throw RuntimeException("Bad call to getIterator");
 	});
-	this->objectiter.ptr = new _JetObjectBacking;//std::map<std::string, Value>;
-	(*this->objectiter.ptr)["next"] = Value([](JetContext* context, Value* v, int args)
+	this->objectiter = new JetObject(this);
+	(*this->objectiter)["next"] = Value([](JetContext* context, Value* v, int args)
 	{
 		struct iter2
 		{
-			_JetObjectBacking* container;
-			_JetObjectIterator iterator;
+			JetObject* container;
+			JetObject::Iterator iterator;
 		};
 		auto iterator = v->GetUserdata<iter2>();
 		if (iterator->iterator != iterator->container->end())
@@ -330,12 +339,12 @@ JetContext::JetContext() : gc(this), stack(500000)
 		}
 		//just return null
 	});
-	(*this->objectiter.ptr)["current"] = Value([](JetContext* context, Value* v, int args)
+	(*this->objectiter)["current"] = Value([](JetContext* context, Value* v, int args)
 	{
 		struct iter2
 		{
-			_JetObjectBacking* container;
-			_JetObjectIterator iterator;
+			JetObject* container;
+			JetObject::Iterator iterator;
 		};
 		//still kinda wierd
 		auto iterator = v->GetUserdata<iter2>();
@@ -345,12 +354,12 @@ JetContext::JetContext() : gc(this), stack(500000)
 		}
 		//just return null
 	});
-	(*this->objectiter.ptr)["advance"] = Value([](JetContext* context, Value* v, int args)
+	(*this->objectiter)["advance"] = Value([](JetContext* context, Value* v, int args)
 	{
 		struct iter2
 		{
-			_JetObjectBacking* container;
-			_JetObjectIterator iterator;
+			JetObject* container;
+			JetObject::Iterator iterator;
 		};
 		auto iterator = v->GetUserdata<iter2>();
 		if (++iterator->iterator != iterator->container->end())
@@ -359,17 +368,17 @@ JetContext::JetContext() : gc(this), stack(500000)
 			context->Return(0);
 		//just return null
 	});
-	(*this->objectiter.ptr)["_gc"] = Value([](JetContext* context, Value* v, int args)
+	(*this->objectiter)["_gc"] = Value([](JetContext* context, Value* v, int args)
 	{
 		struct iter2
 		{
-			_JetObjectBacking* container;
-			_JetObjectIterator iterator;
+			JetObject* container;
+			JetObject::Iterator iterator;
 		};
 		delete v->GetUserdata<iter2>();
 	});
-	this->arrayiter.ptr = new _JetObjectBacking;//std::map<std::string, Value>;
-	(*this->arrayiter.ptr)["next"] = Value([](JetContext* context, Value* v, int args)
+	this->arrayiter = new JetObject(this);
+	(*this->arrayiter)["next"] = Value([](JetContext* context, Value* v, int args)
 	{
 		struct iter
 		{
@@ -384,7 +393,7 @@ JetContext::JetContext() : gc(this), stack(500000)
 		}
 		//just return null
 	});
-	(*this->arrayiter.ptr)["current"] = Value([](JetContext* context, Value* v, int args)
+	(*this->arrayiter)["current"] = Value([](JetContext* context, Value* v, int args)
 	{
 		struct iter
 		{
@@ -394,12 +403,9 @@ JetContext::JetContext() : gc(this), stack(500000)
 		//still kinda wierd
 		auto iterator = v->GetUserdata<iter>();
 		if (iterator->iterator != iterator->container->end())
-		{
 			context->Return((*iterator->iterator));
-		}
-		//just return null
 	});
-	(*this->arrayiter.ptr)["advance"] = Value([](JetContext* context, Value* v, int args)
+	(*this->arrayiter)["advance"] = Value([](JetContext* context, Value* v, int args)
 	{
 		struct iter
 		{
@@ -411,9 +417,8 @@ JetContext::JetContext() : gc(this), stack(500000)
 			context->Return(1);
 		else
 			context->Return(0);
-		//just return null
 	});
-	(*this->arrayiter.ptr)["_gc"] = Value([](JetContext* context, Value* v, int args)
+	(*this->arrayiter)["_gc"] = Value([](JetContext* context, Value* v, int args)
 	{
 		struct iter
 		{
@@ -429,7 +434,8 @@ JetContext::~JetContext()
 	this->gc.Cleanup();
 
 	for (auto ii: this->ins)
-		delete[] ii.string;
+		if (ii.instruction != InstructionType::LdStr)
+			delete[] ii.string;
 
 	for (auto ii: this->functions)
 		delete ii.second;
@@ -437,12 +443,12 @@ JetContext::~JetContext()
 	for (auto ii: this->entrypoints)
 		delete ii;
 
-	delete this->string.ptr;
-	delete this->Array.ptr;
-	delete this->file.ptr;
-	delete this->object.ptr;
-	delete this->arrayiter.ptr;
-	delete this->objectiter.ptr;
+	delete this->string;
+	delete this->Array;
+	delete this->file;
+	delete this->object;
+	delete this->arrayiter;
+	delete this->objectiter;
 }
 
 #ifndef _WIN32
@@ -549,7 +555,7 @@ Value JetContext::Execute(int iptr)
 				{
 					Value one = stack.Pop();
 					Value two = stack.Pop();
-					stack.Push(one+two);
+					stack.Push(two+one);
 					break;
 				}
 			case InstructionType::Sub:
@@ -563,7 +569,7 @@ Value JetContext::Execute(int iptr)
 				{
 					Value one = stack.Pop();
 					Value two = stack.Pop();
-					stack.Push(one*two);
+					stack.Push(two*one);
 					break;
 				}
 			case InstructionType::Div:
@@ -725,7 +731,9 @@ Value JetContext::Execute(int iptr)
 				}
 			case InstructionType::LdStr:
 				{
-					stack.Push(in.string);
+					//fix this
+					//fixme all these strings shouldnt be garbage collected
+					stack.Push(Value(in.strlit));
 					break;
 				}
 			case InstructionType::Jump:
@@ -833,6 +841,7 @@ Value JetContext::Execute(int iptr)
 					Closure* closure = new Closure;
 					closure->grey = closure->mark = false;
 					closure->prev = curframe;
+					closure->refcount = 0;
 					closure->numupvals = in.func->upvals;
 					closure->closed = false;
 					if (in.func->upvals)
@@ -902,11 +911,12 @@ Value JetContext::Execute(int iptr)
 							Closure* closure = new Closure;
 							closure->grey = closure->mark = false;
 							closure->prev = curframe->prev;
-							closure->numupvals = curframe->numupvals;//in.func->upvals;
+							closure->refcount = 0;
+							closure->numupvals = curframe->numupvals;
 							closure->closed = false;
 							if (closure->numupvals)
 								closure->upvals = new Value*[closure->numupvals];
-							closure->prototype = curframe->prototype;//in.func;
+							closure->prototype = curframe->prototype;
 							this->gc.closures.push_back(closure);
 
 							curframe = closure;
@@ -1024,6 +1034,7 @@ Value JetContext::Execute(int iptr)
 							closure->prev = curframe->prev;
 							closure->numupvals = closure->numupvals;
 							closure->closed = false;
+							closure->refcount = 0;
 							if (closure->numupvals)
 								closure->upvals = new Value*[closure->numupvals];
 							closure->prototype = curframe->prototype;
@@ -1102,7 +1113,7 @@ Value JetContext::Execute(int iptr)
 				}
 			case InstructionType::Return:
 				{
-					auto oframe = callstack.Pop();//iptr = callstack.Pop();
+					auto oframe = callstack.Pop();
 					iptr = oframe.first;
 					if (oframe.first != 123456789)
 					{
@@ -1112,7 +1123,7 @@ Value JetContext::Execute(int iptr)
 						{
 							//need to mark stack with garbage values for error checking
 							sptr[i].type = ValueType::Object;
-							sptr[i]._object = (_JetObject*)0xcdcdcdcd;
+							sptr[i]._object = (JetObject*)0xcdcdcdcd;
 						}
 #endif
 						sptr -= oframe.second->prototype->locals;//curframe->prototype->locals;
@@ -1141,7 +1152,7 @@ Value JetContext::Execute(int iptr)
 						Value val = stack.Pop();	
 
 						if (loc.type == ValueType::Object)
-							(*loc._object->ptr)[in.string] = val;
+							(*loc._object)[in.string] = val;
 						else
 							throw RuntimeException("Could not index a non array/object value!");
 
@@ -1178,7 +1189,7 @@ Value JetContext::Execute(int iptr)
 						}
 						else if (loc.type == ValueType::Object)
 						{
-							(*loc._object->ptr)[index] = val;
+							(*loc._object)[index] = val;
 
 							//write barrier
 							if (loc._object->mark)
@@ -1204,16 +1215,17 @@ Value JetContext::Execute(int iptr)
 						if (loc.type == ValueType::Object)
 						{
 							Value v;
-							auto ii = loc._object->ptr->find(in.string);
-							if (ii == loc._object->ptr->end())
+							//loc._object->findNode(in.string);
+							auto ii = loc._object->find(in.string);
+							if (ii == loc._object->end())
 							{
 								if (loc.prototype)
 								{
-									ii = loc.prototype->ptr->find(in.string);
-									if (ii == loc.prototype->ptr->end())
+									ii = loc.prototype->find(in.string);
+									if (ii == loc.prototype->end())
 									{
-										ii = this->object.ptr->find(in.string);
-										if (ii != this->object.ptr->end())
+										ii = this->object->find(in.string);
+										if (ii != this->object->end())
 											v = ii->second;
 									}
 									else
@@ -1221,8 +1233,8 @@ Value JetContext::Execute(int iptr)
 								}
 								else
 								{
-									ii = this->object.ptr->find(in.string);
-									if (ii != this->object.ptr->end())
+									ii = this->object->find(in.string);
+									if (ii != this->object->end())
 										v = ii->second;
 								}
 								stack.Push(v);
@@ -1239,11 +1251,11 @@ Value JetContext::Execute(int iptr)
 							//stack.Push(v);
 						}
 						else if (loc.type == ValueType::String)
-							stack.Push((*this->string.ptr)[in.string]);
+							stack.Push((*this->string)[in.string]);
 						else if (loc.type == ValueType::Array)
-							stack.Push((*this->Array.ptr)[in.string]);
+							stack.Push((*this->Array)[in.string]);
 						else if (loc.type == ValueType::Userdata)
-							stack.Push((*loc.prototype->ptr)[in.string]);
+							stack.Push((*loc.prototype)[in.string]);
 						else
 							throw RuntimeException("Could not index a non array/object value!");
 					}
@@ -1259,7 +1271,7 @@ Value JetContext::Execute(int iptr)
 							stack.Push((*loc._array->ptr)[(int)index]);
 						}
 						else if (loc.type == ValueType::Object)
-							stack.Push((*loc._object->ptr)[index]);
+							stack.Push((*loc._object)[index]);
 						else
 							throw RuntimeException("Could not index a non array/object value!");
 					}
@@ -1267,8 +1279,9 @@ Value JetContext::Execute(int iptr)
 				}
 			case InstructionType::NewArray:
 				{
-					auto arr = new GCVal<std::vector<Value>*>(new std::vector<Value>(in.value));//new std::map<int, Value>;
+					auto arr = new GCVal<std::vector<Value>*>(new std::vector<Value>(in.value));
 					arr->grey = arr->mark = false;
+					arr->refcount = 0;
 					this->gc.arrays.push_back(arr);
 					for (int i = in.value-1; i >= 0; i--)
 						(*arr->ptr)[i] = stack.Pop();
@@ -1281,14 +1294,15 @@ Value JetContext::Execute(int iptr)
 				}
 			case InstructionType::NewObject:
 				{
-					auto obj = new _JetObject(new _JetObjectBacking);
+					auto obj = new JetObject(this);
 					obj->grey = obj->mark = false;
+					obj->refcount = 0;
 					this->gc.objects.push_back(obj);
 					for (int i = in.value-1; i >= 0; i--)
 					{
 						auto value = stack.Pop();
 						auto key = stack.Pop();
-						(*obj->ptr)[key] = value;
+						(*obj)[key] = value;
 					}
 					stack.Push(Value(obj));
 
@@ -1584,6 +1598,13 @@ Value JetContext::Assemble(const std::vector<IntermediateInstruction>& code)
 						ins.value = variables[inst.string];
 						break;
 					}
+				case InstructionType::LdStr:
+					{
+						Value str = this->NewString(inst.string, false);
+						str.AddRef();
+						ins.strlit = str._string;
+						break;
+					}
 				case InstructionType::LoadFunction:
 					{
 						ins.func = functions[inst.string];
@@ -1640,7 +1661,7 @@ Value JetContext::Assemble(const std::vector<IntermediateInstruction>& code)
 };
 
 
-Value JetContext::Call(Value* fun, Value* args, unsigned int numargs)
+Value JetContext::Call(const Value* fun, Value* args, unsigned int numargs)
 {
 	if (fun->type != ValueType::NativeFunction && fun->type != ValueType::Function)
 	{
