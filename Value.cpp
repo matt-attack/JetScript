@@ -233,21 +233,28 @@ void Value::SetPrototype(JetObject* obj)
 Value Value::CallMetamethod(const char* name, const Value* other)
 {
 	auto node = this->_object->prototype->findNode(name);
-	if (node)
-		return this->_object->prototype->context->Call(&node->second, (Value*)other, other ? 1 : 0);
-	else
+	if (node == 0)
 	{
 		auto obj = this->_object->prototype;
 		while(obj)
 		{
 			node = obj->findNode(name);
 			if (node)
-				return this->_object->prototype->context->Call(&node->second, (Value*)other, other ? 1 : 0);
+				break;
 			obj = obj->prototype;
 		}
 	}
 
-	throw RuntimeException("Cannot " + (std::string)(name+1) + " two non-numeric types! " + (std::string)ValueTypes[(int)other->type] + " and " + (std::string)ValueTypes[(int)this->type]);
+	if (node)
+	{
+		Value args[2];
+		args[0] = *this;
+		if (other)
+			args[1] = *other;
+		return this->_object->prototype->context->Call(&node->second, (Value*)&args, other ? 2 : 1);
+	}
+
+	throw RuntimeException("Cannot " + (std::string)(name+1) + " two non-numeric types! " + (std::string)ValueTypes[(int)this->type] + " and " + (std::string)ValueTypes[(int)other->type]);
 }
 
 bool Value::operator== (const Value& other) const
