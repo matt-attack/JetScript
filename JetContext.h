@@ -38,10 +38,10 @@
 namespace Jet
 {
 	typedef std::function<void(Jet::JetContext*,Jet::Value*,int)> JetFunction;
-#define JetBind(context, fun) 	auto temp__bind_##fun = [](Jet::JetContext* context,Jet::Value* args, int numargs) { context->Return(fun(args[0]));};context[#fun] = Jet::Value(temp__bind_##fun);
+#define JetBind(context, fun) 	auto temp__bind_##fun = [](Jet::JetContext* context,Jet::Value* args, int numargs) { return Value(fun(args[0]));};context[#fun] = Jet::Value(temp__bind_##fun);
 	//void(*temp__bind_##fun)(Jet::JetContext*,Jet::Value*,int)> temp__bind_##fun = &[](Jet::JetContext* context,Jet::Value* args, int numargs) { context->Return(fun(args[0]));}; context[#fun] = &temp__bind_##fun;
-#define JetBind2(context, fun) 	auto temp__bind_##fun = [](Jet::JetContext* context,Jet::Value* args, int numargs) { context->Return(fun(args[0],args[1]));};context[#fun] = Jet::Value(temp__bind_##fun);
-#define JetBind2(context, fun, type) 	auto temp__bind_##fun = [](Jet::JetContext* context,Jet::Value* args, int numargs) { context->Return(fun((type)args[0],(type)args[1]));};context[#fun] = Jet::Value(temp__bind_##fun);
+#define JetBind2(context, fun) 	auto temp__bind_##fun = [](Jet::JetContext* context,Jet::Value* args, int numargs) {  return Value(fun(args[0],args[1]));};context[#fun] = Jet::Value(temp__bind_##fun);
+#define JetBind2(context, fun, type) 	auto temp__bind_##fun = [](Jet::JetContext* context,Jet::Value* args, int numargs) {  return Value(fun((type)args[0],(type)args[1]));};context[#fun] = Jet::Value(temp__bind_##fun);
 
 	struct Instruction
 	{
@@ -64,8 +64,8 @@ namespace Jet
 	};
 
 	//builtin function definitions
-	void gc(JetContext* context,Value* args, int numargs);
-	void print(JetContext* context,Value* args, int numargs);
+	Value gc(JetContext* context,Value* args, int numargs);
+	Value print(JetContext* context,Value* args, int numargs);
 
 	class JetContext
 	{
@@ -104,6 +104,9 @@ namespace Jet
 		JetObject* arrayiter;
 		JetObject* objectiter;
 
+		//require cache
+		std::map<std::string, Value> require_cache;
+
 		//manages memory
 		GarbageCollector gc;
 
@@ -114,9 +117,8 @@ namespace Jet
 		Value NewUserdata(void* data, const Value& proto);
 		Value NewString(const char* string, bool copy = true);
 
-		//a helper function for registering metatables, returns an object
-		//automatically adds a reference to the object
-		Value NewPrototype(const char* Typename);
+		//a helper function for registering metatables, returns an ValueRef smartpointer
+		ValueRef NewPrototype(const char* Typename);
 
 		JetContext();
 		~JetContext();
@@ -141,8 +143,6 @@ namespace Jet
 		Value Call(const Value* function, Value* args = 0, unsigned int numargs = 0);
 
 		void RunGC();//runs an iteration of the garbage collector
-
-		void Return(Value val);//returns value from native functions
 
 	private:
 		int fptr;//frame pointer, not really used except in gc

@@ -1,6 +1,7 @@
 #include "Parselets.h"
 #include "Expressions.h"
 #include "Parser.h"
+#include "UniquePtr.h"
 #include <string>
 
 using namespace Jet;
@@ -10,13 +11,13 @@ Expression* NameParselet::parse(Parser* parser, Token token)
 	if (parser->MatchAndConsume(TokenType::LeftBracket))
 	{
 		//array index
-		Expression* index = parser->parseExpression();
+		UniquePtr<Expression*> index = parser->parseExpression();
 		parser->Consume(TokenType::RightBracket);
 
-		return new IndexExpression(new NameExpression(token.getText()), index, token);
+		return new IndexExpression(new NameExpression(token.text), index.Release(), token);
 	}
 	else
-		return new NameExpression(token.getText());
+		return new NameExpression(token.text);
 }
 
 Expression* AssignParselet::parse(Parser* parser, Expression* left, Token token)
@@ -24,32 +25,34 @@ Expression* AssignParselet::parse(Parser* parser, Expression* left, Token token)
 	Expression* right = parser->parseExpression(/*assignment prcedence -1 */);
 
 	if (dynamic_cast<IStorableExpression*>(left) == 0)
+	{
+		delete right;
 		throw CompilerException(token.filename, token.line, "AssignParselet: Left hand side must be a storable location!");
-
+	}
 	return new AssignExpression(left, right);
 }
 
 Expression* OperatorAssignParselet::parse(Parser* parser, Expression* left, Token token)
 {
-	Expression* right = parser->parseExpression(/*assignment prcedence -1 */);
+	UniquePtr<Expression*> right = parser->parseExpression(/*assignment prcedence -1 */);
 
 	if (dynamic_cast<IStorableExpression*>(left) == 0)
 		throw CompilerException(token.filename, token.line, "OperatorAssignParselet: Left hand side must be a storable location!");
 
-	return new OperatorAssignExpression(token, left, right);
+	return new OperatorAssignExpression(token, left, right.Release());
 }
 
 Expression* SwapParselet::parse(Parser* parser, Expression* left, Token token)
 {
-	Expression* right = parser->parseExpression(/*assignment prcedence -1 */);
+	UniquePtr<Expression*> right = parser->parseExpression(/*assignment prcedence -1 */);
 
 	if (dynamic_cast<IStorableExpression*>(left) == 0)
 		throw CompilerException(token.filename, token.line, "SwapParselet: Left hand side must be a storable location!");
 
-	if (dynamic_cast<IStorableExpression*>(right) == 0)
+	if (dynamic_cast<IStorableExpression*>((Expression*)right) == 0)
 		throw CompilerException(token.filename, token.line, "SwapParselet: Right hand side must be a storable location!");
 
-	return new SwapExpression(left, right);
+	return new SwapExpression(left, right.Release());
 }
 
 Expression* PrefixOperatorParselet::parse(Parser* parser, Token token)
@@ -72,21 +75,21 @@ Expression* BinaryOperatorParselet::parse(Parser* parser, Expression* left, Toke
 
 Expression* GroupParselet::parse(Parser* parser, Token token)
 {
-	Expression* exp = parser->parseExpression();
+	UniquePtr<Expression*> exp = parser->parseExpression();
 	parser->Consume(TokenType::RightParen);
-	return exp;
+	return exp.Release();
 }
 
 Expression* WhileParselet::parse(Parser* parser, Token token)
 {
 	parser->Consume(TokenType::LeftParen);
 
-	auto condition = parser->parseExpression();
+	UniquePtr<Expression*> condition = parser->parseExpression();
 
 	parser->Consume(TokenType::RightParen);
 
 	auto block = new ScopeExpression(parser->parseBlock());
-	return new WhileExpression(token, condition, block);
+	return new WhileExpression(token, condition.Release(), block);
 }
 
 
@@ -112,16 +115,15 @@ Expression* ForParselet::parse(Parser* parser, Token token)
 			}
 		}
 	}
-	//closure program not working
 
-	auto initial = parser->ParseStatement(true);
-	auto condition = parser->ParseStatement(true);
-	auto increment = parser->parseExpression();
+	UniquePtr<Expression*> initial = parser->ParseStatement(true);
+	UniquePtr<Expression*> condition = parser->ParseStatement(true);
+	UniquePtr<Expression*> increment = parser->parseExpression();
 
 	parser->Consume(TokenType::RightParen);
 
 	auto block = new ScopeExpression(parser->parseBlock());
-	return new ForExpression(token, initial, condition, increment, block);
+	return new ForExpression(token, initial.Release(), condition.Release(), increment.Release(), block);
 }
 
 Expression* IfParselet::parse(Parser* parser, Token token)
@@ -288,10 +290,9 @@ Expression* LocalParselet::parse(Parser* parser, Token token)
 	}
 	while (parser->MatchAndConsume(TokenType::Comma));
 
-
 	parser->Consume(TokenType::Assign);//its possible this wont be here and it may just be a mentioning, but no assignment
 
-	//do somethign with multiple comma expressions
+	//handle multiple comma expressions
 	std::vector<Expression*>* rights = new std::vector<Expression*>;
 	do
 	{
@@ -302,8 +303,6 @@ Expression* LocalParselet::parse(Parser* parser, Token token)
 	while (parser->MatchAndConsume(TokenType::Comma));
 
 	parser->Consume(TokenType::Semicolon);
-	//do stuff with this and store and what not
-	//need to add this variable to this's block expression
 
 	return new LocalExpression(names, rights);
 }
@@ -319,7 +318,6 @@ Expression* ConstParselet::parse(Parser* parser, Token token)
 		names->push_back(name);
 	}
 	while (parser->MatchAndConsume(TokenType::Comma));
-
 
 	parser->Consume(TokenType::Assign);//its possible this wont be here and it may just be a mentioning, but no assignment
 
@@ -343,7 +341,7 @@ Expression* ConstParselet::parse(Parser* parser, Token token)
 Expression* ArrayParselet::parse(Parser* parser, Token token)
 {
 	auto inits = new std::vector<Expression*>;
-	while(parser->LookAhead().getType() != TokenType::RightBracket)//== TokenType::String || parser->LookAhead().getType() == TokenType::Number)
+	while(parser->LookAhead().getType() != TokenType::RightBracket)
 	{
 		Expression* e = parser->parseExpression(2);
 
@@ -358,22 +356,24 @@ Expression* ArrayParselet::parse(Parser* parser, Token token)
 
 Expression* IndexParselet::parse(Parser* parser, Expression* left, Token token)
 {
-	Expression* index = parser->parseExpression();
+	UniquePtr<Expression*> index = parser->parseExpression();
 	parser->Consume(TokenType::RightBracket);
 
-	return new IndexExpression(left, index, token);
+	return new IndexExpression(left, index.Release(), token);
 }
 
 Expression* MemberParselet::parse(Parser* parser, Expression* left, Token token)
 {
 	//this is for const members
 	Expression* member = parser->parseExpression(9);
-	NameExpression* name = dynamic_cast<NameExpression*>(member);
+	UniquePtr<NameExpression*> name = dynamic_cast<NameExpression*>(member);
 	if (name == 0)
+	{
+		delete member; delete left;
 		throw CompilerException(token.filename, token.line, "Cannot access member name that is not a string");
+	}
 
 	auto ret = new IndexExpression(left, new StringExpression(name->GetName()), token);
-	delete name;
 
 	return ret;
 }

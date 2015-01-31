@@ -149,7 +149,7 @@ std::vector<IntermediateInstruction> CompilerContext::Compile(BlockExpression* e
 		delete ii.second;
 
 	this->functions.clear();
-	//add metamethods and custom operators
+	//add custom operators
 	this->localindex = 0;
 	this->closures = 0;
 

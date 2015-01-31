@@ -9,34 +9,60 @@ void PrefixExpression::Compile(CompilerContext* context)
 	context->Line(this->_operator.filename, this->_operator.line);
 
 	right->Compile(context);
+
 	context->UnaryOperation(this->_operator.type);
+
 	switch (this->_operator.type)
 	{
 	case TokenType::BNot:
 	case TokenType::Minus:
-		if (dynamic_cast<BlockExpression*>(this->Parent))
-			context->Pop();
-		break;
-	default:
-		if (dynamic_cast<IStorableExpression*>(this->right))
 		{
-			if (dynamic_cast<BlockExpression*>(this->Parent) == 0)
-				context->Duplicate();
-			dynamic_cast<IStorableExpression*>(this->right)->CompileStore(context);
+			if (dynamic_cast<BlockExpression*>(this->Parent))
+				context->Pop();
+			break;
+		}
+	default://operators that also do a store, like ++ and --
+		{
+			auto location = dynamic_cast<IStorableExpression*>(this->right);
+			if (location)
+			{
+				if (dynamic_cast<BlockExpression*>(this->Parent) == 0)
+					context->Duplicate();
+
+				location->CompileStore(context);
+			}
+			else if (dynamic_cast<BlockExpression*>(this->Parent) != 0)
+				context->Pop();
 		}
 	}
+}
+
+void PostfixExpression::Compile(CompilerContext* context)
+{
+	context->Line(this->_operator.filename, this->_operator.line);
+
+	left->Compile(context);
+
+	if (dynamic_cast<BlockExpression*>(this->Parent) == 0 && dynamic_cast<IStorableExpression*>(this->left))
+		context->Duplicate();
+
+	context->UnaryOperation(this->_operator.type);
+
+	if (dynamic_cast<IStorableExpression*>(this->left))
+		dynamic_cast<IStorableExpression*>(this->left)->CompileStore(context);
+	else if (dynamic_cast<BlockExpression*>(this->Parent) != 0)
+		context->Pop();
 }
 
 void IndexExpression::Compile(CompilerContext* context)
 {
 	context->Line(token.filename, token.line);
 
-	//add load variable instruction
 	left->Compile(context);
 	//if the index is constant compile to a special instruction carying that constant
-	if (dynamic_cast<StringExpression*>(index))
+	if (auto string = dynamic_cast<StringExpression*>(index))
 	{
-		context->LoadIndex(dynamic_cast<StringExpression*>(index)->GetValue().c_str());
+		context->LoadIndex(string->GetValue().c_str());
 	}
 	else
 	{
@@ -54,9 +80,9 @@ void IndexExpression::CompileStore(CompilerContext* context)
 
 	left->Compile(context);
 	//if the index is constant compile to a special instruction carying that constant
-	if (dynamic_cast<StringExpression*>(index))
+	if (auto string = dynamic_cast<StringExpression*>(index))
 	{
-		context->StoreIndex(dynamic_cast<StringExpression*>(index)->GetValue().c_str());
+		context->StoreIndex(string->GetValue().c_str());
 	}
 	else
 	{
@@ -80,6 +106,7 @@ void ObjectExpression::Compile(CompilerContext* context)
 	}
 	context->NewObject(count);
 
+	//pop off if we dont need the result
 	if (dynamic_cast<BlockExpression*>(this->Parent))
 		context->Pop();
 }
@@ -97,6 +124,7 @@ void ArrayExpression::Compile(CompilerContext* context)
 	}
 	context->NewArray(count);
 
+	//pop off if we dont need the result
 	if (dynamic_cast<BlockExpression*>(this->Parent))
 		context->Pop();
 }
@@ -105,6 +133,7 @@ void StringExpression::Compile(CompilerContext* context)
 {
 	context->String(this->value);
 
+	//pop off if we dont need the result
 	if (dynamic_cast<BlockExpression*>(this->Parent))
 		context->Pop();
 }
@@ -113,6 +142,7 @@ void NullExpression::Compile(CompilerContext* context)
 {
 	context->Null();
 
+	//pop off if we dont need the result
 	if (dynamic_cast<BlockExpression*>(this->Parent))
 		context->Pop();
 }
@@ -121,23 +151,9 @@ void NumberExpression::Compile(CompilerContext* context)
 {
 	context->Number(this->value);
 
+	//pop off if we dont need the result
 	if (dynamic_cast<BlockExpression*>(this->Parent))
 		context->Pop();
-}
-
-void PostfixExpression::Compile(CompilerContext* context)
-{
-	context->Line(this->_operator.filename, this->_operator.line);
-
-	left->Compile(context);
-
-	if (dynamic_cast<BlockExpression*>(this->Parent) == 0)
-		context->Duplicate();
-
-	context->UnaryOperation(this->_operator.type);
-
-	if (dynamic_cast<IStorableExpression*>(this->left))
-		dynamic_cast<IStorableExpression*>(this->left)->CompileStore(context);
 }
 
 void SwapExpression::Compile(CompilerContext* context)
@@ -145,25 +161,25 @@ void SwapExpression::Compile(CompilerContext* context)
 	right->Compile(context);
 	left->Compile(context);
 
-	if (dynamic_cast<IStorableExpression*>(this->right))
-		dynamic_cast<IStorableExpression*>(this->right)->CompileStore(context);
+	if (auto rstorable = dynamic_cast<IStorableExpression*>(this->right))
+		rstorable->CompileStore(context);
 
 	if (dynamic_cast<BlockExpression*>(this->Parent) == 0)
 		context->Duplicate();
 
-	if (dynamic_cast<IStorableExpression*>(this->left))
-		dynamic_cast<IStorableExpression*>(this->left)->CompileStore(context);
+	if (auto lstorable = dynamic_cast<IStorableExpression*>(this->left))
+		lstorable->CompileStore(context);
 }
 
 void AssignExpression::Compile(CompilerContext* context)
 {
 	this->right->Compile(context);
-	//insert store here
+
 	if (dynamic_cast<BlockExpression*>(this->Parent) == 0)
 		context->Duplicate();//if my parent is not block expression, we need the result, so push it
 
-	if (dynamic_cast<IStorableExpression*>(this->left))
-		dynamic_cast<IStorableExpression*>(this->left)->CompileStore(context);
+	if (auto storable = dynamic_cast<IStorableExpression*>(this->left))
+		storable->CompileStore(context);
 }
 
 void CallExpression::Compile(CompilerContext* context)
@@ -237,7 +253,7 @@ void OperatorAssignExpression::Compile(CompilerContext* context)
 {
 	context->Line(token.filename, token.line);
 
-	left->Compile(context);
+	this->left->Compile(context);
 	this->right->Compile(context);
 	context->BinaryOperation(token.type);
 
@@ -245,8 +261,8 @@ void OperatorAssignExpression::Compile(CompilerContext* context)
 	if (dynamic_cast<BlockExpression*>(this->Parent) == 0)
 		context->Duplicate();//if my parent is not block expression, we need the result, so push it
 
-	if (dynamic_cast<IStorableExpression*>(this->left))
-		dynamic_cast<IStorableExpression*>(this->left)->CompileStore(context);
+	if (auto storable = dynamic_cast<IStorableExpression*>(this->left))
+		storable->CompileStore(context);
 }
 
 void OperatorExpression::Compile(CompilerContext* context)
@@ -257,6 +273,7 @@ void OperatorExpression::Compile(CompilerContext* context)
 	this->right->Compile(context);
 	context->BinaryOperation(this->_operator.type);
 
+	//pop off if we dont need the result
 	if (dynamic_cast<BlockExpression*>(this->Parent))
 		context->Pop();
 }
@@ -267,16 +284,16 @@ void FunctionExpression::Compile(CompilerContext* context)
 
 	std::string fname;
 	if (name)
-		fname = dynamic_cast<NameExpression*>(name)->GetName();
+		fname = static_cast<NameExpression*>(name)->GetName();
 	else
-		fname = "_lambda_id_";//+context->GetUUID();
+		fname = "_lambda_id_";
 
 	CompilerContext* function = context->AddFunction(fname, this->args->size(), this->varargs);
 
 	//ok push locals, in opposite order
 	for (int i = 0; i < this->args->size(); i++)
 	{
-		auto aname = dynamic_cast<NameExpression*>((*this->args)[i]);
+		auto aname = static_cast<NameExpression*>((*this->args)[i]);
 		function->RegisterLocal(aname->GetName());
 	}
 	if (this->varargs)
@@ -303,7 +320,7 @@ void FunctionExpression::Compile(CompilerContext* context)
 
 	//only named functions need to be stored here
 	if (name)
-		context->Store(dynamic_cast<NameExpression*>(name)->GetName());
+		context->Store(static_cast<NameExpression*>(name)->GetName());
 
 	//vm will pop off locals when it removes the call stack
 }
@@ -323,8 +340,6 @@ void LocalExpression::Compile(CompilerContext* context)
 
 	//actually store if we have something to store
 	for (int i = _right->size()-1; i >= 0; i--)
-	{
 		context->StoreLocal((*_names)[i].text);
-	}
 }
 

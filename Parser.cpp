@@ -1,5 +1,6 @@
 #include "Parser.h"
 #include "Token.h"
+#include "UniquePtr.h"
 
 using namespace Jet;
 
@@ -161,7 +162,7 @@ Expression* Parser::ParseStatement(bool takeTrailingSemicolon)//call this until 
 		if (takeTrailingSemicolon)
 			Consume(TokenType::Semicolon);
 
-		return result;
+		return result;//.Release();
 	}
 
 	token = Consume();
@@ -170,7 +171,7 @@ Expression* Parser::ParseStatement(bool takeTrailingSemicolon)//call this until 
 	if (takeTrailingSemicolon && statement->TrailingSemicolon)
 		Consume(TokenType::Semicolon);
 
-	return result;
+	return result;//.Release();
 }
 
 BlockExpression* Parser::parseBlock(bool allowsingle)

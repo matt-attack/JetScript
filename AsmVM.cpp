@@ -163,17 +163,21 @@ int main(int argc, char* argv[])
 					Jet::Value b = arguments[1];   // Number , -100
 					Jet::Value c = arguments[2];   // Number , 120
 					Jet::Value d = arguments[3];   // Number , 6
+					return Value();
 				};
 				context.Script("effect_move(\"hi\", -100, 120, 6);");
 
 				try
 				{
+					//the 5++ in the if statement leaks stack
 					Value ret = context.Script(
 						"fail = 0;"
 						"if (++5 != 6) fail = 1;"
 						"if (5++ != 5) fail = 1;"
 						"x = -5;"
 						"y = -5;"
+						"5++;"
+						"++5;"
 						"print(++x);"
 						"return ++x;");
 					if ((int)ret != -3)
@@ -216,7 +220,7 @@ int main(int argc, char* argv[])
 				//recursive calling checks
 				auto f = [](JetContext* context,Value* args, int numargs)
 				{ 
-					context->Return(context->Call("h"));
+					return context->Call("h");
 				};
 
 				context["inception"] = Value(f);
@@ -237,7 +241,7 @@ int main(int argc, char* argv[])
 				//native function test
 				context["ih"] = Value([](JetContext* context, Value* args, int numargs) 
 				{ 
-					context->Return(args[0]);
+					return args[0];
 				});
 
 				if ((v = context.Script("return ih(\"test\");")).ToString() != "test")
@@ -249,18 +253,20 @@ int main(int argc, char* argv[])
 				//test meta tables and userdata
 				try
 				{
-					Value meta = context.NewPrototype("Test");//ok, lets give me a type
+					//fix valueref breaking this
+					ValueRef meta = context.NewPrototype("Test");//ok, lets give me a type
 					meta["t1"] = [](JetContext* context, Value* v, int args)
 					{
 						printf("hi from metatable\n");
+						return Value();
 					};
 					meta["t2"] = [](JetContext* context, Value* v, int args)
 					{
-						context->Return(7);
+						return Value(7);
 					};
 					meta["t3"] = [](JetContext* context, Value* v, int args)
 					{
-
+						return Value();
 					};
 					context["mttest"] = context.NewUserdata(0, meta);
 					auto out = context.Script("mttest.t1();"
@@ -268,9 +274,9 @@ int main(int argc, char* argv[])
 					if ((double)out != 7.0)
 						throw 7;
 					//release table when context is done
-					Value t2 = context.NewPrototype("hi");
-					meta.Release();
-					t2.Release();
+					ValueRef t2 = context.NewPrototype("hi");
+					//meta.Release();
+					//t2.Release();
 				}
 				catch(...)
 				{

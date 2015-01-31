@@ -69,7 +69,6 @@ namespace Jet
 
 		void CompileStore(CompilerContext* context)
 		{
-			//todo make me detect if this is a local or not
 			context->Store(name);
 		}
 	};

@@ -63,6 +63,9 @@
     <ClInclude Include="GarbageCollector.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="UniquePtr.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="stdafx.cpp">

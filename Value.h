@@ -67,7 +67,7 @@ namespace Jet
 	typedef GCVal<char*> JetString;
 
 	typedef void _JetFunction;
-	typedef void(*_JetNativeFunc)(JetContext*,Value*, int);
+	typedef Value(*_JetNativeFunc)(JetContext*,Value*, int);
 
 	class JetContext;
 
@@ -119,7 +119,6 @@ namespace Jet
 				union
 				{
 					unsigned int length;//used for strings
-					//JetObject* prototype;
 				};
 			};
 
@@ -233,7 +232,7 @@ namespace Jet
 		Value& operator[] (const char* key);
 		Value& operator[] (const Value& key);
 
-		bool operator== (const Value& other) const;
+		bool operator==(const Value& other) const;
 
 		Value operator+( const Value &other );
 
@@ -416,6 +415,54 @@ namespace Jet
 
 		//memory barrier
 		void Barrier();
+	};
+
+	//basically a unique_ptr for values
+	class ValueRef
+	{
+		Value v;
+	public:
+		ValueRef(const Value& value)
+		{
+			this->v = value;
+			this->v.AddRef();
+		}
+
+		ValueRef(ValueRef&& other)
+		{
+			this->v = other.v;
+			other.v = Value();
+		}
+
+		~ValueRef()
+		{
+			this->v.Release();
+		}
+
+		inline operator Value()
+		{
+			return this->v;
+		}
+
+		inline Value* operator ->()
+		{
+			return &this->v;
+		}
+
+		inline Value& operator [](const char* c)
+		{
+			return this->v[c];
+		}
+
+		inline Value& operator [](int i)
+		{
+			return this->v[i];
+		}
+
+		inline Value& operator [](const Value& c)
+		{
+			return this->v[c];
+		}
 	};
 }
 

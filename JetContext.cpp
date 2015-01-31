@@ -9,23 +9,28 @@
 #endif
 
 #include "JetContext.h"
+#include "UniquePtr.h"
 
 #include <stack>
+#include <fstream>
+#include <memory>
 
 using namespace Jet;
 
-void Jet::gc(JetContext* context,Value* args, int numargs) 
+Value Jet::gc(JetContext* context,Value* args, int numargs) 
 { 
 	context->RunGC();
+	return Value();
 };
 
-void Jet::print(JetContext* context,Value* args, int numargs) 
+Value Jet::print(JetContext* context,Value* args, int numargs) 
 { 
 	for (int i = 0; i < numargs; i++)
 	{
 		printf("%s", args[i].ToString().c_str());
 	}
 	printf("\n");
+	return Value();
 };
 
 Value& JetContext::operator[](const std::string& id)
@@ -81,15 +86,13 @@ Value JetContext::NewObject()
 	return Value(v);
 }
 
-Value JetContext::NewPrototype(const char* Typename)
+ValueRef JetContext::NewPrototype(const char* Typename)
 {
 	auto v = new JetObject(this);
 	v->refcount = 0;
 	v->grey = v->mark = false;
 	this->gc.objects.push_back(v);
-	Value val(v);
-	val.AddRef();
-	return val;
+	return v;
 }
 
 Value JetContext::NewArray()
@@ -150,7 +153,7 @@ JetContext::JetContext() : gc(this), stack(500000)
 		{
 			Value val = v[0];
 			val._object->prototype = v[1]._object;
-			context->Return(val);
+			return val;
 		}
 		else
 		{
@@ -158,12 +161,49 @@ JetContext::JetContext() : gc(this), stack(500000)
 		}
 	};
 
+	(*this)["require"] = [](JetContext* context, Value* v, int args)
+	{
+		if (args != 1 || v->type != ValueType::String)
+			throw RuntimeException("Invalid Call, Improper Arguments!");
+
+		auto iter = context->require_cache.find(v->_string->ptr);
+		if (iter == context->require_cache.end())
+		{
+			//load from file
+			std::ifstream t(v->_string->ptr);
+			if (t)
+			{
+				int length;
+				t.seekg(0, std::ios::end);    // go to the end
+				length = t.tellg();           // report location (this is the length)
+				t.seekg(0, std::ios::beg);    // go back to the beginning
+				UniquePtr<char[]> buffer(new char[length+1]);    // allocate memory for a buffer of appropriate dimension
+				t.read(buffer, length);       // read the whole file into the buffer
+				buffer[length] = 0;
+				t.close();
+
+				auto out = context->Compile(buffer, v->_string->ptr);
+				auto fun = context->Assemble(out);
+				context->require_cache[v->_string->ptr] = Value();
+				auto obj = context->Call(&fun);
+				context->require_cache[v->_string->ptr] = obj;
+				return obj;
+			}
+			else
+			{
+				throw RuntimeException("Require could not find file: '" + (std::string)v->_string->ptr + "'");
+			}
+		}
+		else
+		{
+			return Value(iter->second);
+		}
+	};
+
 	(*this)["getprototype"] = [](JetContext* context, Value* v, int args)
 	{
 		if (args == 1 && (v->type == ValueType::Object || v->type == ValueType::Userdata))
-		{
-			context->Return(v->GetPrototype());
-		}
+			return Value(v->GetPrototype());
 		else
 			throw RuntimeException("getprototype expected an object or userdata value!");
 	};
@@ -179,7 +219,7 @@ JetContext::JetContext() : gc(this), stack(500000)
 		char* out = new char[((int)v->value)+1];//context->GCAllocate((v)->value);
 		fread(out, 1, (int)(v)->value, v[1].GetUserdata<FILE>());
 		out[(int)(v)->value] = 0;
-		context->Return(context->NewString(out, false));
+		return context->NewString(out, false);
 	});
 	(*file)["write"] = Value([](JetContext* context, Value* v, int args)
 	{
@@ -188,11 +228,13 @@ JetContext::JetContext() : gc(this), stack(500000)
 
 		std::string str = v->ToString();
 		fwrite(str.c_str(), 1, str.length(), v[1].GetUserdata<FILE>());
+		return Value();
 	});
 	//this function is called when the value is garbage collected
 	(*file)["_gc"] = Value([](JetContext* context, Value* v, int args)
 	{
 		fclose(v->GetUserdata<FILE>());
+		return Value();
 	});
 
 	(*this)["fopen"] = Value([](JetContext* context, Value* v, int args)
@@ -201,7 +243,7 @@ JetContext::JetContext() : gc(this), stack(500000)
 			throw RuntimeException("Invalid number of arguments to fopen!");
 
 		FILE* f = fopen(v->ToString().c_str(), v[1].ToString().c_str());
-		context->Return(context->NewUserdata(f, context->file));
+		return context->NewUserdata(f, context->file);
 	});
 
 	(*this)["fclose"] = Value([](JetContext* context, Value* v, int args)
@@ -209,6 +251,7 @@ JetContext::JetContext() : gc(this), stack(500000)
 		if (args != 1)
 			throw RuntimeException("Invalid number of arguments to fclose!");
 		fclose(v->GetUserdata<FILE>());
+		return Value();
 	});
 
 
@@ -224,7 +267,7 @@ JetContext::JetContext() : gc(this), stack(500000)
 			memcpy(text, v[1]._string, v[1].length);
 			memcpy(text+v[1].length, v[0]._string, v[0].length);
 			text[len-1] = 0;
-			context->Return(context->NewString(text, false));
+			return context->NewString(text, false);
 		}
 		else
 			throw RuntimeException("bad append call!");
@@ -232,7 +275,7 @@ JetContext::JetContext() : gc(this), stack(500000)
 	(*this->string)["length"] = Value([](JetContext* context, Value* v, int args)
 	{
 		if (args == 1)
-			context->Return(Value((double)v->length));
+			return Value((double)v->length);
 		else
 			throw RuntimeException("bad length call!");
 	});
@@ -248,12 +291,13 @@ JetContext::JetContext() : gc(this), stack(500000)
 		}
 		else
 			throw RuntimeException("Invalid add call!!");
+		return Value();
 	});
 	(*this->Array)["size"] = Value([](JetContext* context, Value* v, int args)
 	{
 		//how do I get access to the array from here?
 		if (args == 1)
-			context->Return((int)v->_array->ptr->size());
+			return Value((int)v->_array->ptr->size());
 		else
 			throw RuntimeException("Invalid size call!!");
 	});
@@ -264,6 +308,7 @@ JetContext::JetContext() : gc(this), stack(500000)
 			v[1]._array->ptr->resize(v->value);
 		else
 			throw RuntimeException("Invalid size call!!");
+		return Value();
 	});
 
 	(*this->Array)["getIterator"] = Value([](JetContext* context, Value* v, int args)
@@ -278,8 +323,7 @@ JetContext::JetContext() : gc(this), stack(500000)
 			iter* it = new iter;
 			it->container = v->_array->ptr;
 			it->iterator = v->_array->ptr->begin();
-			context->Return(context->NewUserdata(it, context->arrayiter));
-			return;
+			return Value(context->NewUserdata(it, context->arrayiter));
 		}
 		throw RuntimeException("Bad call to getIterator");
 	});
@@ -289,7 +333,7 @@ JetContext::JetContext() : gc(this), stack(500000)
 	{
 		//how do I get access to the array from here?
 		if (args == 1)
-			context->Return((int)v->_object->size());
+			return Value((int)v->_object->size());
 		else
 			throw RuntimeException("Invalid size call!!");
 	});
@@ -306,8 +350,7 @@ JetContext::JetContext() : gc(this), stack(500000)
 			iter2* it = new iter2;
 			it->container = v->_object;
 			it->iterator = v->_object->begin();
-			context->Return(context->NewUserdata(it, context->objectiter));
-			return;
+			return (context->NewUserdata(it, context->objectiter));
 		}
 		throw RuntimeException("Bad call to getIterator");
 	});
@@ -323,8 +366,8 @@ JetContext::JetContext() : gc(this), stack(500000)
 		auto iterator = v->GetUserdata<iter2>();
 		if (iterator->iterator != iterator->container->end())
 		{
-			context->Return((*iterator->iterator).second);
-			++iterator->iterator;//->operator++();
+			return Value((*iterator->iterator++).second);
+			//++iterator->iterator;//->operator++();
 		}
 		//just return null
 	});
@@ -339,7 +382,7 @@ JetContext::JetContext() : gc(this), stack(500000)
 		auto iterator = v->GetUserdata<iter2>();
 		if (iterator->iterator != iterator->container->end())
 		{
-			context->Return((*iterator->iterator).second);
+			return Value((*iterator->iterator).second);
 		}
 		//just return null
 	});
@@ -352,9 +395,9 @@ JetContext::JetContext() : gc(this), stack(500000)
 		};
 		auto iterator = v->GetUserdata<iter2>();
 		if (++iterator->iterator != iterator->container->end())
-			context->Return(1);
+			return Value(1);
 		else
-			context->Return(0);
+			return Value(0);
 		//just return null
 	});
 	(*this->objectiter)["_gc"] = Value([](JetContext* context, Value* v, int args)
@@ -365,6 +408,7 @@ JetContext::JetContext() : gc(this), stack(500000)
 			JetObject::Iterator iterator;
 		};
 		delete v->GetUserdata<iter2>();
+		return Value();
 	});
 	this->arrayiter = new JetObject(this);
 	this->arrayiter->prototype = 0;
@@ -378,8 +422,8 @@ JetContext::JetContext() : gc(this), stack(500000)
 		auto iterator = v->GetUserdata<iter>();
 		if (iterator->iterator != iterator->container->end())
 		{
-			context->Return((*iterator->iterator));
-			++iterator->iterator;//->operator++();
+			return Value((*iterator->iterator++));
+			//++iterator->iterator;//->operator++();
 		}
 		//just return null
 	});
@@ -393,7 +437,7 @@ JetContext::JetContext() : gc(this), stack(500000)
 		//still kinda wierd
 		auto iterator = v->GetUserdata<iter>();
 		if (iterator->iterator != iterator->container->end())
-			context->Return((*iterator->iterator));
+			return Value((*iterator->iterator));
 	});
 	(*this->arrayiter)["advance"] = Value([](JetContext* context, Value* v, int args)
 	{
@@ -404,9 +448,9 @@ JetContext::JetContext() : gc(this), stack(500000)
 		};
 		auto iterator = v->GetUserdata<iter>();
 		if (++iterator->iterator != iterator->container->end())
-			context->Return(1);
+			return Value(1);
 		else
-			context->Return(0);
+			return Value(0);
 	});
 	(*this->arrayiter)["_gc"] = Value([](JetContext* context, Value* v, int args)
 	{
@@ -416,6 +460,7 @@ JetContext::JetContext() : gc(this), stack(500000)
 			_JetArrayIterator iterator;
 		};
 		delete v->GetUserdata<iter>();
+		return Value();
 	});
 };
 
@@ -959,19 +1004,17 @@ Value JetContext::Execute(int iptr)
 					{
 						unsigned int args = (unsigned int)in.value2;
 						Value* tmp = &stack.mem[stack.size()-args];
-						stack.QuickPop(args);//pop off args
-
+						
 						//ok fix this to be cleaner and resolve stack printing
 						//should just push a value to indicate that we are in a native function call
-						callstack.Push(std::pair<unsigned int, Closure*>(iptr, curframe));//callstack.Push(iptr);
-						callstack.Push(std::pair<unsigned int, Closure*>(123456789, curframe));//callstack.Push(123456789);
-						//to return something, push it to the stack
-						int s = stack.size();
-						(*vars[in.value].func)(this,tmp,args);
+						callstack.Push(std::pair<unsigned int, Closure*>(iptr, curframe));
+						callstack.Push(std::pair<unsigned int, Closure*>(123456789, curframe));
+						
+						Value ret = (*vars[in.value].func)(this,tmp,args);
+						stack.QuickPop(args);//pop off args
 
 						callstack.QuickPop(2);
-						if (stack.size() == s)//we didnt return anything
-							stack.Push(Value());//return null
+						stack.Push(ret);
 					}
 					else
 					{
@@ -1080,20 +1123,17 @@ Value JetContext::Execute(int iptr)
 					{
 						unsigned int args = (unsigned int)in.value;
 						Value* tmp = &stack.mem[stack.size()-args];
-						stack.QuickPop(args);//pop off args
-
+						
 						//ok fix this to be cleaner and resolve stack printing
 						//should just push a value to indicate that we are in a native function call
 						callstack.Push(std::pair<unsigned int, Closure*>(iptr, curframe));
 						callstack.Push(std::pair<unsigned int, Closure*>(123456789, curframe));
 
-						//to return something, push it to the stack
-						int s = stack.size();
-						(*fun.func)(this,tmp,args);
+						Value ret = (*fun.func)(this,tmp,args);
+						stack.QuickPop(args);
 
 						callstack.QuickPop(2);
-						if (stack.size() == s)//we didnt return anything
-							stack.Push(Value());//return null
+						stack.Push(ret);
 					}
 					else
 					{
@@ -1384,10 +1424,11 @@ Value JetContext::Execute(int iptr)
 		if (this->fptr != 0)
 			throw RuntimeException("FATAL ERROR: Frame pointer did not properly reset");
 	}
-#endif
 
-	if (stack.size() == 0)
-		return Value();
+	//check for stack leaks
+	if (this->stack.size() > startstack+1)
+		throw RuntimeException("FATAL ERROR: Stack leak detected!");
+#endif
 
 	return stack.Pop();
 }
@@ -1622,15 +1663,15 @@ Value JetContext::Assemble(const std::vector<IntermediateInstruction>& code)
 	else
 		tmpframe->upvals = 0;
 
-	this->curframe = tmpframe;
+	//this->curframe = tmpframe;
 
 	gc.closures.push_back(tmpframe);
 
 	//reset stack for the gc
-	for (int i = 0; i < tmpframe->prototype->locals; i++)
-		sptr[i] = Value();
+	//for (int i = 0; i < tmpframe->prototype->locals; i++)
+	//sptr[i] = Value();
 
-	return this->Execute(tmpframe->prototype->ptr);//run the static code
+	return tmpframe;//this->Execute(tmpframe->prototype->ptr);//run the static code
 };
 
 
@@ -1740,15 +1781,9 @@ std::string JetContext::Script(const std::string code, const std::string filenam
 Value JetContext::Script(const char* code, const char* filename)//compiles, assembles and executes the script
 {
 	auto asmb = this->Compile(code, filename);
+	Value fun = this->Assemble(asmb);
 
-	Value v = this->Assemble(asmb);
-
-	return v;
-}
-
-void JetContext::Return(Value val)
-{
-	this->stack.Push(val);
+	return this->Call(&fun);
 }
 
 #ifdef EMSCRIPTEN

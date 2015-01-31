@@ -25,15 +25,10 @@ namespace Jet
 	//add includes/modules
 	//parallelism maybe?
 	//add const
-	//allow recursive calling of Execute!!!
 	struct IntermediateInstruction
 	{
 		InstructionType type;
-		/*union
-		{
-		char* string;
-		double second;
-		};*/
+
 		char* string;
 		int first;
 		union
@@ -55,7 +50,7 @@ namespace Jet
 			}
 			else 
 				this->string = 0;
-			//this->string = (char*)string;
+
 			this->second = 0;
 			this->type = type;
 			this->first = num;
@@ -100,12 +95,12 @@ namespace Jet
 		friend class CallExpression;
 		std::map<std::string, CompilerContext*> functions;
 
-		struct _LoopInfo
+		struct LoopInfo
 		{
 			std::string Break;
 			std::string Continue;
 		};
-		std::vector<_LoopInfo> _loops;
+		std::vector<LoopInfo> loops;
 
 		struct LocalVariable
 		{
@@ -200,10 +195,10 @@ namespace Jet
 
 		void PushLoop(const std::string Break, const std::string Continue)
 		{
-			_LoopInfo i;
+			LoopInfo i;
 			i.Break = Break;
 			i.Continue = Continue;
-			_loops.push_back(i);
+			loops.push_back(i);
 		}
 
 		void PopLoop()
@@ -218,21 +213,21 @@ namespace Jet
 					ii.uploaded = true;
 				}
 			}*/
-			_loops.pop_back();
+			loops.pop_back();
 		}
 
 		void Break()
 		{
-			if (this->_loops.size() == 0)
+			if (this->loops.size() == 0)
 				throw CompilerException(this->lastfile, this->lastline, "Cannot use break outside of a loop!");
-			this->Jump(_loops.back().Break.c_str());
+			this->Jump(loops.back().Break.c_str());
 		}
 
 		void Continue()
 		{
-			if (this->_loops.size() == 0)
+			if (this->loops.size() == 0)
 				throw CompilerException(this->lastfile, this->lastline, "Cannot use continue outside of a loop!");
-			this->Jump(_loops.back().Continue.c_str());
+			this->Jump(loops.back().Continue.c_str());
 		}
 
 		bool RegisterLocal(const std::string name);//returns success
