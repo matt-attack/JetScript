@@ -3,6 +3,7 @@
 
 #include "Token.h"
 #include <map>
+#include <vector>
 
 namespace Jet
 {
@@ -16,17 +17,21 @@ namespace Jet
 		std::istream* stream;
 
 		std::string text;
+
 		std::map<std::string, TokenType> operators;
 		std::map<std::string, TokenType> keywords;
 
+		std::map<char, std::vector<std::pair<std::string, TokenType>>> operatorsearch;
+
 		unsigned int linenumber;
-		std::string filename;
 
 	public:
 		Lexer(std::istream* input, std::string filename);
 		Lexer(std::string text, std::string filename);
 
 		Token Next();
+
+		std::string filename;
 
 	private:
 		void Init();

@@ -471,7 +471,7 @@ namespace Jet
 
 		void Compile(CompilerContext* context)
 		{
-			context->Line(token.filename, token.line);
+			context->Line(token.line);
 
 			std::string uuid = context->GetUUID();
 			context->Label("loopstart_"+uuid);
@@ -521,7 +521,7 @@ namespace Jet
 
 		void Compile(CompilerContext* context)
 		{
-			context->Line(token.filename, token.line);
+			context->Line(token.line);
 
 			std::string uuid = context->GetUUID();
 			this->initial->Compile(context);
@@ -654,10 +654,10 @@ namespace Jet
 
 		void Compile(CompilerContext* context)
 		{
-			context->Line(token.filename, token.line);
+			context->Line(token.line);
 
-			::std::string uuid = context->GetUUID();
-			::std::string bname = "ifstatement_" + uuid + "_I";
+			std::string uuid = context->GetUUID();
+			std::string bname = "ifstatement_" + uuid + "_I";
 			int pos = 0;
 			bool hasElse = this->Else ? this->Else->block->statements.size() > 0 : false;
 			for (auto ii: *this->branches)
@@ -798,7 +798,7 @@ namespace Jet
 
 		void Compile(CompilerContext* context)
 		{
-			context->Line(token.filename, token.line);
+			context->Line(token.line);
 
 			if (right)
 				right->Compile(context);

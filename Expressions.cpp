@@ -6,7 +6,7 @@ using namespace Jet;
 
 void PrefixExpression::Compile(CompilerContext* context)
 {
-	context->Line(this->_operator.filename, this->_operator.line);
+	context->Line(this->_operator.line);
 
 	right->Compile(context);
 
@@ -39,7 +39,7 @@ void PrefixExpression::Compile(CompilerContext* context)
 
 void PostfixExpression::Compile(CompilerContext* context)
 {
-	context->Line(this->_operator.filename, this->_operator.line);
+	context->Line(this->_operator.line);
 
 	left->Compile(context);
 
@@ -56,7 +56,7 @@ void PostfixExpression::Compile(CompilerContext* context)
 
 void IndexExpression::Compile(CompilerContext* context)
 {
-	context->Line(token.filename, token.line);
+	context->Line(token.line);
 
 	left->Compile(context);
 	//if the index is constant compile to a special instruction carying that constant
@@ -76,7 +76,7 @@ void IndexExpression::Compile(CompilerContext* context)
 
 void IndexExpression::CompileStore(CompilerContext* context)
 {
-	context->Line(token.filename, token.line);
+	context->Line(token.line);
 
 	left->Compile(context);
 	//if the index is constant compile to a special instruction carying that constant
@@ -184,7 +184,7 @@ void AssignExpression::Compile(CompilerContext* context)
 
 void CallExpression::Compile(CompilerContext* context)
 {
-	context->Line(token.filename, token.line);
+	context->Line(token.line);
 
 	//need to check if left is a local, or a captured value before looking at globals
 	if (dynamic_cast<NameExpression*>(left) && context->IsLocal(dynamic_cast<NameExpression*>(left)->GetName()) == false)
@@ -251,7 +251,7 @@ void NameExpression::Compile(CompilerContext* context)
 
 void OperatorAssignExpression::Compile(CompilerContext* context)
 {
-	context->Line(token.filename, token.line);
+	context->Line(token.line);
 
 	this->left->Compile(context);
 	this->right->Compile(context);
@@ -267,7 +267,7 @@ void OperatorAssignExpression::Compile(CompilerContext* context)
 
 void OperatorExpression::Compile(CompilerContext* context)
 {
-	context->Line(this->_operator.filename, this->_operator.line);
+	context->Line(this->_operator.line);
 
 	this->left->Compile(context);
 	this->right->Compile(context);
@@ -280,7 +280,7 @@ void OperatorExpression::Compile(CompilerContext* context)
 
 void FunctionExpression::Compile(CompilerContext* context)
 {
-	context->Line(token.filename, token.line);
+	context->Line(token.line);
 
 	std::string fname;
 	if (name)
@@ -327,7 +327,7 @@ void FunctionExpression::Compile(CompilerContext* context)
 
 void LocalExpression::Compile(CompilerContext* context)
 {
-	context->Line((*_names)[0].filename, (*_names)[0].line);
+	context->Line((*_names)[0].line);
 
 	//add load variable instruction
 	for (auto ii: *this->_right)
@@ -336,7 +336,7 @@ void LocalExpression::Compile(CompilerContext* context)
 	//make sure to create identifier
 	for (auto _name: *this->_names)
 		if (context->RegisterLocal(_name.getText()) == false)
-			throw CompilerException(_name.filename, _name.line, "Duplicate Local Variable '"+_name.text+"'");
+			throw CompilerException(context->filename, _name.line, "Duplicate Local Variable '"+_name.text+"'");
 
 	//actually store if we have something to store
 	for (int i = _right->size()-1; i >= 0; i--)

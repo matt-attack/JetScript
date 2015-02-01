@@ -506,7 +506,7 @@ std::vector<IntermediateInstruction> JetContext::Compile(const char* code, const
 	//result->print();
 	//printf("\n\n");
 
-	std::vector<IntermediateInstruction> out = compiler.Compile(result);
+	std::vector<IntermediateInstruction> out = compiler.Compile(result, filename);
 
 	delete result;
 
@@ -1004,12 +1004,12 @@ Value JetContext::Execute(int iptr)
 					{
 						unsigned int args = (unsigned int)in.value2;
 						Value* tmp = &stack.mem[stack.size()-args];
-						
+
 						//ok fix this to be cleaner and resolve stack printing
 						//should just push a value to indicate that we are in a native function call
 						callstack.Push(std::pair<unsigned int, Closure*>(iptr, curframe));
 						callstack.Push(std::pair<unsigned int, Closure*>(123456789, curframe));
-						
+
 						Value ret = (*vars[in.value].func)(this,tmp,args);
 						stack.QuickPop(args);//pop off args
 
@@ -1123,7 +1123,7 @@ Value JetContext::Execute(int iptr)
 					{
 						unsigned int args = (unsigned int)in.value;
 						Value* tmp = &stack.mem[stack.size()-args];
-						
+
 						//ok fix this to be cleaner and resolve stack printing
 						//should just push a value to indicate that we are in a native function call
 						callstack.Push(std::pair<unsigned int, Closure*>(iptr, curframe));
@@ -1643,15 +1643,6 @@ Value JetContext::Assemble(const std::vector<IntermediateInstruction>& code)
 	if (labels.size() > 100000)
 		throw CompilerException("test", 5, "problem with labels!");
 
-#ifdef JET_TIME_EXECUTION
-	QueryPerformanceCounter( (LARGE_INTEGER *)&end );
-
-	INT64 diff = end - start;
-	double dt = ((double)diff)/((double)rate);
-
-	printf("Took %lf seconds to assemble\n\n", dt);
-#endif
-
 	auto tmpframe = new Closure;
 	tmpframe->grey = tmpframe->mark = false;
 	tmpframe->prev = 0;
@@ -1663,15 +1654,18 @@ Value JetContext::Assemble(const std::vector<IntermediateInstruction>& code)
 	else
 		tmpframe->upvals = 0;
 
-	//this->curframe = tmpframe;
-
 	gc.closures.push_back(tmpframe);
 
-	//reset stack for the gc
-	//for (int i = 0; i < tmpframe->prototype->locals; i++)
-	//sptr[i] = Value();
+#ifdef JET_TIME_EXECUTION
+	QueryPerformanceCounter( (LARGE_INTEGER *)&end );
 
-	return tmpframe;//this->Execute(tmpframe->prototype->ptr);//run the static code
+	INT64 diff = end - start;
+	double dt = ((double)diff)/((double)rate);
+
+	printf("Took %lf seconds to assemble\n\n", dt);
+#endif
+
+	return tmpframe;
 };
 
 

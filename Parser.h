@@ -22,7 +22,7 @@
 #include "Lexer.h"
 #include "JetExceptions.h"
 
-#include <list>
+#include <deque>
 
 namespace Jet
 {
@@ -32,9 +32,10 @@ namespace Jet
 		std::map<TokenType, InfixParselet*> mInfixParselets;
 		std::map<TokenType, PrefixParselet*> mPrefixParselets;
 		std::map<TokenType, StatementParselet*> mStatementParselets;
-		std::list<Token> mRead;
+		std::deque<Token> mRead;
 
 	public:
+		std::string filename;
 		Parser(Lexer* l);
 
 		~Parser();

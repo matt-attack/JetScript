@@ -102,18 +102,16 @@ namespace Jet
 		TokenType type;
 		std::string text;
 		unsigned int line;
-		std::string filename;
 
 		Token()
 		{
 
 		}
 
-		Token(std::string file, unsigned int line, TokenType type, std::string txt)
+		Token(unsigned int line, TokenType type, std::string txt)
 		{
 			this->type = type;
 			this->text = txt;
-			this->filename = file;
 			this->line = line;
 		}
 

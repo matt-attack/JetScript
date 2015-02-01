@@ -36,6 +36,7 @@ char* Jet::Operator(TokenType t)
 Parser::Parser(Lexer* l)
 {
 	this->lexer = l;
+	this->filename = l->filename;
 
 	this->Register(TokenType::Name, new NameParselet());
 	this->Register(TokenType::Number, new NumberParselet());
@@ -134,7 +135,7 @@ Expression* Parser::parseExpression(int precedence)
 	if (prefix == 0)
 	{
 		std::string str = "ParseExpression: No Parser Found for: " + token.getText();
-		throw CompilerException(token.filename, token.line, str);//printf("Consume: TokenType not as expected!\n");
+		throw CompilerException(this->filename, token.line, str);//printf("Consume: TokenType not as expected!\n");
 	}
 
 	Expression* left = prefix->parse(this, token);
@@ -148,30 +149,28 @@ Expression* Parser::parseExpression(int precedence)
 	return left;
 }
 
-
 Expression* Parser::ParseStatement(bool takeTrailingSemicolon)//call this until out of tokens (hit EOF)
 {
 	Token token = LookAhead();
 	StatementParselet* statement = mStatementParselets[token.getType()];
 
-	Expression* result;
 	if (statement == 0)
 	{
-		result = parseExpression();
+		UniquePtr<Expression*> result(parseExpression());
 
 		if (takeTrailingSemicolon)
 			Consume(TokenType::Semicolon);
 
-		return result;//.Release();
+		return result.Release();
 	}
 
 	token = Consume();
-	result = statement->parse(this, token);
+	UniquePtr<Expression*> result(statement->parse(this, token));
 
 	if (takeTrailingSemicolon && statement->TrailingSemicolon)
 		Consume(TokenType::Semicolon);
 
-	return result;//.Release();
+	return result.Release();
 }
 
 BlockExpression* Parser::parseBlock(bool allowsingle)
@@ -209,21 +208,18 @@ BlockExpression* Parser::parseAll()
 
 Token Parser::Consume()
 {
-	LookAhead();
-
-	auto temp = mRead.front();
+	auto temp = LookAhead();
 	mRead.pop_front();
 	return temp;
 }
 
 Token Parser::Consume(TokenType expected)
 {
-	LookAhead();
-	auto temp = mRead.front();
+	auto temp = LookAhead();
 	if (temp.getType() != expected)
 	{
 		std::string str = "Consume: TokenType not as expected! Expected: " + TokenToString[expected] + " Got: " + temp.text;
-		throw CompilerException(temp.filename, temp.line, str);
+		throw CompilerException(this->filename, temp.line, str);
 	}
 	mRead.pop_front();
 	return temp;
@@ -241,7 +237,7 @@ Token Parser::LookAhead(unsigned int num)
 			return ii;
 	}
 
-	return Token("test", 0, TokenType::EoF, "EOF");
+	return Token(0, TokenType::EoF, "EOF");
 }
 
 bool Parser::Match(TokenType expected)
@@ -263,7 +259,7 @@ bool Parser::MatchAndConsume(TokenType expected)
 		return false;
 	}
 
-	Consume();
+	mRead.pop_front();
 	return true;
 }
 

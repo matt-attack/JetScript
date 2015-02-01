@@ -140,7 +140,7 @@ namespace Jet
 		CompilerContext* AddFunction(std::string name, unsigned int args, bool vararg = false);
 		void FinalizeFunction(CompilerContext* c);
 
-		std::vector<IntermediateInstruction> Compile(BlockExpression* expr);
+		std::vector<IntermediateInstruction> Compile(BlockExpression* expr, const char* filename);
 
 	private:
 		void Compile()
@@ -219,14 +219,14 @@ namespace Jet
 		void Break()
 		{
 			if (this->loops.size() == 0)
-				throw CompilerException(this->lastfile, this->lastline, "Cannot use break outside of a loop!");
+				throw CompilerException(this->filename, this->lastline, "Cannot use break outside of a loop!");
 			this->Jump(loops.back().Break.c_str());
 		}
 
 		void Continue()
 		{
 			if (this->loops.size() == 0)
-				throw CompilerException(this->lastfile, this->lastline, "Cannot use continue outside of a loop!");
+				throw CompilerException(this->filename, this->lastline, "Cannot use continue outside of a loop!");
 			this->Jump(loops.back().Continue.c_str());
 		}
 
@@ -487,14 +487,20 @@ namespace Jet
 		}
 
 		//debug info
-		std::string lastfile; unsigned int lastline;
-		void Line(const std::string file, unsigned int line)
+		std::string filename;
+		void SetFilename(const std::string filename)
+		{
+			this->filename = filename;
+		}
+
+		unsigned int lastline;
+		void Line(unsigned int line)
 		{
 			//need to avoid duplicates, because thats silly
-			if (lastline != line || lastfile != file)
+			if (lastline != line)
 			{
-				lastline = line; lastfile = file;
-				out.push_back(IntermediateInstruction(InstructionType::DebugLine, file, line));
+				lastline = line;
+				out.push_back(IntermediateInstruction(InstructionType::DebugLine, filename, line));
 			}
 		}
 

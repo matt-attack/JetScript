@@ -78,7 +78,7 @@ void CompilerContext::PrintAssembly()
 	printf("\n");
 }
 
-std::vector<IntermediateInstruction> CompilerContext::Compile(BlockExpression* expr)
+std::vector<IntermediateInstruction> CompilerContext::Compile(BlockExpression* expr, const char* filename)
 {
 	try
 	{
@@ -97,9 +97,9 @@ std::vector<IntermediateInstruction> CompilerContext::Compile(BlockExpression* e
 		this->Compile();
 
 		if (localindex > 255)
-			throw CompilerException(this->lastfile, this->lastline, "Too many locals: over 256 locals in function!");
+			throw CompilerException(this->filename, this->lastline, "Too many locals: over 256 locals in function!");
 		if (closures > 255)
-			throw CompilerException(this->lastfile, this->lastline, "Too many closures: over 256 closures in function!");
+			throw CompilerException(this->filename, this->lastline, "Too many closures: over 256 closures in function!");
 
 		//modify the entry point with number of locals
 		this->out[0].b = this->localindex;

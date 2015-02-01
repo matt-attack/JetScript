@@ -131,6 +131,18 @@ void Lexer::Init()
 	for (auto ii = operators.begin(); ii != operators.end(); ii++)
 	{
 		TokenToString[ii->second] = ii->first;
+
+		//build search structure
+		auto t = operatorsearch.find(ii->first[0]);
+		if (t != operatorsearch.end())
+		{
+			t->second.push_back(std::pair<std::string, TokenType>(ii->first, ii->second));
+		}
+		else
+		{
+			operatorsearch[ii->first[0]] = std::vector<std::pair<std::string, TokenType>>();
+			operatorsearch[ii->first[0]].push_back(std::pair<std::string, TokenType>(ii->first, ii->second));
+		}
 	}
 }
 
@@ -147,23 +159,30 @@ Token Lexer::Next()
 		char c = this->ConsumeChar();
 		std::string str = text.substr(index-1, 1);
 		bool found = false; unsigned int len = 0;
-		for (auto ii: operators)
+		auto iter = this->operatorsearch.find(str[0]);
+		if (iter != this->operatorsearch.end())
 		{
-			// make sure memcmp can't cause an overrun
-			if (ii.first.length() > (text.length()+1-index))
-				continue;
-
-			//pick the longest matching operator/keyword
-			if (ii.first.length() <= len)
-				continue;
-
-			//check if the characters match the operator/keyword
-			if(memcmp(ii.first.c_str(), &text.c_str()[index-1], ii.first.length()) == 0)
+			for (auto ii: iter->second)
 			{
-				len = ii.first.length();
-				str = ii.first;
-				found = true;
+				if (ii.first.length() > (text.length()+1-index))
+					continue;
+
+				//pick the longest matching operator/keyword
+				if (ii.first.length() <= len)
+					continue;
+
+				//check if the characters match the operator/keyword
+				if(memcmp(ii.first.c_str(), &text.c_str()[index-1], ii.first.length()) == 0)
+				{
+					len = ii.first.length();
+					str = ii.first;
+					found = true;
+				}
 			}
+		}
+		else
+		{
+			found = false;
 		}
 
 		if (found)
@@ -178,7 +197,7 @@ Token Lexer::Next()
 				while(c != '\n' && c != 0) 
 				{
 					c = this->ConsumeChar();
-				};
+				}
 
 				if (c == 0)
 					break;
@@ -193,7 +212,7 @@ Token Lexer::Next()
 				while(n.type != TokenType::CommentEnd) 
 				{
 					if (n.type == TokenType::EoF)
-						throw CompilerException(n.filename, n.line, "Missing end to comment block starting at line "+std::to_string(startline));
+						throw CompilerException(this->filename, n.line, "Missing end to comment block starting at line "+std::to_string(startline));
 
 					n = this->Next();
 				}
@@ -254,15 +273,15 @@ Token Lexer::Next()
 				}
 
 				index++;
-				return Token(filename, linenumber, operators[str], txt);
+				return Token(linenumber, operators[str], txt);
 			}
 
-			return Token(filename, linenumber, operators[str], str);
+			return Token(linenumber, operators[str], str);
 		}
 		else if (IsLetter(c) || c == '_')//word
 		{
 			int start = index - 1;
-			while (true)//index < text.length())
+			while (true)
 			{
 				char c = this->PeekChar();
 				if (!(IsLetter(c) || c == '_'))
@@ -275,14 +294,14 @@ Token Lexer::Next()
 			std::string name = text.substr(start, index-start);
 			//check if it is a keyword
 			if (keywords.find(name) != keywords.end())//is keyword?
-				return Token(filename, linenumber, keywords[name], name);
+				return Token(linenumber, keywords[name], name);
 			else//just a variable name
-				return Token(filename, linenumber, TokenType::Name, name);
+				return Token(linenumber, TokenType::Name, name);
 		}
 		else if (IsNumber(c))//number
 		{
 			int start = index-1;
-			while (true)//index < text.length())
+			while (true)
 			{
 				char c = this->PeekChar();
 				if (!(c == '.' || IsNumber(c)))
@@ -292,14 +311,14 @@ Token Lexer::Next()
 			}
 
 			std::string num = text.substr(start, index-start);
-			return Token(filename, linenumber, TokenType::Number, num);
+			return Token(linenumber, TokenType::Number, num);
 		}
 		else
 		{
 			//character to ignore like whitespace
 		}
 	}
-	return Token(filename, linenumber, TokenType::EoF, "EOF");
+	return Token(linenumber, TokenType::EoF, "EOF");
 }
 
 char Lexer::ConsumeChar()
