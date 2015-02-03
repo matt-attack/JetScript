@@ -218,12 +218,15 @@ void CompilerContext::BinaryOperation(TokenType operation)
 	case TokenType::GreaterThanEqual:
 		this->out.push_back(IntermediateInstruction(InstructionType::GtE));
 		break;
+	case TokenType::OrAssign:
 	case TokenType::Or:
 		this->out.push_back(IntermediateInstruction(InstructionType::BOr));
 		break;
+	case TokenType::AndAssign:
 	case TokenType::And:
 		this->out.push_back(IntermediateInstruction(InstructionType::BAnd));
 		break;
+	case TokenType::XorAssign:
 	case TokenType::Xor:
 		this->out.push_back(IntermediateInstruction(InstructionType::Xor));
 		break;

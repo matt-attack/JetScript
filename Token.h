@@ -41,6 +41,9 @@ namespace Jet
 		SubtractAssign,
 		MultiplyAssign,
 		DivideAssign,
+		AndAssign,
+		OrAssign,
+		XorAssign,
 
 		NotEqual,
 		Equals,

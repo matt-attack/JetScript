@@ -18,11 +18,6 @@ namespace Jet
 
 		std::string text;
 
-		std::map<std::string, TokenType> operators;
-		std::map<std::string, TokenType> keywords;
-
-		std::map<char, std::vector<std::pair<std::string, TokenType>>> operatorsearch;
-
 		unsigned int linenumber;
 
 	public:
@@ -34,8 +29,6 @@ namespace Jet
 		std::string filename;
 
 	private:
-		void Init();
-
 		char ConsumeChar();
 		char MatchAndConsumeChar(char c);
 		char PeekChar();

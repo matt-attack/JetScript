@@ -60,6 +60,9 @@ Parser::Parser(Lexer* l)
 	this->Register(TokenType::SubtractAssign, new OperatorAssignParselet());
 	this->Register(TokenType::MultiplyAssign, new OperatorAssignParselet());
 	this->Register(TokenType::DivideAssign, new OperatorAssignParselet());
+	this->Register(TokenType::AndAssign, new OperatorAssignParselet());
+	this->Register(TokenType::OrAssign, new OperatorAssignParselet());
+	this->Register(TokenType::XorAssign, new OperatorAssignParselet());
 
 
 	//prefix stuff

@@ -1,10 +1,132 @@
 #include "Lexer.h"
 #include "Parser.h"
-#undef EOF
 
 using namespace Jet;
 
 std::map<TokenType,std::string> Jet::TokenToString; 
+
+class LexerStatic
+{
+public:
+	std::map<std::string, TokenType> operators;
+	std::map<std::string, TokenType> keywords;
+	std::map<char, std::vector<std::pair<std::string, TokenType>>> operatorsearch;
+
+	LexerStatic()
+	{
+		//math and assignment
+		operators["="] = TokenType::Assign;
+		operators["+"] = TokenType::Plus;
+		operators["-"] = TokenType::Minus;
+		operators["*"] = TokenType::Asterisk;
+		operators["/"] = TokenType::Slash;
+		operators["%"] = TokenType::Modulo;
+
+		operators["|"] = TokenType::Or;//or
+		operators["&"] = TokenType::And;//and
+		operators["^"] = TokenType::Xor;//xor
+		operators["~"] = TokenType::BNot;//binary not
+		operators["<<"] = TokenType::LeftShift;
+		operators[">>"] = TokenType::RightShift;
+
+		//grouping
+		operators["("] = TokenType::LeftParen;
+		operators[")"] = TokenType::RightParen;
+		operators["{"] = TokenType::LeftBrace;
+		operators["}"] = TokenType::RightBrace;
+
+		//array stuff
+		operators["["] = TokenType::LeftBracket;
+		operators["]"] = TokenType::RightBracket;
+
+		//object stuff
+		operators["."] = TokenType::Dot;
+		operators[":"] = TokenType::Colon;
+		operators[";"] = TokenType::Semicolon;
+		operators[","] = TokenType::Comma;
+
+		operators["++"] = TokenType::Increment;
+		operators["--"] = TokenType::Decrement;
+
+		//operator + equals sign
+		operators["+="] = TokenType::AddAssign;
+		operators["-="] = TokenType::SubtractAssign;
+		operators["*="] = TokenType::MultiplyAssign;
+		operators["/="] = TokenType::DivideAssign;
+		operators["&="] = TokenType::AndAssign;
+		operators["|="] = TokenType::OrAssign;
+		operators["^="] = TokenType::XorAssign;
+
+		//boolean logic
+		operators["!="] = TokenType::NotEqual;
+		operators["=="] = TokenType::Equals;
+
+		//comparisons
+		operators["<"] = TokenType::LessThan;
+		operators[">"] = TokenType::GreaterThan;
+		operators["<="] = TokenType::LessThanEqual;
+		operators[">="] = TokenType::GreaterThanEqual;
+
+		//special stuff
+		operators["<>"] = TokenType::Swap;
+		operators["\""] = TokenType::String;
+
+		operators["..."] = TokenType::Ellipses;
+
+		//comments
+		operators["//"] = TokenType::LineComment;
+		operators["-[["] = TokenType::CommentBegin;
+		operators["]]-"] = TokenType::CommentEnd;
+		operators["/*"] = TokenType::CommentBegin;
+		operators["*/"] = TokenType::CommentEnd;
+
+		//keywords
+		keywords["while"] = TokenType::While;
+		keywords["mientras"] = TokenType::While;
+		keywords["if"] = TokenType::If;
+		keywords["si"] = TokenType::If;
+		keywords["elseif"] = TokenType::ElseIf;
+		keywords["otrosi"] = TokenType::ElseIf;
+		keywords["else"] = TokenType::Else;
+		keywords["otro"] = TokenType::Else;
+		keywords["fun"] = TokenType::Function;
+		keywords["return"] = TokenType::Ret;
+		keywords["volver"] = TokenType::Ret;
+		keywords["for"] = TokenType::For;
+		//add spanish mode yo!
+		keywords["por"] = TokenType::For;
+		keywords["local"] = TokenType::Local;
+		keywords["break"] = TokenType::Break;
+		keywords["romper"/*"parar"*/] = TokenType::Break;
+		keywords["continue"] = TokenType::Continue;
+		keywords["continuar"] = TokenType::Continue;
+
+		keywords["null"] = TokenType::Null;
+		//keywords["const"] = TokenType::Const;
+
+		//keywords["operator"] = TokenType::Operator;
+
+		for (auto ii = operators.begin(); ii != operators.end(); ii++)
+		{
+			TokenToString[ii->second] = ii->first;
+
+			//build search structure
+			auto t = operatorsearch.find(ii->first[0]);
+			if (t != operatorsearch.end())
+			{
+				t->second.push_back(std::pair<std::string, TokenType>(ii->first, ii->second));
+			}
+			else
+			{
+				operatorsearch[ii->first[0]] = std::vector<std::pair<std::string, TokenType>>();
+				operatorsearch[ii->first[0]].push_back(std::pair<std::string, TokenType>(ii->first, ii->second));
+			}
+		}
+	};
+};
+
+//initialize static lexer stuff
+static LexerStatic ls;
 
 bool Jet::IsLetter(char c)
 {
@@ -22,8 +144,6 @@ Lexer::Lexer(std::istream* input, std::string filename)
 	this->linenumber = 1;
 	this->index = 0;
 	this->filename = filename;
-
-	this->Init();
 }
 
 Lexer::Lexer(std::string text, std::string filename)
@@ -33,117 +153,6 @@ Lexer::Lexer(std::string text, std::string filename)
 	this->index = 0;
 	this->text = text;
 	this->filename = filename;
-
-	this->Init();
-}
-
-void Lexer::Init()
-{
-	//math and assignment
-	operators["="] = TokenType::Assign;
-	operators["+"] = TokenType::Plus;
-	operators["-"] = TokenType::Minus;
-	operators["*"] = TokenType::Asterisk;
-	operators["/"] = TokenType::Slash;
-	operators["%"] = TokenType::Modulo;
-
-	operators["|"] = TokenType::Or;//or
-	operators["&"] = TokenType::And;//and
-	operators["^"] = TokenType::Xor;//xor
-	operators["~"] = TokenType::BNot;//binary not
-	operators["<<"] = TokenType::LeftShift;
-	operators[">>"] = TokenType::RightShift;
-
-	//grouping
-	operators["("] = TokenType::LeftParen;
-	operators[")"] = TokenType::RightParen;
-	operators["{"] = TokenType::LeftBrace;
-	operators["}"] = TokenType::RightBrace;
-
-	//array stuff
-	operators["["] = TokenType::LeftBracket;
-	operators["]"] = TokenType::RightBracket;
-
-	//object stuff
-	operators["."] = TokenType::Dot;
-	operators[":"] = TokenType::Colon;
-	operators[";"] = TokenType::Semicolon;
-	operators[","] = TokenType::Comma;
-
-	operators["++"] = TokenType::Increment;
-	operators["--"] = TokenType::Decrement;
-
-	//operator + equals sign
-	operators["+="] = TokenType::AddAssign;
-	operators["-="] = TokenType::SubtractAssign;
-	operators["*="] = TokenType::MultiplyAssign;
-	operators["/="] = TokenType::DivideAssign;
-
-	//boolean logic
-	operators["!="] = TokenType::NotEqual;
-	operators["=="] = TokenType::Equals;
-
-	//comparisons
-	operators["<"] = TokenType::LessThan;
-	operators[">"] = TokenType::GreaterThan;
-	operators["<="] = TokenType::LessThanEqual;
-	operators[">="] = TokenType::GreaterThanEqual;
-
-	//special stuff
-	operators["<>"] = TokenType::Swap;
-	operators["\""] = TokenType::String;
-
-	operators["..."] = TokenType::Ellipses;
-
-	//comments
-	operators["//"] = TokenType::LineComment;
-	operators["-[["] = TokenType::CommentBegin;
-	operators["]]-"] = TokenType::CommentEnd;
-	operators["/*"] = TokenType::CommentBegin;
-	operators["*/"] = TokenType::CommentEnd;
-
-	//keywords
-	keywords["while"] = TokenType::While;
-	keywords["mientras"] = TokenType::While;
-	keywords["if"] = TokenType::If;
-	keywords["si"] = TokenType::If;
-	keywords["elseif"] = TokenType::ElseIf;
-	keywords["otrosi"] = TokenType::ElseIf;
-	keywords["else"] = TokenType::Else;
-	keywords["otro"] = TokenType::Else;
-	keywords["fun"] = TokenType::Function;
-	keywords["return"] = TokenType::Ret;
-	keywords["volver"] = TokenType::Ret;
-	keywords["for"] = TokenType::For;
-	//add spanish mode yo!
-	keywords["por"] = TokenType::For;
-	keywords["local"] = TokenType::Local;
-	keywords["break"] = TokenType::Break;
-	keywords["romper"/*"parar"*/] = TokenType::Break;
-	keywords["continue"] = TokenType::Continue;
-	keywords["continuar"] = TokenType::Continue;
-
-	keywords["null"] = TokenType::Null;
-	//keywords["const"] = TokenType::Const;
-
-	//keywords["operator"] = TokenType::Operator;
-
-	for (auto ii = operators.begin(); ii != operators.end(); ii++)
-	{
-		TokenToString[ii->second] = ii->first;
-
-		//build search structure
-		auto t = operatorsearch.find(ii->first[0]);
-		if (t != operatorsearch.end())
-		{
-			t->second.push_back(std::pair<std::string, TokenType>(ii->first, ii->second));
-		}
-		else
-		{
-			operatorsearch[ii->first[0]] = std::vector<std::pair<std::string, TokenType>>();
-			operatorsearch[ii->first[0]].push_back(std::pair<std::string, TokenType>(ii->first, ii->second));
-		}
-	}
 }
 
 //can move to functions at some point
@@ -159,8 +168,9 @@ Token Lexer::Next()
 		char c = this->ConsumeChar();
 		std::string str = text.substr(index-1, 1);
 		bool found = false; unsigned int len = 0;
-		auto iter = this->operatorsearch.find(str[0]);
-		if (iter != this->operatorsearch.end())
+		TokenType toktype;
+		auto iter = ls.operatorsearch.find(str[0]);
+		if (iter != ls.operatorsearch.end())
 		{
 			for (auto ii: iter->second)
 			{
@@ -176,6 +186,7 @@ Token Lexer::Next()
 				{
 					len = ii.first.length();
 					str = ii.first;
+					toktype = ii.second;
 					found = true;
 				}
 			}
@@ -190,7 +201,8 @@ Token Lexer::Next()
 			for (unsigned int i = 0; i < len-1; i++)
 				this->ConsumeChar();
 
-			if (operators[str] == TokenType::LineComment)
+			//remove these use of operators
+			if (toktype == TokenType::LineComment)
 			{
 				//go to next line
 				char c = this->ConsumeChar();
@@ -204,21 +216,25 @@ Token Lexer::Next()
 
 				continue;
 			}
-			else if (operators[str] == TokenType::CommentBegin)
+			else if (toktype == TokenType::CommentBegin)
 			{
 				int startline = this->linenumber;
-
-				Token n = this->Next();
-				while(n.type != TokenType::CommentEnd) 
+				//Token n = this->Next();
+				while (true)
 				{
-					if (n.type == TokenType::EoF)
-						throw CompilerException(this->filename, n.line, "Missing end to comment block starting at line "+std::to_string(startline));
-
-					n = this->Next();
+					char c = this->ConsumeChar();
+					if ( c == '*' && this->PeekChar() == '/')
+					{
+						this->ConsumeChar();
+						break;
+					}
+					else if (c == 0)
+						throw CompilerException(this->filename, this->linenumber, "Missing end to comment block starting at line "+std::to_string(startline));
 				}
+
 				continue;
 			}
-			else if (operators[str] == TokenType::String)
+			else if (toktype == TokenType::String)
 			{
 				std::string txt;
 
@@ -273,10 +289,10 @@ Token Lexer::Next()
 				}
 
 				index++;
-				return Token(linenumber, operators[str], txt);
+				return Token(linenumber, toktype, txt);
 			}
 
-			return Token(linenumber, operators[str], str);
+			return Token(linenumber, toktype, str);
 		}
 		else if (IsLetter(c) || c == '_')//word
 		{
@@ -293,8 +309,9 @@ Token Lexer::Next()
 
 			std::string name = text.substr(start, index-start);
 			//check if it is a keyword
-			if (keywords.find(name) != keywords.end())//is keyword?
-				return Token(linenumber, keywords[name], name);
+			auto keyword = ls.keywords.find(name);
+			if (keyword != ls.keywords.end())//is keyword?
+				return Token(linenumber, keyword->second, name);
 			else//just a variable name
 				return Token(linenumber, TokenType::Name, name);
 		}
