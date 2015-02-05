@@ -334,6 +334,24 @@ namespace Jet
 
 		Expression* parse(Parser* parser, Token token);
 	};
+
+	class YieldParselet: public StatementParselet
+	{
+	public:
+		Expression* parse(Parser* parser, Token token);
+	};
+
+	class ResumeParselet: public StatementParselet
+	{
+	public:
+		Expression* parse(Parser* parser, Token token);
+	};
+
+	class ResumePrefixParselet: public PrefixParselet
+	{
+	public:
+		Expression* parse(Parser* parser, Token token);
+	};
 };
 
 #endif

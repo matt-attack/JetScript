@@ -576,19 +576,24 @@ namespace Jet
 			context->Duplicate();
 			context->LoadIndex("getIterator");
 			context->ECall(1);
+			context->Duplicate();
 			context->Store("_iter");
-
+			context->JumpFalse(("_foreachend"+uuid).c_str());
 
 			context->Label("_foreachstart"+uuid);
-			context->Load("_iter");//this->container.text);
+			context->Load("_iter");
 			context->Duplicate();
 			context->LoadIndex("current");
 			context->ECall(1);
 			context->Store(this->name.text);
 
+			//context->ForEach(this->name.text, "_foreachstart"+uuid, "_foreachend"+uuid);
+			//finish implementing foreach instructions
 			context->PushLoop("_foreachend"+uuid, "_foreachstart"+uuid);
 			this->block->Compile(context);
 			context->PopLoop();
+
+			//context->PostForEach(
 
 			context->Load("_iter");
 			context->Duplicate();
@@ -598,6 +603,7 @@ namespace Jet
 
 			context->Jump(("_foreachstart"+uuid).c_str());
 			context->Label("_foreachend"+uuid);
+
 			context->PopScope();
 		}
 	};
@@ -835,6 +841,57 @@ namespace Jet
 		void Compile(CompilerContext* context)
 		{
 			context->Continue();
+		}
+	};
+
+	class YieldExpression: public Expression
+	{
+		Token token;
+		Expression* right;
+	public:
+		YieldExpression(Token t, Expression* right)
+		{
+			this->token = t;
+			this->right = right;
+		}
+
+		void SetParent(Expression* parent)
+		{
+			this->Parent = parent;
+		}
+
+		void Compile(CompilerContext* context)
+		{
+			if (right)
+				right->Compile(context);
+			else
+				context->Null();
+
+			context->Yield();
+		}
+	};
+
+	class ResumeExpression: public Expression
+	{
+		Token token;
+		Expression* right;
+	public:
+		ResumeExpression(Token t, Expression* right)
+		{
+			this->token = t;
+			this->right = right;
+		}
+
+		void SetParent(Expression* parent)
+		{
+			this->Parent = parent;
+		}
+
+		void Compile(CompilerContext* context)
+		{
+			this->right->Compile(context);
+
+			context->Resume();
 		}
 	};
 }

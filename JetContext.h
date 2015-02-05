@@ -69,6 +69,7 @@ namespace Jet
 
 	class JetContext
 	{
+		friend class Generator;
 		friend class Value;
 		friend class JetObject;
 		friend class GarbageCollector;

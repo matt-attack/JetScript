@@ -14,7 +14,7 @@
 #include <stack>
 #include <fstream>
 #include <memory>
-
+#undef Yield;
 using namespace Jet;
 
 Value Jet::gc(JetContext* context,Value* args, int numargs) 
@@ -323,6 +323,11 @@ JetContext::JetContext() : gc(this), stack(500000)
 			iter* it = new iter;
 			it->container = v->_array->ptr;
 			it->iterator = v->_array->ptr->begin();
+			if (it->iterator == v->_array->ptr->end())
+			{
+				delete it;
+				return Value();
+			}
 			return Value(context->NewUserdata(it, context->arrayiter));
 		}
 		throw RuntimeException("Bad call to getIterator");
@@ -350,6 +355,11 @@ JetContext::JetContext() : gc(this), stack(500000)
 			iter2* it = new iter2;
 			it->container = v->_object;
 			it->iterator = v->_object->begin();
+			if (it->iterator == v->_object->end())
+			{
+				delete it;
+				return Value();
+			}
 			return (context->NewUserdata(it, context->objectiter));
 		}
 		throw RuntimeException("Bad call to getIterator");
@@ -877,6 +887,7 @@ Value JetContext::Execute(int iptr)
 					closure->grey = closure->mark = false;
 					closure->prev = curframe;
 					closure->refcount = 0;
+					closure->generator = 0;
 					closure->numupvals = in.func->upvals;
 					closure->closed = false;
 					if (in.func->upvals)
@@ -922,6 +933,25 @@ Value JetContext::Execute(int iptr)
 						if (fptr > JET_MAX_CALLDEPTH)
 							throw RuntimeException("Exceeded Max Call Depth!");
 
+						if (vars[in.value]._function->prototype->generator)
+						{
+							//create generator and return it
+							Closure* closure = new Closure;
+							closure->grey = closure->mark = false;
+							closure->prev = curframe->prev;
+							closure->numupvals = closure->numupvals;
+							closure->closed = false;
+							closure->refcount = 0;
+							closure->generator = new Generator(this, vars[in.value]._function, in.value2);
+							if (closure->numupvals)
+								closure->upvals = new Value*[closure->numupvals];
+							closure->prototype = vars[in.value]._function->prototype;
+							this->gc.closures.push_back(closure);
+
+							this->stack.Push(Value(closure));
+							break;
+						}
+
 						fptr++;
 
 						callstack.Push(std::pair<unsigned int, Closure*>(iptr, curframe));
@@ -947,6 +977,7 @@ Value JetContext::Execute(int iptr)
 							closure->grey = closure->mark = false;
 							closure->prev = curframe->prev;
 							closure->refcount = 0;
+							closure->generator = 0;
 							closure->numupvals = curframe->numupvals;
 							closure->closed = false;
 							if (closure->numupvals)
@@ -1042,6 +1073,25 @@ Value JetContext::Execute(int iptr)
 						if (fptr > JET_MAX_CALLDEPTH)
 							throw RuntimeException("Exceeded Max Call Depth!");
 
+						if (fun._function->prototype->generator)
+						{
+							//create generator and return it
+							Closure* closure = new Closure;
+							closure->grey = closure->mark = false;
+							closure->prev = curframe->prev;
+							closure->numupvals = closure->numupvals;
+							closure->closed = false;
+							closure->refcount = 0;
+							closure->generator = new Generator(this, curframe, in.value);
+							if (closure->numupvals)
+								closure->upvals = new Value*[closure->numupvals];
+							closure->prototype = fun._function->prototype;
+							this->gc.closures.push_back(closure);
+
+							this->stack.Push(Value(closure));
+							break;
+						}
+
 						fptr++;
 
 						callstack.Push(std::pair<unsigned int, Closure*>(iptr, curframe));//callstack.Push(iptr);
@@ -1068,6 +1118,7 @@ Value JetContext::Execute(int iptr)
 							closure->numupvals = closure->numupvals;
 							closure->closed = false;
 							closure->refcount = 0;
+							closure->generator = 0;
 							if (closure->numupvals)
 								closure->upvals = new Value*[closure->numupvals];
 							closure->prototype = curframe->prototype;
@@ -1145,6 +1196,9 @@ Value JetContext::Execute(int iptr)
 				{
 					auto oframe = callstack.Pop();
 					iptr = oframe.first;
+					if (this->curframe && this->curframe->generator)
+						this->curframe->generator->Kill();
+
 					if (oframe.first != 123456789)
 					{
 #ifdef _DEBUG
@@ -1162,6 +1216,40 @@ Value JetContext::Execute(int iptr)
 					curframe = oframe.second;
 
 					fptr--;
+					break;
+				}
+			case InstructionType::Yield:
+				{
+					if (this->curframe->generator)
+						this->curframe->generator->Yield(this, iptr);
+					else
+						throw RuntimeException("Cannot Yield from outside a generator");
+					
+					auto oframe = callstack.Pop();
+					iptr = oframe.first;
+					curframe = oframe.second;
+					sptr -= oframe.second->prototype->locals;
+					fptr--;
+
+					break;
+				}
+			case InstructionType::Resume:
+				{
+					//resume last item placed on stack
+					Value v = this->stack.Pop();
+					if (v.type != ValueType::Function || v._function->generator == 0)
+						throw RuntimeException("Cannot resume a non generator!");
+
+					fptr++;
+
+					callstack.Push(std::pair<unsigned int, Closure*>(iptr, curframe));//callstack.Push(iptr);
+
+					sptr += curframe->prototype->locals;
+
+					curframe = v._function;
+
+					iptr = v._function->generator->Resume(this)-1;
+
 					break;
 				}
 			case InstructionType::Dup:
@@ -1541,7 +1629,8 @@ Value JetContext::Assemble(const std::vector<IntermediateInstruction>& code)
 				func->upvals = inst.c;
 				func->ptr = labelposition;
 				func->name = inst.string;
-				func->vararg = inst.d ? true : false;
+				func->generator = inst.d & 2 ? true : false;
+				func->vararg = inst.d & 1? true : false;
 
 				if (functions.find(inst.string) == functions.end())
 					functions[inst.string] = func;
@@ -1633,6 +1722,19 @@ Value JetContext::Assemble(const std::vector<IntermediateInstruction>& code)
 						ins.value = labels[inst.string];
 						break;
 					}
+				case InstructionType::ForEach:
+					{
+						if (labels.find(inst.string) == labels.end())
+							throw RuntimeException("Label '" + (std::string)inst.string + "' does not exist!");
+						ins.value = labels[inst.string];
+						if (labels.find(inst.string2) == labels.end())
+							throw RuntimeException("Label '" + (std::string)inst.string2 + "' does not exist!");
+						ins.value2 = labels[inst.string2];
+
+						delete[] inst.string;
+						delete[] inst.string2;
+						break;
+					}
 				}
 
 				this->ins.push_back(ins);
@@ -1647,6 +1749,7 @@ Value JetContext::Assemble(const std::vector<IntermediateInstruction>& code)
 	tmpframe->grey = tmpframe->mark = false;
 	tmpframe->prev = 0;
 	tmpframe->closed = false;
+	tmpframe->generator = 0;
 	tmpframe->prototype = this->functions["{Entry Point}"];
 	tmpframe->numupvals = tmpframe->prototype->upvals;
 	if (tmpframe->numupvals)

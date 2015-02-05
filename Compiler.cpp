@@ -16,6 +16,7 @@ using namespace Jet;
 CompilerContext::CompilerContext(void)
 {
 	this->vararg = false;
+	this->isgenerator = false;
 	this->closures = 0;
 	this->parent = 0;
 	this->uuid = 0;
@@ -104,6 +105,7 @@ std::vector<IntermediateInstruction> CompilerContext::Compile(BlockExpression* e
 		//modify the entry point with number of locals
 		this->out[0].b = this->localindex;
 		this->out[0].c = this->closures;
+		this->out[0].d = this->vararg + this->isgenerator*2;
 	}
 	catch (CompilerException e)
 	{

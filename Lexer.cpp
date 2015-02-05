@@ -102,6 +102,9 @@ public:
 		keywords["continuar"] = TokenType::Continue;
 
 		keywords["null"] = TokenType::Null;
+
+		keywords["yield"] = TokenType::Yield;
+		keywords["resume"] = TokenType::Resume;
 		//keywords["const"] = TokenType::Const;
 
 		//keywords["operator"] = TokenType::Operator;
@@ -333,6 +336,10 @@ Token Lexer::Next()
 		else
 		{
 			//character to ignore like whitespace
+			if (c == ' ' || c == '\t' || c == '\n' || c == '\r')
+				continue;
+			else
+				throw CompilerException(this->filename, this->linenumber, "Unexpected character: '" + str + "'");
 		}
 	}
 	return Token(linenumber, TokenType::EoF, "EOF");

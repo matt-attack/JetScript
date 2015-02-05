@@ -404,3 +404,26 @@ Expression* ObjectParselet::parse(Parser* parser, Token token)
 	parser->Consume(TokenType::RightBrace);//end part
 	return new ObjectExpression(inits);
 };
+
+Expression* YieldParselet::parse(Parser* parser, Token token)
+{
+	Expression* right = 0;
+	if (parser->Match(TokenType::Semicolon) == false)
+		right = parser->parseExpression(1);
+
+	return new YieldExpression(token, right);
+}
+
+Expression* ResumeParselet::parse(Parser* parser, Token token)
+{
+	Expression* right = parser->parseExpression(1);
+
+	return new ResumeExpression(token, right);
+}
+
+Expression* ResumePrefixParselet::parse(Parser* parser, Token token)
+{
+	Expression* right = parser->parseExpression(1);
+
+	return new ResumeExpression(token, right);
+}

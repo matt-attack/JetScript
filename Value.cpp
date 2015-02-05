@@ -2,6 +2,58 @@
 #include "JetContext.h"
 
 using namespace Jet;
+#undef Yield
+
+Generator::Generator(JetContext* context, Closure* closure, int args)
+{
+	state = GeneratorState::Suspended;
+	this->closure = closure;
+
+	//need to push args onto the stack
+	this->stack = new Value[closure->prototype->locals];
+
+	//fix me later
+	for (int i = 0; i < args; i++)
+	{
+		stack[i] = context->stack.Pop();
+	}
+
+	this->curiptr = closure->prototype->ptr;//set current position to start of function
+}
+
+void Generator::Yield(JetContext* context, unsigned int iptr)
+{
+	this->state = GeneratorState::Suspended;
+	//store the iptr
+	this->curiptr = iptr+1;
+
+	//store stack
+	for (int i = 0; i < this->closure->prototype->locals; i++)
+		this->stack[i] = context->sptr[i];
+
+	//context->stack.Push(Value());//return the value
+}
+
+unsigned int Generator::Resume(JetContext* context)
+{
+	if (this->state == GeneratorState::Dead)
+		throw RuntimeException("cannot resume dead generator");
+	if (this->state == GeneratorState::Running)
+		throw RuntimeException("cannot resume active generator");
+
+	this->state = GeneratorState::Running;
+
+	//execute
+	//resume function
+
+	//setup stack
+	for (int i = 0; i < this->closure->prototype->locals; i++)
+	{
+		context->sptr[i] = this->stack[i];
+	}
+
+	return this->curiptr;
+};
 
 Value::Value()
 {

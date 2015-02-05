@@ -49,6 +49,8 @@ namespace Jet
 		"CLoad",
 		"CInit",
 
+		"ForEach",
+
 		//index functions
 		"LoadAt",
 		"StoreAt",
@@ -58,6 +60,8 @@ namespace Jet
 
 		"Call",
 		"Return",
+		"Resume",
+		"Yield",
 		"Close",
 
 		//dummy instructions for the assembler/debugging
@@ -118,6 +122,9 @@ namespace Jet
 		CLoad,
 		CInit, //to setup captures
 
+		//loop instruction
+		ForEach,
+
 		//index functions
 		LoadAt,
 		StoreAt,
@@ -127,6 +134,10 @@ namespace Jet
 
 		Call,
 		Return,
+		
+		//generator stuff
+		Resume,
+		Yield,
 
 		Close, //closes all opened closures in a function
 

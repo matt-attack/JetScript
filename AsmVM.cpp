@@ -75,14 +75,14 @@ int main(int argc, char* argv[])
 		{
 			try
 			{
-				std::ifstream t(argv[1]);
+				std::ifstream t(argv[1], std::ios::in | std::ios::binary);
 				if (t)
 				{
 					int length;
 					t.seekg(0, std::ios::end);    // go to the end
 					length = t.tellg();           // report location (this is the length)
 					t.seekg(0, std::ios::beg);    // go back to the beginning
-					char* buffer = new char[length+1];    // allocate memory for a buffer of appropriate dimension
+					char* buffer = new char[length];    // allocate memory for a buffer of appropriate dimension
 					t.read(buffer, length);       // read the whole file into the buffer
 					buffer[length] = 0;
 					t.close();
@@ -118,12 +118,11 @@ int main(int argc, char* argv[])
 			char* buffer = 0;
 			try
 			{
-				std::ifstream t(arg);
+				std::ifstream t(arg, std::ios::in | std::ios::binary);
 				if (t)
 				{
-					int length;
 					t.seekg(0, std::ios::end);    // go to the end
-					length = t.tellg();           // report location (this is the length)
+					int length = t.tellg();           // report location (this is the length)
 					t.seekg(0, std::ios::beg);    // go back to the beginning
 					buffer = new char[length+1];    // allocate memory for a buffer of appropriate dimension
 					t.read(buffer, length);       // read the whole file into the buffer

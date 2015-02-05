@@ -289,6 +289,8 @@ void FunctionExpression::Compile(CompilerContext* context)
 		fname = "_lambda_id_";
 
 	CompilerContext* function = context->AddFunction(fname, this->args->size(), this->varargs);
+	//ok, kinda hacky
+	int start = context->out.size();
 
 	//ok push locals, in opposite order
 	for (int i = 0; i < this->args->size(); i++)
@@ -315,6 +317,9 @@ void FunctionExpression::Compile(CompilerContext* context)
 		function->Null();//return nil
 		function->Return();
 	}
+
+	//if (function->isgenerator)
+	//context->out[0].
 
 	context->FinalizeFunction(function);
 

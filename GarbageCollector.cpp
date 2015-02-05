@@ -52,6 +52,7 @@ void GarbageCollector::Cleanup()
 	{
 		if (ii->numupvals)
 			delete[] ii->upvals;
+		delete ii->generator;
 		delete ii;
 	}
 	this->closures.clear();
@@ -250,6 +251,22 @@ void GarbageCollector::Mark()
 							}
 						}
 					}
+
+					if (obj._function->generator)
+					{
+						//mark generator stack
+						for (int i = 0; i < obj._function->prototype->locals; i++)
+						{
+							if (obj._function->generator->stack[i].type > ValueType::NativeFunction)
+							{
+								if (obj._function->generator->stack[i]._object->grey == false)
+								{
+									obj._function->generator->stack[i]._object->grey = true;
+									greys.Push(obj._function->generator->stack[i]);
+								}
+							}
+						}
+					}
 					break;
 				}
 			case ValueType::Userdata:
@@ -328,6 +345,7 @@ void GarbageCollector::Sweep()
 			{
 				if (ii->numupvals)
 					delete[] ii->upvals;
+				delete ii->generator;
 				delete ii;
 			}
 		}

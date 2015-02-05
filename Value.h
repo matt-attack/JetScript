@@ -10,6 +10,8 @@
 #include <vector>
 #include <unordered_map>
 
+#undef Yield
+
 namespace Jet
 {
 	class JetContext;
@@ -75,8 +77,37 @@ namespace Jet
 	{
 		unsigned int ptr;
 		unsigned int args, locals, upvals;
-		bool vararg;
+		bool vararg; bool generator;
 		std::string name;
+	};
+
+	struct Closure;
+	//ok for this we will cheat and simply use captures to store the stack values!!!
+	struct Generator
+	{
+		enum class GeneratorState
+		{
+			Running,
+			Suspended,
+			Dead,
+		};
+
+		Generator(JetContext* context, Closure* closure, int args);
+
+		void Yield(JetContext* context, unsigned int iptr);
+
+		unsigned int Resume(JetContext* context);
+
+		void Kill()//what happens when you return, resets to start
+		{
+			this->state = GeneratorState::Dead;
+			//restore iptr
+		}
+
+		int curiptr;
+		GeneratorState state;
+		Closure* closure;
+		Value* stack;
 	};
 
 	struct Closure
@@ -89,6 +120,7 @@ namespace Jet
 		unsigned char numupvals;
 
 		Function* prototype;
+		Generator* generator;
 
 		union
 		{

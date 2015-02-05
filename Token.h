@@ -79,6 +79,8 @@ namespace Jet
 		Local,
 		Break,
 		Continue,
+		Yield,
+		Resume,
 
 		Const,
 

@@ -30,7 +30,11 @@ namespace Jet
 		InstructionType type;
 
 		char* string;
-		int first;
+		union
+		{
+			int first;
+			char* string2;
+		};
 		union
 		{
 			double second;
@@ -92,6 +96,7 @@ namespace Jet
 
 	class CompilerContext
 	{
+		friend class FunctionExpression;
 		friend class CallExpression;
 		std::map<std::string, CompilerContext*> functions;
 
@@ -122,7 +127,7 @@ namespace Jet
 
 		unsigned int localindex;
 
-		bool vararg;
+		bool vararg; bool isgenerator;
 		unsigned int closures;
 		unsigned int arguments;
 		CompilerContext* parent;
@@ -151,7 +156,7 @@ namespace Jet
 				fun.second->Compile();
 
 				//need to set var with the function name and location
-				this->FunctionLabel(fun.first, fun.second->arguments, fun.second->localindex, fun.second->closures);
+				this->FunctionLabel(fun.first, fun.second->arguments, fun.second->localindex, fun.second->closures, fun.second->vararg, fun.second->isgenerator);
 				for (auto ins: fun.second->out)
 					this->out.push_back(ins);
 
@@ -159,13 +164,13 @@ namespace Jet
 			}
 		}
 
-		void FunctionLabel(std::string name, int args, int locals, int upvals, bool vararg = false)
+		void FunctionLabel(std::string name, int args, int locals, int upvals, bool vararg = false, bool isgenerator = false)
 		{
 			IntermediateInstruction ins = IntermediateInstruction(InstructionType::Function, name, args);
 			ins.a = args;
 			ins.b = locals;
 			ins.c = upvals;
-			ins.d = vararg ? 1 : 0;
+			ins.d = vararg + isgenerator*2;//vararg ? 1 : 0;
 			out.push_back(ins);
 		}
 
@@ -206,12 +211,12 @@ namespace Jet
 			//do a close if necessary
 			/*for (auto& ii : this->scope->localvars)
 			{
-				if (ii.capture >= 0)
-				{
-					out.push_back(IntermediateInstruction(InstructionType::CInit,ii.local, ii.capture));
-					out.push_back(IntermediateInstruction(InstructionType::Close));
-					ii.uploaded = true;
-				}
+			if (ii.capture >= 0)
+			{
+			out.push_back(IntermediateInstruction(InstructionType::CInit,ii.local, ii.capture));
+			out.push_back(IntermediateInstruction(InstructionType::Close));
+			ii.uploaded = true;
+			}
 			}*/
 			loops.pop_back();
 		}
@@ -228,6 +233,31 @@ namespace Jet
 			if (this->loops.size() == 0)
 				throw CompilerException(this->filename, this->lastline, "Cannot use continue outside of a loop!");
 			this->Jump(loops.back().Continue.c_str());
+		}
+
+		void ForEach(const std::string& dest, const std::string& start, std::string& end)
+		{
+			int lpos = 0;
+			for (unsigned int i = 0; i < this->scope->localvars.size(); i++)
+			{
+				if (this->scope->localvars[i].name == dest)
+				{
+					lpos = this->scope->localvars[i].local;
+					break;
+				}
+			}
+			IntermediateInstruction inst(InstructionType::ForEach);
+			inst.second = lpos;
+			//copy the strings
+			char* s = new char[start.length()+1];
+			start.copy(s, start.length());
+			s[start.length()] = 0;
+			char* e = new char[end.length()+1];
+			end.copy(e, end.length());
+			e[end.length()] = 0;
+			inst.string = s;
+			inst.string2 = e;
+			this->out.push_back(inst);
 		}
 
 		bool RegisterLocal(const std::string name);//returns success
@@ -484,6 +514,17 @@ namespace Jet
 			if (this->closures > 0)//close all open closures
 				out.push_back(IntermediateInstruction(InstructionType::Close));
 			out.push_back(IntermediateInstruction(InstructionType::Return));
+		}
+
+		void Yield()
+		{
+			out.push_back(IntermediateInstruction(InstructionType::Yield));
+			this->isgenerator = true;
+		}
+
+		void Resume()
+		{
+			out.push_back(IntermediateInstruction(InstructionType::Resume));
 		}
 
 		//debug info
