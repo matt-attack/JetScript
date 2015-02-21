@@ -251,32 +251,22 @@ Token Lexer::Next()
 						switch(c)
 						{
 						case 'n':
-							{
-								txt.push_back('\n');
-								break;
-							}
+							txt.push_back('\n');
+							break;
 						case 'b':
-							{
-								txt.push_back('\b');
-								break;
-							}
+							txt.push_back('\b');
+							break;
 						case 't':
-							{
-								txt.push_back('\t');
-								break;
-							}
+							txt.push_back('\t');
+							break;
 						case '\\':
-							{
-								txt.push_back('\\');
-								break;
-							}
+							txt.push_back('\\');
+							break;
 						case '"':
-							{
-								txt.push_back('"');
-								break;
-							}
+							txt.push_back('"');
+							break;
 						default:
-							throw CompilerException(filename, this->linenumber, "Invalid Escape Sequence '\\"+text.substr(index+1)+"'");
+							throw CompilerException(filename, this->linenumber, "Invalid Escape Sequence '\\"+text.substr(index+1,1)+"'");
 						}
 
 						index += 2;
@@ -331,6 +321,41 @@ Token Lexer::Next()
 			}
 
 			std::string num = text.substr(start, index-start);
+			return Token(linenumber, TokenType::Number, num);
+		}
+		else if (c == '\'')
+		{
+			char cc = this->ConsumeChar();
+			if (cc == '\\')
+			{
+				//handle the escape sequence
+				cc = this->ConsumeChar();
+				switch(cc)
+				{
+				case 'n':
+					cc = '\n';
+					break;
+				case 'b':
+					cc = '\b';
+					break;
+				case 't':
+					cc = '\t';
+					break;
+				case '\\':
+					cc = '\\';
+					break;
+				case '\'':
+					cc = '\'';
+					break;
+				default:
+					throw CompilerException(filename, this->linenumber, "Invalid Escape Sequence '\\"+text.substr(index-1,1)+"'");
+				}
+			}
+			std::string num = std::to_string((int)cc);
+
+			cc = this->ConsumeChar();
+			if (cc != '\'')
+				throw CompilerException(filename, linenumber, "Closing ' expected for character literal.");
 			return Token(linenumber, TokenType::Number, num);
 		}
 		else

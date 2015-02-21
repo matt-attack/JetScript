@@ -91,6 +91,18 @@ namespace Jet
 			delete this->initializers;
 		}
 
+		virtual void SetParent(Expression* parent)
+		{
+			this->Parent = parent;
+			if (this->initializers)
+			{
+				for (auto ii: *this->initializers)
+				{
+					ii->SetParent(this);
+				}
+			}
+		}
+
 		void Compile(CompilerContext* context);
 	};
 
@@ -109,6 +121,18 @@ namespace Jet
 				for (auto ii: *this->inits)
 					delete ii.second;
 			delete this->inits;
+		}
+
+		virtual void SetParent(Expression* parent)
+		{
+			this->Parent = parent;
+			if (this->inits)
+			{
+				for (auto ii: *this->inits)
+				{
+					ii.second->SetParent(this);
+				}
+			}
 		}
 
 		void Compile(CompilerContext* context);
@@ -892,6 +916,9 @@ namespace Jet
 			this->right->Compile(context);
 
 			context->Resume();
+
+			if (dynamic_cast<BlockExpression*>(this->Parent))
+				context->Pop();
 		}
 	};
 }

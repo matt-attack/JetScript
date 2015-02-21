@@ -252,7 +252,7 @@ void NameExpression::Compile(CompilerContext* context)
 void OperatorAssignExpression::Compile(CompilerContext* context)
 {
 	context->Line(token.line);
-
+	//https://dl.dropboxusercontent.com/u/675786/ShareX/2015-02/08_22-33-22.png fix this
 	this->left->Compile(context);
 	this->right->Compile(context);
 	context->BinaryOperation(token.type);

@@ -67,7 +67,7 @@ int main(int argc, char* argv[])
 	args[0] = Value(3);
 	args[1] = Value(4);
 	args[2] = Value(5);
-	printf("Sizeof Value: %d\n\n", sizeof(Value));
+	printf("Sizeof Value: %d, Sizeof Instruction: %d\n\n", sizeof(Value), sizeof(Instruction));
 
 	if (argc > 1)
 	{
@@ -102,15 +102,34 @@ int main(int argc, char* argv[])
 			}
 		}
 	}
+	//need to make sure function definitions dont just build up forever and make the instructions array huge
+	//	each function needs to store its own instructions, so it can be garbage collected
+	//mess with this to fix all possible memory leaks/buildups, like with functions
+	/*{
+		std::ifstream t("coroutines.txt", std::ios::in | std::ios::binary);
+		int length;
+		t.seekg(0, std::ios::end);    // go to the end
+		length = t.tellg();           // report location (this is the length)
+		t.seekg(0, std::ios::beg);    // go back to the beginning
+		char* buffer = new char[length];    // allocate memory for a buffer of appropriate dimension
+		t.read(buffer, length);       // read the whole file into the buffer
+		buffer[length] = 0;
+		t.close();
+		for (int i = 0; i < 100000; i++)
+		{
+			context.Script(buffer, "coroutines.txt");
+		}
+		delete[] buffer;
+	}*/
 
 	while (true)
 	{
 		printf("\n>");
-		char command[80];
+		char command[800];
 		char arg[50]; char command2[50];
 		memset(arg, 0, 50);
 		memset(command2, 0, 50);
-		std::cin.getline(command, 80);
+		std::cin.getline(command, 800);
 
 		sscanf(command, "%s %s\n", command2, arg);
 		if (strcmp(command2, "run") == 0)
@@ -168,7 +187,6 @@ int main(int argc, char* argv[])
 
 				try
 				{
-					//the 5++ in the if statement leaks stack
 					Value ret = context.Script(
 						"fail = 0;"
 						"if (++5 != 6) fail = 1;"
@@ -181,7 +199,7 @@ int main(int argc, char* argv[])
 						"return ++x;");
 					if ((int)ret != -3)
 						throw 7;
-					
+
 					if ((int)context["y"] != -5)
 						throw 7;
 
@@ -192,7 +210,7 @@ int main(int argc, char* argv[])
 				{
 					throw CompilerException("", 0, "unary operator test failed\n");
 				}
-				
+
 				try
 				{
 					context.Script("fun main(dt, f2, a3) { print(dt); return dt; } ");
@@ -204,6 +222,19 @@ int main(int argc, char* argv[])
 				catch (...)
 				{
 					throw CompilerException("", 0, "context.Call test failed\n");
+				}
+
+				try
+				{
+					Value out = context.Script("x = { _call = fun(x,y,z) { return z; }};"
+						"y = {}; setprototype(y,x); return y(1,2,3);");
+
+					if ((int)out != 3)
+						throw 7;
+				}
+				catch (...)
+				{
+					throw CompilerException("", 0, "call operator overload test failed\n");
 				}
 
 				//test reading and setting vars
@@ -224,7 +255,7 @@ int main(int argc, char* argv[])
 
 				context["inception"] = Value(f);
 				context.Script("fun h() { return 7; } inception(); print(\"hi im still alive\"); print(inception());");
-				
+
 				//this should not crash or leave anything on the callstack
 				//context.Script("fun h() { return p[7]; } inception(); print(\"hi im still alive\");");
 

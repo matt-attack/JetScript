@@ -69,7 +69,7 @@ namespace Jet
 	typedef GCVal<char*> JetString;
 
 	typedef void _JetFunction;
-	typedef Value(*_JetNativeFunc)(JetContext*,Value*, int);
+	typedef Value(*JetNativeFunc)(JetContext*,Value*, int);
 
 	class JetContext;
 
@@ -79,6 +79,8 @@ namespace Jet
 		unsigned int args, locals, upvals;
 		bool vararg; bool generator;
 		std::string name;
+		JetContext* context;
+		//std::vector<Instruction> instructions;useme
 	};
 
 	struct Closure;
@@ -98,7 +100,7 @@ namespace Jet
 
 		unsigned int Resume(JetContext* context);
 
-		void Kill()//what happens when you return, resets to start
+		void Kill()//what happens when you return
 		{
 			this->state = GeneratorState::Dead;
 			//restore iptr
@@ -119,7 +121,7 @@ namespace Jet
 		bool closed;//marks if the closure has gone out of its parent scope and was closed
 		unsigned char numupvals;
 
-		Function* prototype;
+		Function* prototype;//need to mark this for gc
 		Generator* generator;
 
 		union
@@ -155,7 +157,7 @@ namespace Jet
 			};
 
 			Closure* _function;//jet function
-			_JetNativeFunc func;//native func
+			JetNativeFunc func;//native func
 		};
 
 		Value();
@@ -167,12 +169,12 @@ namespace Jet
 		Value(double val);
 		Value(int val);
 
-		Value(_JetNativeFunc a);
+		Value(JetNativeFunc a);
 		Value(Closure* func);
 
 		explicit Value(JetUserdata* userdata, JetObject* prototype);
 
-		Value& operator= (const _JetNativeFunc& func)
+		Value& operator= (const JetNativeFunc& func)
 		{
 			return *this = Value(func);
 		}
@@ -264,34 +266,36 @@ namespace Jet
 		Value& operator[] (const char* key);
 		Value& operator[] (const Value& key);
 
+		//binary operators
 		bool operator==(const Value& other) const;
 
 		Value operator+( const Value &other );
-
 		Value operator-( const Value &other );
 
 		Value operator*( const Value &other );
-
 		Value operator/( const Value &other );
 
 		Value operator%( const Value &other );
 
 		Value operator|( const Value &other );
-
 		Value operator&( const Value &other );
-
 		Value operator^( const Value &other );
 
 		Value operator<<( const Value &other );
-
 		Value operator>>( const Value &other );
 
+		//unary operators
 		Value operator~();
 
 		Value operator-();
 
 	private:
 		Value CallMetamethod(const char* name, const Value* other);
+		Value CallMetamethod(JetObject* table, const char* name, const Value* other);
+
+		bool TryCallMetamethod(const char* name, const Value* args, int numargs, Value* out);
+
+		friend class JetContext;
 	};
 
 

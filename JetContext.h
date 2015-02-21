@@ -43,23 +43,28 @@ namespace Jet
 #define JetBind2(context, fun) 	auto temp__bind_##fun = [](Jet::JetContext* context,Jet::Value* args, int numargs) {  return Value(fun(args[0],args[1]));};context[#fun] = Jet::Value(temp__bind_##fun);
 #define JetBind2(context, fun, type) 	auto temp__bind_##fun = [](Jet::JetContext* context,Jet::Value* args, int numargs) {  return Value(fun((type)args[0],(type)args[1]));};context[#fun] = Jet::Value(temp__bind_##fun);
 
+	//each instruction can have a double, or two integers
 	struct Instruction
 	{
 		InstructionType instruction;
+		//data part
 		union
 		{
-			int value;
-			Function* func;
-		};
-		union
-		{
-			double value2;
-			//const char* string;
-		};
-		union
-		{
-			JetString* strlit;
-			const char* string;
+			struct
+			{
+				int value;
+				
+				union
+				{
+					int value2;
+
+					Function* func;
+					JetString* strlit;
+					const char* string;
+				};
+			};
+
+			double lit;//double literal for pushing numbers
 		};
 	};
 
@@ -91,6 +96,7 @@ namespace Jet
 		std::vector<DebugInfo> debuginfo;
 
 		//actual data being worked on
+		//this instruction array is being moved to each function
 		std::vector<Instruction> ins;
 		std::vector<Value> vars;//where they are actually stored
 
@@ -104,6 +110,7 @@ namespace Jet
 		JetObject* file;
 		JetObject* arrayiter;
 		JetObject* objectiter;
+		JetObject* function;
 
 		//require cache
 		std::map<std::string, Value> require_cache;
@@ -146,7 +153,6 @@ namespace Jet
 		void RunGC();//runs an iteration of the garbage collector
 
 	private:
-		int fptr;//frame pointer, not really used except in gc
 		Value* sptr;//stack pointer
 		Closure* curframe;
 		Value localstack[JET_STACK_SIZE];

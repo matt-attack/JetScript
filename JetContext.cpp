@@ -137,7 +137,6 @@ Value JetContext::NewString(const char* string, bool copy)
 JetContext::JetContext() : gc(this), stack(500000)
 {
 	this->labelposition = 0;
-	this->fptr = 0;
 	this->sptr = this->localstack;
 
 	//add more functions and junk
@@ -170,7 +169,7 @@ JetContext::JetContext() : gc(this), stack(500000)
 		if (iter == context->require_cache.end())
 		{
 			//load from file
-			std::ifstream t(v->_string->ptr);
+			std::ifstream t(v->_string->ptr, std::ios::in | std::ios::binary);
 			if (t)
 			{
 				int length;
@@ -184,9 +183,19 @@ JetContext::JetContext() : gc(this), stack(500000)
 
 				auto out = context->Compile(buffer, v->_string->ptr);
 				auto fun = context->Assemble(out);
-				context->require_cache[v->_string->ptr] = Value();
+				auto temp = context->NewObject();
+				context->require_cache[v->_string->ptr] = temp;
 				auto obj = context->Call(&fun);
 				context->require_cache[v->_string->ptr] = obj;
+				if (obj.type == ValueType::Object)
+				{
+					for (auto ii: *obj._object)//copy stuff into the temporary object
+						temp[ii.first] = ii.second;
+				}
+				else
+				{
+					context->require_cache[v->_string->ptr] = obj;//just use what was returned
+				}
 				return obj;
 			}
 			else
@@ -272,6 +281,21 @@ JetContext::JetContext() : gc(this), stack(500000)
 		else
 			throw RuntimeException("bad append call!");
 	});
+	//figure out how to get this working with strings
+	(*this->string)["_add"] = Value([](JetContext* context, Value* v, int args)
+	{
+		if (args == 2 && v[0].type == ValueType::String && v[1].type == ValueType::String)
+		{
+			size_t len = v[0].length + v[1].length + 1;
+			char* text = new char[len];
+			memcpy(text, v[1]._string, v[1].length);
+			memcpy(text+v[1].length, v[0]._string, v[0].length);
+			text[len-1] = 0;
+			return context->NewString(text, false);
+		}
+		else
+			throw RuntimeException("bad append call!");
+	});
 	(*this->string)["length"] = Value([](JetContext* context, Value* v, int args)
 	{
 		if (args == 1)
@@ -285,17 +309,13 @@ JetContext::JetContext() : gc(this), stack(500000)
 	(*this->Array)["add"] = Value([](JetContext* context, Value* v, int args)
 	{
 		if (args == 2)
-		{
 			v[1]._array->ptr->push_back(*v);
-			//(*(v+1)->_array->ptr)[(v+1)->_array->ptr->size()] = *(v);
-		}
 		else
 			throw RuntimeException("Invalid add call!!");
 		return Value();
 	});
 	(*this->Array)["size"] = Value([](JetContext* context, Value* v, int args)
 	{
-		//how do I get access to the array from here?
 		if (args == 1)
 			return Value((int)v->_array->ptr->size());
 		else
@@ -303,11 +323,19 @@ JetContext::JetContext() : gc(this), stack(500000)
 	});
 	(*this->Array)["resize"] = Value([](JetContext* context, Value* v, int args)
 	{
-		//how do I get access to the array from here?
 		if (args == 2)
-			v[1]._array->ptr->resize(v->value);
+			v[1]._array->ptr->resize((int)v);
 		else
-			throw RuntimeException("Invalid size call!!");
+			throw RuntimeException("Invalid resize call!!");
+		return Value();
+	});
+
+	(*this->Array)["remove"] = Value([](JetContext* context, Value* v, int args)
+	{
+		if (args == 2)
+			v[1]._array->ptr->erase(v[1]._array->ptr->begin()+(int)v);
+		else
+			throw RuntimeException("Invalid remove call!!");
 		return Value();
 	});
 
@@ -375,10 +403,7 @@ JetContext::JetContext() : gc(this), stack(500000)
 		};
 		auto iterator = v->GetUserdata<iter2>();
 		if (iterator->iterator != iterator->container->end())
-		{
 			return Value((*iterator->iterator++).second);
-			//++iterator->iterator;//->operator++();
-		}
 		//just return null
 	});
 	(*this->objectiter)["current"] = Value([](JetContext* context, Value* v, int args)
@@ -391,9 +416,7 @@ JetContext::JetContext() : gc(this), stack(500000)
 		//still kinda wierd
 		auto iterator = v->GetUserdata<iter2>();
 		if (iterator->iterator != iterator->container->end())
-		{
 			return Value((*iterator->iterator).second);
-		}
 		//just return null
 	});
 	(*this->objectiter)["advance"] = Value([](JetContext* context, Value* v, int args)
@@ -408,7 +431,6 @@ JetContext::JetContext() : gc(this), stack(500000)
 			return Value(1);
 		else
 			return Value(0);
-		//just return null
 	});
 	(*this->objectiter)["_gc"] = Value([](JetContext* context, Value* v, int args)
 	{
@@ -431,10 +453,7 @@ JetContext::JetContext() : gc(this), stack(500000)
 		};
 		auto iterator = v->GetUserdata<iter>();
 		if (iterator->iterator != iterator->container->end())
-		{
 			return Value((*iterator->iterator++));
-			//++iterator->iterator;//->operator++();
-		}
 		//just return null
 	});
 	(*this->arrayiter)["current"] = Value([](JetContext* context, Value* v, int args)
@@ -472,6 +491,20 @@ JetContext::JetContext() : gc(this), stack(500000)
 		delete v->GetUserdata<iter>();
 		return Value();
 	});
+
+	this->function = new JetObject(this);
+	this->function->prototype = 0;
+	(*this->function)["done"] = Value([](JetContext* context, Value* v, int args)
+	{
+		if (args == 1 && v->type == ValueType::Function && v->_function->generator)
+		{
+			if (v->_function->generator->state == Generator::GeneratorState::Dead)
+				return Value(1);
+			else
+				return Value(0);
+		}
+		throw RuntimeException("Cannot index a non generator or table");
+	});
 };
 
 JetContext::~JetContext()
@@ -479,7 +512,14 @@ JetContext::~JetContext()
 	this->gc.Cleanup();
 
 	for (auto ii: this->ins)
-		if (ii.instruction != InstructionType::LdStr)
+		if (ii.instruction != InstructionType::CLoad 
+			&& ii.instruction != InstructionType::CInit
+			&& ii.instruction != InstructionType::LoadFunction 
+			&& ii.instruction != InstructionType::LdStr 
+			&& ii.instruction != InstructionType::LdNum 
+			&& ii.instruction != InstructionType::Call
+			&& ii.instruction != InstructionType::Load
+			&& ii.instruction != InstructionType::Store)
 			delete[] ii.string;
 
 	for (auto ii: this->functions)
@@ -494,6 +534,7 @@ JetContext::~JetContext()
 	delete this->object;
 	delete this->arrayiter;
 	delete this->objectiter;
+	delete this->function;
 }
 
 #ifndef _WIN32
@@ -578,8 +619,6 @@ Value JetContext::Execute(int iptr)
 	QueryPerformanceCounter( (LARGE_INTEGER *)&start );
 #endif
 	//frame and stack pointer reset
-	fptr += 1;//this needs to disappear
-
 	unsigned int startcallstack = this->callstack.size();
 	unsigned int startstack = this->stack.size();
 	auto startlocalstack = this->sptr;
@@ -771,13 +810,11 @@ Value JetContext::Execute(int iptr)
 				}
 			case InstructionType::LdNum:
 				{
-					stack.Push(in.value2);
+					stack.Push(in.lit);
 					break;
 				}
 			case InstructionType::LdStr:
 				{
-					//fix this
-					//fixme all these strings shouldnt be garbage collected
 					stack.Push(Value(in.strlit));
 					break;
 				}
@@ -904,7 +941,7 @@ Value JetContext::Execute(int iptr)
 			case InstructionType::CInit:
 				{
 					//allocate and add new upvalue
-					curframe->upvals[(unsigned int)in.value2] = &sptr[in.value];
+					curframe->upvals[in.value2] = &sptr[in.value];
 
 					break;
 				}
@@ -926,12 +963,29 @@ Value JetContext::Execute(int iptr)
 				}
 			case InstructionType::Call:
 				{
+					//add call metamethod
 					//allocate capture area here
 					if (vars[in.value].type == ValueType::Function)
 					{
-						//store iptr on call stack
-						if (fptr > JET_MAX_CALLDEPTH)
-							throw RuntimeException("Exceeded Max Call Depth!");
+						//let generators be called
+						if (vars[in.value]._function->generator)
+						{
+							//put resume stuff in here
+							if (callstack.size() > JET_MAX_CALLDEPTH)
+								throw RuntimeException("Exceeded Max Call Depth!");
+
+							callstack.Push(std::pair<unsigned int, Closure*>(iptr, curframe));
+
+							sptr += curframe->prototype->locals;
+
+							if ((sptr - localstack) >= JET_STACK_SIZE)
+								throw RuntimeException("Stack Overflow!");
+
+							curframe = vars[in.value]._function;
+
+							iptr = vars[in.value]._function->generator->Resume(this)-1;
+							break;
+						}
 
 						if (vars[in.value]._function->prototype->generator)
 						{
@@ -952,7 +1006,9 @@ Value JetContext::Execute(int iptr)
 							break;
 						}
 
-						fptr++;
+						//store iptr on call stack
+						if (callstack.size() > JET_MAX_CALLDEPTH)
+							throw RuntimeException("Exceeded Max Call Depth!");
 
 						callstack.Push(std::pair<unsigned int, Closure*>(iptr, curframe));
 
@@ -960,9 +1016,7 @@ Value JetContext::Execute(int iptr)
 
 						//clean out the new stack for the gc
 						for (int i = 0; i < vars[in.value]._function->prototype->locals; i++)
-						{
 							sptr[i] = Value();
-						}
 
 						//need to reduce use of this if possible
 						if ((sptr - localstack) >= JET_STACK_SIZE)
@@ -994,11 +1048,11 @@ Value JetContext::Execute(int iptr)
 
 						Function* func = curframe->prototype;
 						//set all the locals
-						if ((unsigned int)in.value2 <= func->args)
+						if (in.value2 <= func->args)
 						{
 							for (int i = func->args-1; i >= 0; i--)
 							{
-								if (i < (int)in.value2)
+								if (i < in.value2)
 									sptr[i] = stack.Pop();
 								else
 									sptr[i] = Value();
@@ -1009,7 +1063,7 @@ Value JetContext::Execute(int iptr)
 							sptr[func->locals-1] = this->NewArray();
 							auto arr = sptr[func->locals-1]._array->ptr;
 							arr->resize(in.value2 - func->args);
-							for (int i = (int)in.value2-1; i >= 0; i--)
+							for (int i = in.value2-1; i >= 0; i--)
 							{
 								if (i < func->args)
 									sptr[i] = stack.Pop();
@@ -1019,10 +1073,10 @@ Value JetContext::Execute(int iptr)
 						}
 						else
 						{
-							for (int i = (int)in.value2-1; i >= 0; i--)
+							for (int i = in.value2-1; i >= 0; i--)
 							{
 								if (i < func->args)
-									sptr[i] = stack.Pop();//frames[fptr].locals[i] = stack.Pop();
+									sptr[i] = stack.Pop();
 								else
 									stack.Pop();
 							}
@@ -1030,10 +1084,11 @@ Value JetContext::Execute(int iptr)
 
 						//go to function
 						iptr = func->ptr-1;
+						break;
 					}
 					else if (vars[in.value].type == ValueType::NativeFunction)
 					{
-						unsigned int args = (unsigned int)in.value2;
+						unsigned int args = in.value2;
 						Value* tmp = &stack.mem[stack.size()-args];
 
 						//ok fix this to be cleaner and resolve stack printing
@@ -1046,21 +1101,33 @@ Value JetContext::Execute(int iptr)
 
 						callstack.QuickPop(2);
 						stack.Push(ret);
+						break;
 					}
-					else
+					else if (vars[in.value].type == ValueType::Object)
 					{
-						//find the variable name from the in.value which is the index into the variable array
-						std::string var;
-						for (auto ii: variables)
+						unsigned int args = in.value2;
+						Value* tmp = &stack.mem[stack.size()-args];
+						Value ret;
+						if(vars[in.value].TryCallMetamethod("_call", tmp, args, &ret))
 						{
-							if (ii.second == in.value)
-							{
-								var = ii.first;
-								break;
-							}
+							stack.QuickPop(args);
+							stack.Push(ret);
+							break;
 						}
-						throw RuntimeException("Cannot call non function '" + var + " of type " + vars[(int)in.value].Type() + "'!!!");
+						stack.QuickPop(args);
 					}
+
+					//find the variable name from the in.value which is the index into the variable array
+					std::string var;
+					for (auto ii: variables)
+					{
+						if (ii.second == in.value)
+						{
+							var = ii.first;
+							break;
+						}
+					}
+					throw RuntimeException("Cannot call non function '" + var + " of type " + vars[in.value].Type() + "'!!!");
 
 					break;
 				}
@@ -1070,8 +1137,25 @@ Value JetContext::Execute(int iptr)
 					Value fun = stack.Pop();
 					if (fun.type == ValueType::Function)
 					{
-						if (fptr > JET_MAX_CALLDEPTH)
-							throw RuntimeException("Exceeded Max Call Depth!");
+						//let generators be called
+						if (fun._function->generator)
+						{
+							//put resume stuff in here
+							if (callstack.size() > JET_MAX_CALLDEPTH)
+								throw RuntimeException("Exceeded Max Call Depth!");
+
+							callstack.Push(std::pair<unsigned int, Closure*>(iptr, curframe));
+
+							sptr += curframe->prototype->locals;
+
+							if ((sptr - localstack) >= JET_STACK_SIZE)
+								throw RuntimeException("Stack Overflow!");
+
+							curframe = fun._function;
+
+							iptr = fun._function->generator->Resume(this)-1;
+							break;
+						}
 
 						if (fun._function->prototype->generator)
 						{
@@ -1092,7 +1176,9 @@ Value JetContext::Execute(int iptr)
 							break;
 						}
 
-						fptr++;
+						//manipulate frame pointer
+						if (callstack.size() > JET_MAX_CALLDEPTH)
+							throw RuntimeException("Exceeded Max Call Depth!");
 
 						callstack.Push(std::pair<unsigned int, Closure*>(iptr, curframe));//callstack.Push(iptr);
 
@@ -1100,9 +1186,7 @@ Value JetContext::Execute(int iptr)
 
 						//clean out the new stack for the gc
 						for (int i = 0; i < fun._function->prototype->locals; i++)
-						{
 							sptr[i] = Value();
-						}
 
 						if ((sptr - localstack) >= JET_STACK_SIZE)
 							throw RuntimeException("Stack Overflow!");
@@ -1147,8 +1231,8 @@ Value JetContext::Execute(int iptr)
 						{
 							sptr[func->locals-1] = this->NewArray();
 							auto arr = sptr[func->locals-1]._array->ptr;
-							arr->resize(in.value2 - func->args);
-							for (int i = (int)in.value2-1; i >= 0; i--)
+							arr->resize(in.value - func->args);
+							for (int i = (int)in.value-1; i >= 0; i--)
 							{
 								if (i < func->args)
 									sptr[i] = stack.Pop();
@@ -1169,10 +1253,11 @@ Value JetContext::Execute(int iptr)
 
 						//go to function
 						iptr = fun._function->prototype->ptr-1;
+						break;
 					}
 					else if (fun.type == ValueType::NativeFunction)
 					{
-						unsigned int args = (unsigned int)in.value;
+						unsigned int args = in.value;
 						Value* tmp = &stack.mem[stack.size()-args];
 
 						//ok fix this to be cleaner and resolve stack printing
@@ -1185,11 +1270,24 @@ Value JetContext::Execute(int iptr)
 
 						callstack.QuickPop(2);
 						stack.Push(ret);
+						break;
 					}
-					else
+					else if (fun.type == ValueType::Object)
 					{
-						throw RuntimeException("Cannot call non function type " + std::string(fun.Type()) + "!!!");
+						unsigned int args = in.value;
+						Value* tmp = &stack.mem[stack.size()-args];
+						Value ret;
+						if(fun.TryCallMetamethod("_call", tmp, args, &ret))
+						{
+							stack.QuickPop(args);
+							stack.Push(ret);
+							break;
+						}
+						stack.QuickPop(args);
 					}
+
+					throw RuntimeException("Cannot call non function type " + std::string(fun.Type()) + "!!!");
+
 					break;
 				}
 			case InstructionType::Return:
@@ -1210,12 +1308,11 @@ Value JetContext::Execute(int iptr)
 							sptr[i]._object = (JetObject*)0xcdcdcdcd;
 						}
 #endif
-						sptr -= oframe.second->prototype->locals;//curframe->prototype->locals;
+						sptr -= oframe.second->prototype->locals;
 					}
 					//printf("Return: Stack Ptr At: %d\n", sptr - localstack);
 					curframe = oframe.second;
 
-					fptr--;
 					break;
 				}
 			case InstructionType::Yield:
@@ -1224,12 +1321,11 @@ Value JetContext::Execute(int iptr)
 						this->curframe->generator->Yield(this, iptr);
 					else
 						throw RuntimeException("Cannot Yield from outside a generator");
-					
+
 					auto oframe = callstack.Pop();
 					iptr = oframe.first;
 					curframe = oframe.second;
 					sptr -= oframe.second->prototype->locals;
-					fptr--;
 
 					break;
 				}
@@ -1240,11 +1336,15 @@ Value JetContext::Execute(int iptr)
 					if (v.type != ValueType::Function || v._function->generator == 0)
 						throw RuntimeException("Cannot resume a non generator!");
 
-					fptr++;
+					if (callstack.size() > JET_MAX_CALLDEPTH)
+						throw RuntimeException("Exceeded Max Call Depth!");
 
-					callstack.Push(std::pair<unsigned int, Closure*>(iptr, curframe));//callstack.Push(iptr);
+					callstack.Push(std::pair<unsigned int, Closure*>(iptr, curframe));
 
 					sptr += curframe->prototype->locals;
+
+					if ((sptr - localstack) >= JET_STACK_SIZE)
+						throw RuntimeException("Stack Overflow!");
 
 					curframe = v._function;
 
@@ -1291,7 +1391,6 @@ Value JetContext::Execute(int iptr)
 
 						if (loc.type == ValueType::Array)
 						{
-							//gc bug apparant in benchmark.txt.txt fixme
 							if ((int)index >= loc._array->ptr->size() || (int)index < 0)
 								throw RuntimeException("Array index out of range!");
 							(*loc._array->ptr)[(int)index] = val;
@@ -1318,9 +1417,16 @@ Value JetContext::Execute(int iptr)
 								gc.greys.Push(loc);//push to grey stack
 							}
 						}
+						else if (loc.type == ValueType::String)
+						{
+							int in = (int)index;
+							if (in >= loc.length || in < 0)
+								throw RuntimeException("String index out of range!");
+
+							loc._string->ptr[in] = (int)val;
+						}
 						else
 							throw RuntimeException("Could not index a non array/object value!");
-						//write barrier
 					}
 					break;
 				}
@@ -1357,6 +1463,8 @@ Value JetContext::Execute(int iptr)
 							stack.Push((*this->Array)[in.string]);
 						else if (loc.type == ValueType::Userdata)
 							stack.Push((*loc._userdata->ptr.second)[in.string]);
+						else if (loc.type == ValueType::Function && loc._function->generator)
+							stack.Push((*this->function)[in.string]);
 						else
 							throw RuntimeException("Could not index a non array/object value!");
 					}
@@ -1373,6 +1481,15 @@ Value JetContext::Execute(int iptr)
 						}
 						else if (loc.type == ValueType::Object)
 							stack.Push((*loc._object)[index]);
+						else if (loc.type == ValueType::String)
+						{
+							int in = (int)index;
+							if (in >= loc.length || in < 0)
+								throw RuntimeException("String index out of range!");
+
+							stack.Push(Value(loc._string->ptr[in]));
+						}
+
 						else
 							throw RuntimeException("Could not index a non array/object value!");
 					}
@@ -1455,9 +1572,6 @@ Value JetContext::Execute(int iptr)
 
 		//make sure I reset everything in the event of an error
 
-		//reset fptr
-		fptr -= this->callstack.size()-startcallstack;
-
 		//clear the stacks
 		this->callstack.QuickPop(this->callstack.size()-startcallstack);
 		this->stack.QuickPop(this->stack.size()-startstack);
@@ -1480,9 +1594,6 @@ Value JetContext::Execute(int iptr)
 		{
 			printf("%s = %s\n", ii.first.c_str(), vars[ii.second].ToString().c_str());
 		}
-
-		//reset fptr
-		fptr -= this->callstack.size()-startcallstack;
 
 		//ok, need to properly roll back callstack
 		this->callstack.QuickPop(this->callstack.size()-startcallstack);
@@ -1508,14 +1619,14 @@ Value JetContext::Execute(int iptr)
 	{
 		if (this->sptr != this->localstack)
 			throw RuntimeException("FATAL ERROR: Local stack did not properly reset");
-
-		if (this->fptr != 0)
-			throw RuntimeException("FATAL ERROR: Frame pointer did not properly reset");
 	}
 
 	//check for stack leaks
 	if (this->stack.size() > startstack+1)
+	{
+		this->stack.QuickPop(stack.size());
 		throw RuntimeException("FATAL ERROR: Stack leak detected!");
+	}
 #endif
 
 	return stack.Pop();
@@ -1629,6 +1740,7 @@ Value JetContext::Assemble(const std::vector<IntermediateInstruction>& code)
 				func->upvals = inst.c;
 				func->ptr = labelposition;
 				func->name = inst.string;
+				func->context = this;
 				func->generator = inst.d & 2 ? true : false;
 				func->vararg = inst.d & 1? true : false;
 
@@ -1684,7 +1796,8 @@ Value JetContext::Assemble(const std::vector<IntermediateInstruction>& code)
 				ins.instruction = inst.type;
 				ins.string = inst.string;
 				ins.value = inst.first;
-				ins.value2 = inst.second;
+				if (inst.string == 0 || inst.type == InstructionType::Call)
+					ins.value2 = inst.second;
 
 				switch (inst.type)
 				{
@@ -1699,6 +1812,7 @@ Value JetContext::Assemble(const std::vector<IntermediateInstruction>& code)
 							vars.push_back(Value());
 						}
 						ins.value = variables[inst.string];
+						delete[] inst.string;
 						break;
 					}
 				case InstructionType::LdStr:
@@ -1708,9 +1822,15 @@ Value JetContext::Assemble(const std::vector<IntermediateInstruction>& code)
 						ins.strlit = str._string;
 						break;
 					}
+				case InstructionType::LdNum:
+					{
+						ins.lit = inst.second;
+						break;
+					}
 				case InstructionType::LoadFunction:
 					{
 						ins.func = functions[inst.string];
+						delete[] inst.string;
 						break;
 					}
 				case InstructionType::Jump:
