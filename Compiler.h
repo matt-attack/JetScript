@@ -237,7 +237,7 @@ namespace Jet
 
 		void ForEach(const std::string& dest, const std::string& start, std::string& end)
 		{
-			int lpos = 0;
+			/*int lpos = 0;
 			for (unsigned int i = 0; i < this->scope->localvars.size(); i++)
 			{
 				if (this->scope->localvars[i].name == dest)
@@ -257,7 +257,7 @@ namespace Jet
 			e[end.length()] = 0;
 			inst.string = s;
 			inst.string2 = e;
-			this->out.push_back(inst);
+			this->out.push_back(inst);*/
 		}
 
 		bool RegisterLocal(const std::string name);//returns success

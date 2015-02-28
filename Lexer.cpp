@@ -3,7 +3,7 @@
 
 using namespace Jet;
 
-std::map<TokenType,std::string> Jet::TokenToString; 
+//std::map<TokenType,std::string> Jet::TokenToString; 
 
 class LexerStatic
 {
@@ -75,8 +75,8 @@ public:
 
 		//comments
 		operators["//"] = TokenType::LineComment;
-		operators["-[["] = TokenType::CommentBegin;
-		operators["]]-"] = TokenType::CommentEnd;
+		operators["-[["] = TokenType::BlockString;
+		//operators["]]-"] = TokenType::CommentEnd;
 		operators["/*"] = TokenType::CommentBegin;
 		operators["*/"] = TokenType::CommentEnd;
 
@@ -128,8 +128,6 @@ public:
 	};
 };
 
-//initialize static lexer stuff
-static LexerStatic ls;
 
 bool Jet::IsLetter(char c)
 {
@@ -166,6 +164,7 @@ void ParseKeyword(const std::string& string)
 
 Token Lexer::Next()
 {
+	static LexerStatic ls;
 	while (index < text.length())
 	{
 		char c = this->ConsumeChar();
@@ -283,6 +282,53 @@ Token Lexer::Next()
 
 				index++;
 				return Token(linenumber, toktype, txt);
+			}
+			else if (toktype == TokenType::BlockString)
+			{
+				std::string txt;
+
+				int start = index;
+				while (index < text.length())
+				{
+					if (text[index] == '\\')
+					{
+						//handle escape sequences
+						char c = text[index+1];
+						switch(c)
+						{
+						case 'n':
+							txt.push_back('\n');
+							break;
+						case 'b':
+							txt.push_back('\b');
+							break;
+						case 't':
+							txt.push_back('\t');
+							break;
+						case '\\':
+							txt.push_back('\\');
+							break;
+						case '"':
+							txt.push_back('"');
+							break;
+						default:
+							throw CompilerException(filename, this->linenumber, "Invalid Escape Sequence '\\"+text.substr(index+1,1)+"'");
+						}
+
+						index += 2;
+					}
+					else if (text[index] == ']' && text[index+1] == ']' && text[index+2] == '-')
+					{
+						break;
+					}
+					else
+					{
+						txt.push_back(text[index++]);
+					}
+				}
+
+				index += 3;
+				return Token(linenumber, TokenType::String, txt);
 			}
 
 			return Token(linenumber, toktype, str);

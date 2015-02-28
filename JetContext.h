@@ -43,35 +43,10 @@ namespace Jet
 #define JetBind2(context, fun) 	auto temp__bind_##fun = [](Jet::JetContext* context,Jet::Value* args, int numargs) {  return Value(fun(args[0],args[1]));};context[#fun] = Jet::Value(temp__bind_##fun);
 #define JetBind2(context, fun, type) 	auto temp__bind_##fun = [](Jet::JetContext* context,Jet::Value* args, int numargs) {  return Value(fun((type)args[0],(type)args[1]));};context[#fun] = Jet::Value(temp__bind_##fun);
 
-	//each instruction can have a double, or two integers
-	struct Instruction
-	{
-		InstructionType instruction;
-		//data part
-		union
-		{
-			struct
-			{
-				int value;
-				
-				union
-				{
-					int value2;
-
-					Function* func;
-					JetString* strlit;
-					const char* string;
-				};
-			};
-
-			double lit;//double literal for pushing numbers
-		};
-	};
-
 	//builtin function definitions
 	Value gc(JetContext* context,Value* args, int numargs);
 	Value print(JetContext* context,Value* args, int numargs);
-
+	
 	class JetContext
 	{
 		friend class Generator;
@@ -86,21 +61,12 @@ namespace Jet
 		std::vector<Function*> entrypoints;
 		std::map<std::string, unsigned int> variables;//mapping from string to location in vars array
 
-		//debug info
-		struct DebugInfo
-		{
-			unsigned int code;
-			std::string file;
-			unsigned int line;
-		};
-		std::vector<DebugInfo> debuginfo;
-
 		//actual data being worked on
 		//this instruction array is being moved to each function
-		std::vector<Instruction> ins;
+		//std::vector<Instruction> ins;
 		std::vector<Value> vars;//where they are actually stored
 
-		int labelposition;//used for keeping track in assembler
+		//int labelposition;//used for keeping track in assembler
 		CompilerContext compiler;//root compiler context
 
 		//core library prototypes
@@ -158,11 +124,14 @@ namespace Jet
 		Value localstack[JET_STACK_SIZE];
 
 		//begin executing instructions at iptr index
-		Value Execute(int iptr);
+		Value Execute(int iptr, Closure* frame);
+		unsigned int Call(const Value* function, unsigned int iptr, unsigned int args);
 
 		//debug functions
-		void GetCode(int ptr, std::string& ret, unsigned int& line);
-		void StackTrace(int curiptr);
+		void GetCode(int ptr, Closure* closure, std::string& ret, unsigned int& line);
+		void StackTrace(int curiptr, Closure* cframe);
+
+		static Value Callstack(JetContext* context, Value* v, int ar);
 	};
 }
 

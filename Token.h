@@ -20,6 +20,7 @@ namespace Jet
 		Name,
 		Number,
 		String,
+		BlockString,
 		Assign,
 
 		Dot,

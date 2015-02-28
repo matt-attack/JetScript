@@ -23,6 +23,12 @@ Value Jet::gc(JetContext* context,Value* args, int numargs)
 	return Value();
 };
 
+Value JetContext::Callstack(JetContext* context, Value* args, int numargs)
+{
+	context->StackTrace(123456789, 0);
+	return Value();
+}
+
 Value Jet::print(JetContext* context,Value* args, int numargs) 
 { 
 	for (int i = 0; i < numargs; i++)
@@ -136,12 +142,13 @@ Value JetContext::NewString(const char* string, bool copy)
 
 JetContext::JetContext() : gc(this), stack(500000)
 {
-	this->labelposition = 0;
 	this->sptr = this->localstack;
+	this->curframe = 0;
 
 	//add more functions and junk
 	(*this)["print"] = print;
 	(*this)["gc"] = ::gc;
+	(*this)["callstack"] = JetContext::Callstack;
 
 	(*this)["setprototype"] = [](JetContext* context, Value* v, int args)
 	{
@@ -511,17 +518,6 @@ JetContext::~JetContext()
 {
 	this->gc.Cleanup();
 
-	for (auto ii: this->ins)
-		if (ii.instruction != InstructionType::CLoad 
-			&& ii.instruction != InstructionType::CInit
-			&& ii.instruction != InstructionType::LoadFunction 
-			&& ii.instruction != InstructionType::LdStr 
-			&& ii.instruction != InstructionType::LdNum 
-			&& ii.instruction != InstructionType::Call
-			&& ii.instruction != InstructionType::Load
-			&& ii.instruction != InstructionType::Store)
-			delete[] ii.string;
-
 	for (auto ii: this->functions)
 		delete ii.second;
 
@@ -540,7 +536,7 @@ JetContext::~JetContext()
 #ifndef _WIN32
 typedef signed long long INT64;
 #endif
-INT64 rate;
+//INT64 rate;
 std::vector<IntermediateInstruction> JetContext::Compile(const char* code, const char* filename)
 {
 #ifdef JET_TIME_EXECUTION
@@ -611,7 +607,162 @@ void JetContext::RunGC()
 	this->gc.Run();
 }
 
-Value JetContext::Execute(int iptr)
+unsigned int JetContext::Call(const Value* fun, unsigned int iptr, unsigned int args)
+{
+	if (fun->type == ValueType::Function)
+	{
+		//let generators be called
+		if (fun->_function->generator)
+		{
+			//put resume stuff in here
+			if (callstack.size() > JET_MAX_CALLDEPTH)
+				throw RuntimeException("Exceeded Max Call Depth!");
+
+			callstack.Push(std::pair<unsigned int, Closure*>(iptr, curframe));
+
+			sptr += curframe->prototype->locals;
+
+			if ((sptr - localstack) >= JET_STACK_SIZE)
+				throw RuntimeException("Stack Overflow!");
+
+			curframe = fun->_function;
+
+			iptr = fun->_function->generator->Resume(this)-1;
+			return iptr;
+		}
+
+		if (fun->_function->prototype->generator)
+		{
+			//create generator and return it
+			Closure* closure = new Closure;
+			closure->grey = closure->mark = false;
+			closure->prev = curframe->prev;
+			closure->numupvals = closure->numupvals;
+			closure->closed = false;
+			closure->refcount = 0;
+			closure->generator = new Generator(this, curframe, args);
+			if (closure->numupvals)
+				closure->upvals = new Value*[closure->numupvals];
+			closure->prototype = fun->_function->prototype;
+			this->gc.closures.push_back(closure);
+
+			this->stack.Push(Value(closure));
+			return iptr;
+		}
+
+		//manipulate frame pointer
+		if (callstack.size() > JET_MAX_CALLDEPTH)
+			throw RuntimeException("Exceeded Max Call Depth!");
+
+		callstack.Push(std::pair<unsigned int, Closure*>(iptr, curframe));
+
+		sptr += curframe->prototype->locals;
+
+		//clean out the new stack for the gc
+		for (int i = 0; i < fun->_function->prototype->locals; i++)
+			sptr[i] = Value();
+
+		if ((sptr - localstack) >= JET_STACK_SIZE)
+			throw RuntimeException("Stack Overflow!");
+
+		curframe = fun->_function;
+
+
+		if (curframe->closed)
+		{
+			//allocate new local frame here
+			Closure* closure = new Closure;
+			closure->grey = closure->mark = false;
+			closure->prev = curframe->prev;
+			closure->numupvals = curframe->numupvals;
+			closure->closed = false;
+			closure->refcount = 0;
+			closure->generator = 0;
+			if (closure->numupvals)
+				closure->upvals = new Value*[closure->numupvals];
+			closure->prototype = curframe->prototype;
+			this->gc.closures.push_back(closure);
+
+			curframe = closure;
+
+			if (gc.allocationCounter++%GC_INTERVAL == 0)
+				this->RunGC();
+		}
+		//printf("ECall: Stack Ptr At: %d\n", sptr - localstack);
+
+		Function* func = curframe->prototype;
+		//set all the locals
+		if (args <= func->args)
+		{
+			for (int i = func->args-1; i >= 0; i--)
+			{
+				if (i < args)
+					sptr[i] = stack.Pop();
+				else
+					sptr[i] = Value();
+			}
+		}
+		else if (func->vararg)
+		{
+			sptr[func->locals-1] = this->NewArray();
+			auto arr = sptr[func->locals-1]._array->ptr;
+			arr->resize(args - func->args);
+			for (int i = args-1; i >= 0; i--)
+			{
+				if (i < func->args)
+					sptr[i] = stack.Pop();
+				else
+					(*arr)[i] = stack.Pop();
+			}
+		}
+		else
+		{
+			for (int i = args-1; i >= 0; i--)
+			{
+				if (i < func->args)
+					sptr[i] = stack.Pop();
+				else
+					stack.Pop();
+			}
+		}
+
+		//go to function
+		iptr = -1;//fun._function->prototype->ptr-1;
+		return iptr;
+	}
+	else if (fun->type == ValueType::NativeFunction)
+	{
+		Value* tmp = &stack.mem[stack.size()-args];
+
+		//ok fix this to be cleaner and resolve stack printing
+		//should just push a value to indicate that we are in a native function call
+		callstack.Push(std::pair<unsigned int, Closure*>(iptr, curframe));
+		callstack.Push(std::pair<unsigned int, Closure*>(123456789, 0));
+		Closure* temp = curframe;
+		curframe = 0;
+		Value ret = (*fun->func)(this,tmp,args);
+		stack.QuickPop(args);
+		curframe = temp;
+		callstack.QuickPop(2);
+		stack.Push(ret);
+		return iptr;
+	}
+	else if (fun->type == ValueType::Object)
+	{
+		Value* tmp = &stack.mem[stack.size()-args];
+		Value ret;
+		if(fun->TryCallMetamethod("_call", tmp, args, &ret))
+		{
+			stack.QuickPop(args);
+			stack.Push(ret);
+			return iptr;
+		}
+		stack.QuickPop(args);
+	}
+	throw RuntimeException("Cannot call non function type " + std::string(fun->Type()) + "!!!");
+}
+
+Value JetContext::Execute(int iptr, Closure* frame)
 {
 #ifdef JET_TIME_EXECUTION
 	INT64 start, rate, end;
@@ -624,15 +775,20 @@ Value JetContext::Execute(int iptr)
 	auto startlocalstack = this->sptr;
 
 	callstack.Push(std::pair<unsigned int, Closure*>(123456789, 0));//bad value to get it to return;
+	curframe = frame;
 
+	//ignore metamethods for now
+	//main issue is getting callstack info for metamethods
+	//need to have callstack contain all frames so gc works correctly
+	//Closure* curframe = frame;
 	//printf("Execute: Stack Ptr At: %d\n", sptr - localstack);
 
 	try
 	{
-		int max = ins.size();
+		int max = 5000;//fixmeins.size();
 		while(iptr < max && iptr >= 0)
 		{
-			Instruction in = ins[iptr];
+			Instruction in = curframe->prototype->instructions[iptr];
 			switch(in.instruction)
 			{
 			case InstructionType::Add:
@@ -879,8 +1035,8 @@ Value JetContext::Execute(int iptr)
 				}
 			case InstructionType::LStore:
 				{
-					sptr[in.value] = stack.Pop();
 					//printf("Store at: Stack Ptr: %d\n", sptr - localstack + in.value);
+					sptr[in.value] = stack.Pop();
 					break;
 				}
 			case InstructionType::CLoad:
@@ -963,14 +1119,15 @@ Value JetContext::Execute(int iptr)
 				}
 			case InstructionType::Call:
 				{
-					//add call metamethod
+					iptr = this->Call(&vars[in.value], iptr, in.value2);
+
+					break;
 					//allocate capture area here
-					if (vars[in.value].type == ValueType::Function)
+					/*if (vars[in.value].type == ValueType::Function)
 					{
 						//let generators be called
 						if (vars[in.value]._function->generator)
 						{
-							//put resume stuff in here
 							if (callstack.size() > JET_MAX_CALLDEPTH)
 								throw RuntimeException("Exceeded Max Call Depth!");
 
@@ -1083,7 +1240,7 @@ Value JetContext::Execute(int iptr)
 						}
 
 						//go to function
-						iptr = func->ptr-1;
+						iptr = -1;//func->ptr-1;
 						break;
 					}
 					else if (vars[in.value].type == ValueType::NativeFunction)
@@ -1094,10 +1251,12 @@ Value JetContext::Execute(int iptr)
 						//ok fix this to be cleaner and resolve stack printing
 						//should just push a value to indicate that we are in a native function call
 						callstack.Push(std::pair<unsigned int, Closure*>(iptr, curframe));
-						callstack.Push(std::pair<unsigned int, Closure*>(123456789, curframe));
-
+						callstack.Push(std::pair<unsigned int, Closure*>(123456789, 0));
+						Closure* temp = curframe;
+						curframe = 0;
 						Value ret = (*vars[in.value].func)(this,tmp,args);
 						stack.QuickPop(args);//pop off args
+						curframe = temp;
 
 						callstack.QuickPop(2);
 						stack.Push(ret);
@@ -1115,7 +1274,7 @@ Value JetContext::Execute(int iptr)
 							break;
 						}
 						stack.QuickPop(args);
-					}
+					}*/
 
 					//find the variable name from the in.value which is the index into the variable array
 					std::string var;
@@ -1135,7 +1294,9 @@ Value JetContext::Execute(int iptr)
 				{
 					//allocate capture area here
 					Value fun = stack.Pop();
-					if (fun.type == ValueType::Function)
+					iptr = this->Call(&fun, iptr, in.value);
+
+					/*if (fun.type == ValueType::Function)
 					{
 						//let generators be called
 						if (fun._function->generator)
@@ -1180,7 +1341,7 @@ Value JetContext::Execute(int iptr)
 						if (callstack.size() > JET_MAX_CALLDEPTH)
 							throw RuntimeException("Exceeded Max Call Depth!");
 
-						callstack.Push(std::pair<unsigned int, Closure*>(iptr, curframe));//callstack.Push(iptr);
+						callstack.Push(std::pair<unsigned int, Closure*>(iptr, curframe));
 
 						sptr += curframe->prototype->locals;
 
@@ -1193,67 +1354,69 @@ Value JetContext::Execute(int iptr)
 
 						curframe = fun._function;
 
-						if (curframe->closed)
-						{
-							//allocate new local frame here
-							Closure* closure = new Closure;
-							closure->grey = closure->mark = false;
-							closure->prev = curframe->prev;
-							closure->numupvals = closure->numupvals;
-							closure->closed = false;
-							closure->refcount = 0;
-							closure->generator = 0;
-							if (closure->numupvals)
-								closure->upvals = new Value*[closure->numupvals];
-							closure->prototype = curframe->prototype;
-							this->gc.closures.push_back(closure);
+						use the call function
 
-							curframe = closure;
-
-							if (gc.allocationCounter++%GC_INTERVAL == 0)
-								this->RunGC();
-						}
-						//printf("ECall: Stack Ptr At: %d\n", sptr - localstack);
-
-						Function* func = curframe->prototype;
-						//set all the locals
-						if (in.value <= func->args)
-						{
-							for (int i = func->args-1; i >= 0; i--)
+							if (curframe->closed)
 							{
-								if (i < in.value)
-									sptr[i] = stack.Pop();
-								else
-									sptr[i] = Value();
-							}
-						}
-						else if (func->vararg)
-						{
-							sptr[func->locals-1] = this->NewArray();
-							auto arr = sptr[func->locals-1]._array->ptr;
-							arr->resize(in.value - func->args);
-							for (int i = (int)in.value-1; i >= 0; i--)
-							{
-								if (i < func->args)
-									sptr[i] = stack.Pop();
-								else
-									(*arr)[i] = stack.Pop();
-							}
-						}
-						else
-						{
-							for (int i = in.value-1; i >= 0; i--)
-							{
-								if (i < func->args)
-									sptr[i] = stack.Pop();
-								else
-									stack.Pop();
-							}
-						}
+								//allocate new local frame here
+								Closure* closure = new Closure;
+								closure->grey = closure->mark = false;
+								closure->prev = curframe->prev;
+								closure->numupvals = closure->numupvals;
+								closure->closed = false;
+								closure->refcount = 0;
+								closure->generator = 0;
+								if (closure->numupvals)
+									closure->upvals = new Value*[closure->numupvals];
+								closure->prototype = curframe->prototype;
+								this->gc.closures.push_back(closure);
 
-						//go to function
-						iptr = fun._function->prototype->ptr-1;
-						break;
+								curframe = closure;
+
+								if (gc.allocationCounter++%GC_INTERVAL == 0)
+									this->RunGC();
+							}
+							//printf("ECall: Stack Ptr At: %d\n", sptr - localstack);
+
+							Function* func = curframe->prototype;
+							//set all the locals
+							if (in.value <= func->args)
+							{
+								for (int i = func->args-1; i >= 0; i--)
+								{
+									if (i < in.value)
+										sptr[i] = stack.Pop();
+									else
+										sptr[i] = Value();
+								}
+							}
+							else if (func->vararg)
+							{
+								sptr[func->locals-1] = this->NewArray();
+								auto arr = sptr[func->locals-1]._array->ptr;
+								arr->resize(in.value - func->args);
+								for (int i = (int)in.value-1; i >= 0; i--)
+								{
+									if (i < func->args)
+										sptr[i] = stack.Pop();
+									else
+										(*arr)[i] = stack.Pop();
+								}
+							}
+							else
+							{
+								for (int i = in.value-1; i >= 0; i--)
+								{
+									if (i < func->args)
+										sptr[i] = stack.Pop();
+									else
+										stack.Pop();
+								}
+							}
+
+							//go to function
+							iptr = -1;//fun._function->prototype->ptr-1;
+							break;
 					}
 					else if (fun.type == ValueType::NativeFunction)
 					{
@@ -1263,11 +1426,12 @@ Value JetContext::Execute(int iptr)
 						//ok fix this to be cleaner and resolve stack printing
 						//should just push a value to indicate that we are in a native function call
 						callstack.Push(std::pair<unsigned int, Closure*>(iptr, curframe));
-						callstack.Push(std::pair<unsigned int, Closure*>(123456789, curframe));
-
+						callstack.Push(std::pair<unsigned int, Closure*>(123456789, 0));
+						Closure* temp = curframe;
+						curframe = 0;
 						Value ret = (*fun.func)(this,tmp,args);
 						stack.QuickPop(args);
-
+						curframe = temp;
 						callstack.QuickPop(2);
 						stack.Push(ret);
 						break;
@@ -1284,9 +1448,9 @@ Value JetContext::Execute(int iptr)
 							break;
 						}
 						stack.QuickPop(args);
-					}
+					}*/
 
-					throw RuntimeException("Cannot call non function type " + std::string(fun.Type()) + "!!!");
+					//throw RuntimeException("Cannot call non function type " + std::string(fun.Type()) + "!!!");
 
 					break;
 				}
@@ -1294,8 +1458,8 @@ Value JetContext::Execute(int iptr)
 				{
 					auto oframe = callstack.Pop();
 					iptr = oframe.first;
-					if (this->curframe && this->curframe->generator)
-						this->curframe->generator->Kill();
+					if (curframe && curframe->generator)
+						curframe->generator->Kill();
 
 					if (oframe.first != 123456789)
 					{
@@ -1317,8 +1481,8 @@ Value JetContext::Execute(int iptr)
 				}
 			case InstructionType::Yield:
 				{
-					if (this->curframe->generator)
-						this->curframe->generator->Yield(this, iptr);
+					if (curframe->generator)
+						curframe->generator->Yield(this, iptr);
 					else
 						throw RuntimeException("Cannot Yield from outside a generator");
 
@@ -1545,7 +1709,7 @@ Value JetContext::Execute(int iptr)
 			printf("RuntimeException: %s\nCallstack:\n", e.reason.c_str());
 
 			//generate call stack
-			this->StackTrace(iptr);
+			this->StackTrace(iptr, curframe);
 
 			printf("\nLocals:\n");
 			if (curframe)
@@ -1567,9 +1731,6 @@ Value JetContext::Execute(int iptr)
 			e.processed = true;
 		}
 
-		//ok, need to properly roll back callstack
-		//this stuff is lets you call Jet functions from something that called Jet
-
 		//make sure I reset everything in the event of an error
 
 		//clear the stacks
@@ -1585,9 +1746,10 @@ Value JetContext::Execute(int iptr)
 	}
 	catch(...)
 	{
+		//this doesnt work right
 		printf("Caught Some Other Exception\n\nCallstack:\n");
 
-		this->StackTrace(iptr);
+		this->StackTrace(iptr, curframe);
 
 		printf("\nVariables:\n");
 		for (auto ii: variables)
@@ -1601,6 +1763,8 @@ Value JetContext::Execute(int iptr)
 
 		//reset the local variable stack
 		this->sptr = startlocalstack;
+
+		//need to rethrow or something
 	}
 
 
@@ -1632,23 +1796,23 @@ Value JetContext::Execute(int iptr)
 	return stack.Pop();
 }
 
-void JetContext::GetCode(int ptr, std::string& ret, unsigned int& line)
+void JetContext::GetCode(int ptr, Closure* closure, std::string& ret, unsigned int& line)
 {
-	int imax = this->debuginfo.size()-1;
+	int imax = closure->prototype->debuginfo.size()-1;
 	int imin = 0;
 	while (imax >= imin)
 	{
 		// calculate the midpoint for roughly equal partition
 		int imid = (imin+imax)/2;//midpoint(imin, imax);
-		if(this->debuginfo[imid].code == ptr)
+		if(closure->prototype->debuginfo[imid].code == ptr)
 		{
 			// key found at index imid
-			ret = this->debuginfo[imid].file;
-			line = this->debuginfo[imid].line;
+			ret = closure->prototype->debuginfo[imid].file;
+			line = closure->prototype->debuginfo[imid].line;
 			return;// imid; 
 		}
 		// determine which subarray to search
-		else if (this->debuginfo[imid].code < ptr)
+		else if (closure->prototype->debuginfo[imid].code < ptr)
 			// change min index to search upper subarray
 			imin = imid + 1;
 		else         
@@ -1660,43 +1824,45 @@ void JetContext::GetCode(int ptr, std::string& ret, unsigned int& line)
 	if (index < 0)
 		index = 0;
 
-	if (this->debuginfo.size() == 0)//make sure we have debug info
+	if (closure->prototype->debuginfo.size() == 0)//make sure we have debug info
 	{
 		line = 1;
 		return;
 	}
 
-	ret = this->debuginfo[index].file;
-	line = this->debuginfo[index].line;
+	ret = closure->prototype->debuginfo[index].file;
+	line = closure->prototype->debuginfo[index].line;
 }
 
-void JetContext::StackTrace(int curiptr)
+void JetContext::StackTrace(int curiptr, Closure* cframe)
 {
 	auto tempcallstack = this->callstack.Copy();
-	tempcallstack.Push(std::pair<unsigned int, Closure*>(curiptr,0));
+	if (curframe)
+		tempcallstack.Push(std::pair<unsigned int, Closure*>(curiptr,cframe));
 
 	while(tempcallstack.size() > 0)
 	{
 		auto top = tempcallstack.Pop();
 		int greatest = -1;
-		std::string fun;
-		for (auto ii: this->functions)
+
+		/*for (auto ii: this->functions)
 		{
-			//ok, need to find which label pos I am most greatest than or equal to
-			if (top.first >= ii.second->ptr && (int)ii.second->ptr > greatest)
-			{
-				fun = ii.first;
-				greatest = ii.second->ptr;
-			}
+		//ok, need to find which label pos I am most greatest than or equal to
+		if (top.first >= ii.second->ptr && (int)ii.second->ptr > greatest)
+		{
+		fun = ii.first;
+		greatest = ii.second->ptr;
 		}
+		}*/
 		if (top.first == 123456789)
 			printf("{Native}\n");
 		else
 		{
+			std::string fun = top.second->prototype->name;
 			std::string file;
 			unsigned int line;
-			this->GetCode(top.first, file, line);
-			printf("%s() %s Line %d (Instruction %d)\n", fun.c_str(), file.c_str(), line, top.first-greatest);
+			this->GetCode(top.first, top.second, file, line);
+			printf("%s() %s Line %d (Instruction %d)\n", fun.c_str(), file.c_str(), line, top.first);
 		}
 	}
 }
@@ -1709,6 +1875,7 @@ Value JetContext::Assemble(const std::vector<IntermediateInstruction>& code)
 	QueryPerformanceCounter( (LARGE_INTEGER *)&start );
 #endif
 	std::map<std::string, unsigned int> labels;
+	int labelposition = 0;
 
 	for (auto inst: code)
 	{
@@ -1720,25 +1887,18 @@ Value JetContext::Assemble(const std::vector<IntermediateInstruction>& code)
 			}
 		case InstructionType::DebugLine:
 			{
-				//this should contain line/file info
-				DebugInfo info;
-				info.file = inst.string;
-				info.line = inst.second;
-				info.code = this->labelposition;
-				this->debuginfo.push_back(info);
-				//push something into the array at the instruction pointer
-				delete[] inst.string;
-
 				break;
 			}
 		case InstructionType::Function:
 			{
+				labelposition = 0;
+
 				//do something with argument and local counts
 				Function* func = new Function;
 				func->args = inst.a;
 				func->locals = inst.b;
 				func->upvals = inst.c;
-				func->ptr = labelposition;
+				//func->ptr = 0;//labelposition;fix this
 				func->name = inst.string;
 				func->context = this;
 				func->generator = inst.d & 2 ? true : false;
@@ -1755,14 +1915,13 @@ Value JetContext::Assemble(const std::vector<IntermediateInstruction>& code)
 				else
 					throw RuntimeException("ERROR: Duplicate Function Label Name: %s\n" + std::string(inst.string));
 
-				delete[] inst.string;
 				break;
 			}
 		case InstructionType::Label:
 			{
 				if (labels.find(inst.string) == labels.end())
 				{
-					labels[inst.string] = this->labelposition;
+					labels[inst.string] = labelposition;
 					delete[] inst.string;
 				}
 				else
@@ -1774,20 +1933,38 @@ Value JetContext::Assemble(const std::vector<IntermediateInstruction>& code)
 			}
 		default:
 			{
-				this->labelposition++;
+				labelposition++;
 			}
 		}
 	}
 
+	Function* current = 0;
 	for (auto inst: code)
 	{
 		switch (inst.type)
 		{
 		case InstructionType::Comment:
-		case InstructionType::Function:
 		case InstructionType::Label:
+			{
+				break;
+			}
 		case InstructionType::DebugLine:
 			{
+				//this should contain line/file info
+				Function::DebugInfo info;
+				info.file = inst.string;
+				info.line = inst.second;
+				info.code = current->instructions.size();
+				current->debuginfo.push_back(info);
+				//push something into the array at the instruction pointer
+				delete[] inst.string;
+
+				break;
+			}
+		case InstructionType::Function:
+			{
+				current = this->functions[inst.string];
+				delete[] inst.string;
 				break;
 			}
 		default:
@@ -1856,8 +2033,7 @@ Value JetContext::Assemble(const std::vector<IntermediateInstruction>& code)
 						break;
 					}
 				}
-
-				this->ins.push_back(ins);
+				current->instructions.push_back(ins);
 			}
 		}
 	}
@@ -1909,7 +2085,15 @@ Value JetContext::Call(const Value* fun, Value* args, unsigned int numargs)
 
 		return this->stack.Pop();
 	}
-	unsigned int iptr = fun->_function->prototype->ptr;
+
+	bool pushed = false;
+	if (this->curframe)
+	{
+		//need to advance stack pointer
+		sptr += curframe->prototype->locals;
+		pushed = true;
+		this->callstack.Push(std::pair<unsigned int, Closure*>(0, curframe));
+	}
 
 	//clear stack values for the gc
 	for (int i = 0; i < fun->_function->prototype->locals; i++)
@@ -1954,15 +2138,19 @@ Value JetContext::Call(const Value* fun, Value* args, unsigned int numargs)
 		}
 	}
 
-	this->curframe = fun->_function;
+	Value ret = this->Execute(0, fun->_function);
 
-	return this->Execute(iptr);
+	if (pushed)
+	{
+		curframe = this->callstack.Pop().second;//restore
+		sptr -= curframe->prototype->locals;
+	}
+	return ret;
 }
 
 //executes a function in the VM context
 Value JetContext::Call(const char* function, Value* args, unsigned int numargs)
 {
-	int iptr = 0;
 	//printf("Calling: '%s'\n", function);
 	if (variables.find(function) == variables.end())
 	{

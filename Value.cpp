@@ -51,7 +51,7 @@ Generator::Generator(JetContext* context, Closure* closure, int args)
 	}
 
 
-	this->curiptr = closure->prototype->ptr;//set current position to start of function
+	this->curiptr = 0;//closure->prototype->ptr;//set current position to start of function
 }
 
 void Generator::Yield(JetContext* context, unsigned int iptr)
@@ -373,7 +373,7 @@ Value Value::CallMetamethod(const char* name, const Value* other)
 	throw RuntimeException("Cannot " + (std::string)(name+1) + " two non-numeric types! " + (std::string)ValueTypes[(int)this->type] + " and " + (std::string)ValueTypes[(int)other->type]);
 }
 
-bool Value::TryCallMetamethod(const char* name, const Value* iargs, int numargs, Value* out)
+bool Value::TryCallMetamethod(const char* name, const Value* iargs, int numargs, Value* out) const
 {
 	auto node = this->_object->prototype->findNode(name);
 	if (node == 0)
@@ -396,7 +396,8 @@ bool Value::TryCallMetamethod(const char* name, const Value* iargs, int numargs,
 		args[numargs] = *this;
 		for (int i = 0; i < numargs; i++)
 			args[i] = iargs[i];
-
+		
+		//help, calling this derps up curframe
 		*out = this->_object->prototype->context->Call(&node->second, args, numargs+1);
 		return true;
 	}

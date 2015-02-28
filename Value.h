@@ -2,6 +2,7 @@
 #define _VALUE_HEADER
 
 #include "JetExceptions.h"
+#include "JetInstructions.h"
 
 #include <map>
 #include <functional>
@@ -72,19 +73,67 @@ namespace Jet
 	typedef Value(*JetNativeFunc)(JetContext*,Value*, int);
 
 	class JetContext;
+	struct Function;
+	//each instruction can have a double, or two integers
+	struct Instruction
+	{
+		InstructionType instruction;
+		//data part
+		union
+		{
+			struct
+			{
+				int value;
+
+				union
+				{
+					int value2;
+
+					Function* func;
+					JetString* strlit;
+					const char* string;
+				};
+			};
+
+			double lit;//double literal for pushing numbers
+		};
+	};
 
 	struct Function
 	{
-		unsigned int ptr;
+		~Function()
+		{
+			for (auto ii: this->instructions)
+				if (ii.instruction != InstructionType::CLoad 
+					&& ii.instruction != InstructionType::CInit
+					&& ii.instruction != InstructionType::LoadFunction 
+					&& ii.instruction != InstructionType::LdStr 
+					&& ii.instruction != InstructionType::LdNum 
+					&& ii.instruction != InstructionType::Call
+					&& ii.instruction != InstructionType::Load
+					&& ii.instruction != InstructionType::Store)
+					delete[] ii.string;
+		}
+
+		//unsigned int ptr;
 		unsigned int args, locals, upvals;
 		bool vararg; bool generator;
 		std::string name;
 		JetContext* context;
-		//std::vector<Instruction> instructions;useme
+		std::vector<Instruction> instructions;
+
+		//debug info
+		struct DebugInfo
+		{
+			unsigned int code;
+			std::string file;
+			unsigned int line;
+		};
+		std::vector<DebugInfo> debuginfo;
 	};
 
 	struct Closure;
-	//ok for this we will cheat and simply use captures to store the stack values!!!
+
 	struct Generator
 	{
 		enum class GeneratorState
@@ -121,7 +170,7 @@ namespace Jet
 		bool closed;//marks if the closure has gone out of its parent scope and was closed
 		unsigned char numupvals;
 
-		Function* prototype;//need to mark this for gc
+		Function* prototype;
 		Generator* generator;
 
 		union
@@ -132,6 +181,8 @@ namespace Jet
 
 		Closure* prev;//parent closure
 	};
+
+
 
 	struct _JetObject;
 	struct Value
@@ -189,7 +240,7 @@ namespace Jet
 			return (T*&)this->_userdata->ptr.first;
 		}
 
-		const char* Type()
+		const char* Type() const
 		{
 			return ValueTypes[(int)this->type];
 		}
@@ -293,7 +344,7 @@ namespace Jet
 		Value CallMetamethod(const char* name, const Value* other);
 		Value CallMetamethod(JetObject* table, const char* name, const Value* other);
 
-		bool TryCallMetamethod(const char* name, const Value* args, int numargs, Value* out);
+		bool TryCallMetamethod(const char* name, const Value* args, int numargs, Value* out) const;
 
 		friend class JetContext;
 	};

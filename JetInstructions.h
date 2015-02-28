@@ -134,7 +134,7 @@ namespace Jet
 
 		Call,
 		Return,
-		
+
 		//generator stuff
 		Resume,
 		Yield,

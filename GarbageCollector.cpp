@@ -125,7 +125,7 @@ void GarbageCollector::Mark()
 		//StackProfile prof("Traverse/Mark Stack");
 		//printf("GC run at runtime!\n");
 		//traverse all local vars
-		if (context->curframe->grey == false)
+		if (context->curframe && context->curframe->grey == false)
 		{
 			context->curframe->grey = true;
 			this->greys.Push(Value(context->curframe));
@@ -158,15 +158,18 @@ void GarbageCollector::Mark()
 		}
 
 		//mark curframe locals
-		int max = sp+context->curframe->prototype->locals;
-		for (; sp < max; sp++)
+		if (context->curframe)
 		{
-			if (context->localstack[sp].type > ValueType::NativeFunction)
+			int max = sp+context->curframe->prototype->locals;
+			for (; sp < max; sp++)
 			{
-				if (context->localstack[sp]._object->grey == false)
+				if (context->localstack[sp].type > ValueType::NativeFunction)
 				{
-					context->localstack[sp]._object->grey = true;
-					this->greys.Push(context->localstack[sp]);
+					if (context->localstack[sp]._object->grey == false)
+					{
+						context->localstack[sp]._object->grey = true;
+						this->greys.Push(context->localstack[sp]);
+					}
 				}
 			}
 		}

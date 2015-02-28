@@ -115,7 +115,7 @@ int main(int argc, char* argv[])
 		t.read(buffer, length);       // read the whole file into the buffer
 		buffer[length] = 0;
 		t.close();
-		for (int i = 0; i < 100000; i++)
+		for (int i = 0; i < 10000; i++)
 		{
 			context.Script(buffer, "coroutines.txt");
 		}
@@ -283,11 +283,12 @@ int main(int argc, char* argv[])
 				//test meta tables and userdata
 				try
 				{
-					//fix valueref breaking this
 					ValueRef meta = context.NewPrototype("Test");//ok, lets give me a type
 					meta["t1"] = [](JetContext* context, Value* v, int args)
 					{
 						printf("hi from metatable\n");
+						//Value() + Value();
+						//throw 7;
 						return Value();
 					};
 					meta["t2"] = [](JetContext* context, Value* v, int args)
@@ -299,14 +300,12 @@ int main(int argc, char* argv[])
 						return Value();
 					};
 					context["mttest"] = context.NewUserdata(0, meta);
-					auto out = context.Script("mttest.t1();"
+					auto out = context.Script("mttest.t1();\n"
 						"getprototype(mttest).t3 = fun() { print(\"hi from t3\n\");}; mttest.t3(); return mttest.t2();");
 					if ((double)out != 7.0)
 						throw 7;
-					//release table when context is done
+
 					ValueRef t2 = context.NewPrototype("hi");
-					//meta.Release();
-					//t2.Release();
 				}
 				catch(...)
 				{
