@@ -1,10 +1,11 @@
 #ifdef _DEBUG
 #ifndef DBG_NEW      
-#define DBG_NEW new ( _NORMAL_BLOCK , __FILE__ , __LINE__ )     
-#define new DBG_NEW   
+//#define DBG_NEW new ( _NORMAL_BLOCK , __FILE__ , __LINE__ )     
+//#define new DBG_NEW   
 #endif
 
 #define _CRTDBG_MAP_ALLOC
+#define _CRTDBG_MAP_ALLOC_NEW
 #include <crtdbg.h>
 #endif
 
@@ -221,11 +222,11 @@ void CompilerContext::BinaryOperation(TokenType operation)
 		this->out.push_back(IntermediateInstruction(InstructionType::GtE));
 		break;
 	case TokenType::OrAssign:
-	case TokenType::Or:
+	case TokenType::BOr:
 		this->out.push_back(IntermediateInstruction(InstructionType::BOr));
 		break;
 	case TokenType::AndAssign:
-	case TokenType::And:
+	case TokenType::BAnd:
 		this->out.push_back(IntermediateInstruction(InstructionType::BAnd));
 		break;
 	case TokenType::XorAssign:

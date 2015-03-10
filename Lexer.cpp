@@ -22,8 +22,11 @@ public:
 		operators["/"] = TokenType::Slash;
 		operators["%"] = TokenType::Modulo;
 
-		operators["|"] = TokenType::Or;//or
-		operators["&"] = TokenType::And;//and
+		operators["&&"] = TokenType::And;
+		operators["||"] = TokenType::Or;
+
+		operators["|"] = TokenType::BOr;//or
+		operators["&"] = TokenType::BAnd;//and
 		operators["^"] = TokenType::Xor;//xor
 		operators["~"] = TokenType::BNot;//binary not
 		operators["<<"] = TokenType::LeftShift;

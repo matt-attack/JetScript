@@ -7,17 +7,28 @@
 
 #include <stdlib.h>
 
+#ifdef _DEBUG
+#ifndef DBG_NEW      
+#define DBG_NEW new ( _NORMAL_BLOCK , __FILE__ , __LINE__ )     
+#define new DBG_NEW   
+#endif
+
+#define _CRTDBG_MAP_ALLOC
+#include <crtdbg.h>
+#endif
+
 namespace Jet
 {
 	enum Precedence {
 		// Ordered in increasing precedence.
 		ASSIGNMENT = 1,
-		CONDITIONAL = 2,
-		BINARY = 3,
-		SUM = 4,
-		PRODUCT = 5,
-		PREFIX = 6,
-		POSTFIX = 7,
+		LOGICAL = 2,// || or &&
+		CONDITIONAL = 3,
+		BINARY = 4,
+		SUM = 5,
+		PRODUCT = 6,
+		PREFIX = 7,
+		POSTFIX = 8,
 		CALL = 9,//was 9 before
 	};
 
@@ -336,6 +347,12 @@ namespace Jet
 	};
 
 	class YieldParselet: public StatementParselet
+	{
+	public:
+		Expression* parse(Parser* parser, Token token);
+	};
+
+	class InlineYieldParselet: public PrefixParselet
 	{
 	public:
 		Expression* parse(Parser* parser, Token token);

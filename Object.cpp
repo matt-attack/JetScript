@@ -3,8 +3,19 @@
 
 using namespace Jet;
 
+#ifdef _DEBUG
+#ifndef DBG_NEW      
+#define DBG_NEW new ( _NORMAL_BLOCK , __FILE__ , __LINE__ )     
+#define new DBG_NEW   
+#endif
+
+#define _CRTDBG_MAP_ALLOC
+#include <crtdbg.h>
+#endif
+
 size_t stringhash(const char* p)
 {
+	//fix this
 	size_t tot = *p;
 	while (*(p++))
 	{
@@ -17,6 +28,7 @@ JetObject::JetObject(JetContext* jcontext)
 {
 	grey = this->mark = false;
 	refcount = 0;
+	type = ValueType::Object;
 
 	prototype = jcontext->object;
 	context = jcontext;
@@ -43,7 +55,7 @@ std::size_t JetObject::key(const Value* v) const
 	case ValueType::Number:
 		return v->value;
 	case ValueType::String:
-		return stringhash(v->_string->ptr);
+		return stringhash(v->_string->data);
 	case ValueType::Function:
 		return (size_t)v->_function;
 	}
@@ -74,7 +86,7 @@ ObjNode* JetObject::findNode(const char* key)
 	{
 		do
 		{
-			if (node->first.type == ValueType::String && strcmp(node->first._string->ptr, key) == 0)
+			if (node->first.type == ValueType::String && strcmp(node->first._string->data, key) == 0)
 				return node;//we found it
 			else
 				node = node->next;
@@ -162,13 +174,13 @@ ObjNode* JetObject::getNode(const char* key)
 		ObjNode* node = mpnode;
 		while (node->next)
 		{
-			if (node->first.type == ValueType::String && strcmp(node->first._string->ptr, key) == 0)
+			if (node->first.type == ValueType::String && strcmp(node->first._string->data, key) == 0)
 				return node;//we found it
 			else
 				node = node->next;
 		}
 
-		if (node->first.type == ValueType::String && strcmp(node->first._string->ptr, key) == 0)
+		if (node->first.type == ValueType::String && strcmp(node->first._string->data, key) == 0)
 			return node;//we found it
 
 		if (this->Size == this->nodecount)//regrow if we are out of room
@@ -220,46 +232,6 @@ ObjNode* JetObject::getNode(const char* key)
 
 	return mpnode;
 }
-/*ObjNode* JetObject::getNode(const char* key)
-{
-	ObjNode* node = &this->nodes[stringhash(key)%this->nodecount];
-	if (node->first.type != ValueType::Null)
-	{
-		while (node->next)
-		{
-			if (node->first.type == ValueType::String && strcmp(node->first._string->ptr, key) == 0)
-				return node;//we found it
-			else
-				node = node->next;
-		}
-
-		if (node->first.type == ValueType::String && strcmp(node->first._string->ptr, key) == 0)
-			return node;//we found it
-	}
-	else
-	{
-		//just insert new and return
-		node->first = context->NewString(key);
-		node->next = 0;
-		Size++;
-		return node;
-	}
-	if (this->Size == this->nodecount)
-	{
-		this->resize();
-
-		return this->getNode(key);
-	}
-
-	//insert the new node, we had a hash collision
-	ObjNode* newnode = this->getFreePosition();
-	newnode->first = context->NewString(key);
-	newnode->next = 0;
-	node->next = newnode;//link the new one into the chain
-	Size++;
-
-	return newnode;
-}*/
 
 ObjNode* JetObject::getFreePosition()
 {
@@ -337,8 +309,6 @@ void JetObject::DebugPrint()
 		printf("[%d] %s    %s   Hash: %i\n", i, k.c_str(), v.c_str(), (this->key(&this->nodes[i].first)%this->nodecount));
 	}
 }
-
-
 
 //use this function
 void JetObject::Barrier()

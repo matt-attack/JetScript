@@ -9,19 +9,32 @@ namespace Jet
 	template<class T>
 	class VMStack
 	{
+		const char* overflow_error;
 		unsigned int _size;
-		
+		unsigned int _max;
 	public:
 		T mem[5000];
 		VMStack()
 		{
+			overflow_error = "Stack Overflow";
 			_size = 0;
+			_max = 5000;
 			//mem = new T[size];
 		}
 
 		VMStack(unsigned int size)
 		{
 			_size = 0;
+			_max = size;
+			overflow_error = "Stack Overflow";
+			//mem = new T[size];
+		}
+
+		VMStack(unsigned int size, const char* error)
+		{
+			_size = 0;
+			_max = size;
+			overflow_error = error;
 			//mem = new T[size];
 		}
 
@@ -29,9 +42,8 @@ namespace Jet
 		{
 			VMStack<T> ns;
 			for (unsigned int i = 0; i < this->_size; i++)
-			{
 				ns.mem[i] = this->mem[i];
-			}
+
 			ns._size = this->_size;
 			return std::move(ns);
 		}
@@ -57,7 +69,7 @@ namespace Jet
 
 		T& operator[](unsigned int pos)
 		{
-			if (pos >= this->_size)
+			if (pos >= this->_max)
 				throw RuntimeException("Bad Stack Index");
 
 			return mem[pos];
@@ -70,8 +82,8 @@ namespace Jet
 
 		void Push(T item)
 		{
-			if (_size >= 5000)
-				throw RuntimeException("Stack overflow");
+			if (_size >= _max)
+				throw RuntimeException(overflow_error);
 
 			mem[_size++] = item;
 		}

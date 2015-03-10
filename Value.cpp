@@ -4,6 +4,15 @@
 using namespace Jet;
 #undef Yield
 
+#ifdef _DEBUG
+#ifndef DBG_NEW      
+#define DBG_NEW new ( _NORMAL_BLOCK , __FILE__ , __LINE__ )     
+#define new DBG_NEW   
+#endif
+
+#define _CRTDBG_MAP_ALLOC
+#include <crtdbg.h>
+#endif
 
 Generator::Generator(JetContext* context, Closure* closure, int args)
 {
@@ -13,8 +22,6 @@ Generator::Generator(JetContext* context, Closure* closure, int args)
 	//need to push args onto the stack
 	this->stack = new Value[closure->prototype->locals];
 
-	//or (int i = 0; i < args; i++)
-	//stack[i] = context->stack.Pop();
 	//pass in arguments
 	if (args <= closure->prototype->args)
 	{
@@ -29,7 +36,7 @@ Generator::Generator(JetContext* context, Closure* closure, int args)
 	else if (closure->prototype->vararg)
 	{
 		stack[closure->prototype->locals-1] = context->NewArray();
-		auto arr = stack[closure->prototype->locals-1]._array->ptr;
+		auto arr = &stack[closure->prototype->locals-1]._array->data;
 		arr->resize(args - closure->prototype->args);
 		for (int i = args-1; i >= 0; i--)
 		{
@@ -50,8 +57,7 @@ Generator::Generator(JetContext* context, Closure* closure, int args)
 		}
 	}
 
-
-	this->curiptr = 0;//closure->prototype->ptr;//set current position to start of function
+	this->curiptr = 0;//set current position to start of function
 }
 
 void Generator::Yield(JetContext* context, unsigned int iptr)
@@ -59,6 +65,8 @@ void Generator::Yield(JetContext* context, unsigned int iptr)
 	this->state = GeneratorState::Suspended;
 	//store the iptr
 	this->curiptr = iptr+1;
+
+	this->lastyielded = context->stack.Peek();
 
 	//store stack
 	for (int i = 0; i < this->closure->prototype->locals; i++)
@@ -68,15 +76,18 @@ void Generator::Yield(JetContext* context, unsigned int iptr)
 unsigned int Generator::Resume(JetContext* context)
 {
 	if (this->state == GeneratorState::Dead)
-		throw RuntimeException("cannot resume dead generator");
+		throw RuntimeException("Cannot resume dead generator");
 	if (this->state == GeneratorState::Running)
-		throw RuntimeException("cannot resume active generator");
+		throw RuntimeException("Cannot resume active generator");
 
 	this->state = GeneratorState::Running;
 
 	//restore stack
 	for (int i = 0; i < this->closure->prototype->locals; i++)
 		context->sptr[i] = this->stack[i];
+
+	if (this->curiptr == 0)
+		context->stack.Pop();
 
 	return this->curiptr;
 }
@@ -93,7 +104,7 @@ Value::Value(JetString* str)
 		return;
 
 	type = ValueType::String;
-	length = strlen(str->ptr);
+	length = strlen(str->data);
 	_string = str;
 }
 
@@ -137,7 +148,7 @@ Value::Value(JetUserdata* userdata, JetObject* prototype)
 {
 	this->type = ValueType::Userdata;
 	this->_userdata = userdata;
-	this->_userdata->ptr.second = prototype;
+	this->_userdata->prototype = prototype;
 }
 
 JetObject* Value::GetPrototype()
@@ -152,7 +163,7 @@ JetObject* Value::GetPrototype()
 	case ValueType::String:
 		return 0;
 	case ValueType::Userdata:
-		return this->_userdata->ptr.second;//prototype;
+		return this->_userdata->prototype;//prototype;
 	default:
 		return 0;
 	}
@@ -257,7 +268,7 @@ std::string Value::ToString(int depth) const
 	case ValueType::Number:
 		return std::to_string(this->value);
 	case ValueType::String:
-		return this->_string->ptr;
+		return this->_string->data;
 	case ValueType::Function:
 		return "[Function "+this->_function->prototype->name+"]";
 	case ValueType::NativeFunction:
@@ -270,7 +281,7 @@ std::string Value::ToString(int depth) const
 				return "[Array " + std::to_string((int)this->_array)+"]";
 
 			int i = 0;
-			for (auto ii: *this->_array->ptr)
+			for (auto ii: this->_array->data)
 			{
 				str += "\t";
 				str += std::to_string(i++);
@@ -313,7 +324,7 @@ void Value::SetPrototype(JetObject* obj)
 	case ValueType::Object:
 		this->_object->prototype = obj;
 	case ValueType::Userdata:
-		this->_userdata->ptr.second = obj;
+		this->_userdata->prototype = obj;
 	default:
 		throw RuntimeException("Cannot set prototype of non-object or non-userdata!");
 	}
@@ -396,7 +407,7 @@ bool Value::TryCallMetamethod(const char* name, const Value* iargs, int numargs,
 		args[numargs] = *this;
 		for (int i = 0; i < numargs; i++)
 			args[i] = iargs[i];
-		
+
 		//help, calling this derps up curframe
 		*out = this->_object->prototype->context->Call(&node->second, args, numargs+1);
 		return true;
@@ -420,7 +431,7 @@ bool Value::operator== (const Value& other) const
 	case ValueType::NativeFunction:
 		return other.func == this->func;
 	case ValueType::String:
-		return strcmp(other._string->ptr, this->_string->ptr) == 0;
+		return strcmp(other._string->data, this->_string->data) == 0;
 	case ValueType::Null:
 		return true;
 	case ValueType::Object:
@@ -436,7 +447,7 @@ Value& Value::operator[] (int key)
 	{
 	case ValueType::Array:
 		{
-			return (*this->_array->ptr)[key];
+			return this->_array->data[key];
 		}
 	case ValueType::Object:
 		{
@@ -466,7 +477,7 @@ Value& Value::operator[] (const Value& key)
 	{
 	case ValueType::Array:
 		{
-			return (*this->_array->ptr)[(int)key.value];
+			return this->_array->data[(int)key.value];
 		}
 	case ValueType::Object:
 		{
@@ -486,8 +497,8 @@ Value Value::operator+( const Value &other )
 			return Value(value+other.value);
 		break;
 	case ValueType::Userdata:
-		if (this->_userdata->ptr.second)
-			return this->CallMetamethod(this->_userdata->ptr.second, "_add", &other);
+		if (this->_userdata->prototype)
+			return this->CallMetamethod(this->_userdata->prototype, "_add", &other);
 		break;
 	case ValueType::Object:
 		if (this->_object->prototype)
@@ -511,8 +522,8 @@ Value Value::operator-( const Value &other )
 			return Value(value-other.value);
 		break;
 	case ValueType::Userdata:
-		if (this->_userdata->ptr.second)
-			return this->CallMetamethod(this->_userdata->ptr.second, "_sub", &other);
+		if (this->_userdata->prototype)
+			return this->CallMetamethod(this->_userdata->prototype, "_sub", &other);
 		break;
 	case ValueType::Object:
 		if (this->_object->prototype)
@@ -540,21 +551,14 @@ Value Value::operator*( const Value &other )
 			return Value(value*other.value);
 		break;
 	case ValueType::Userdata:
-		if (this->_userdata->ptr.second)
-			return this->CallMetamethod(this->_userdata->ptr.second, "_mul", &other);
+		if (this->_userdata->prototype)
+			return this->CallMetamethod(this->_userdata->prototype, "_mul", &other);
 		break;
 	case ValueType::Object:
 		if (this->_object->prototype)
 			return this->CallMetamethod("_mul", &other);
 		break;
 	}
-	/*if (type == ValueType::Number && other.type == ValueType::Number)
-	return Value(value*other.value);
-	else if (type == ValueType::Object)
-	{
-	if (this->_object->prototype)
-	return this->CallMetamethod("_mul", &other);
-	}*/
 
 	throw RuntimeException("Cannot multiply two non-numeric types! " + (std::string)ValueTypes[(int)this->type] + " and " + (std::string)ValueTypes[(int)other.type]);
 };
@@ -568,21 +572,14 @@ Value Value::operator/( const Value &other )
 			return Value(value/other.value);
 		break;
 	case ValueType::Userdata:
-		if (this->_userdata->ptr.second)
-			return this->CallMetamethod(this->_userdata->ptr.second, "_div", &other);
+		if (this->_userdata->prototype)
+			return this->CallMetamethod(this->_userdata->prototype, "_div", &other);
 		break;
 	case ValueType::Object:
 		if (this->_object->prototype)
 			return this->CallMetamethod("_div", &other);
 		break;
 	}
-	/*if (type == ValueType::Number && other.type == ValueType::Number)
-	return Value(value/other.value);
-	else if (type == ValueType::Object)
-	{
-	if (this->_object->prototype)
-	return this->CallMetamethod("_div", &other);
-	}*/
 
 	throw RuntimeException("Cannot divide two non-numeric types! " + (std::string)ValueTypes[(int)this->type] + " and " + (std::string)ValueTypes[(int)other.type]);
 };
@@ -596,21 +593,14 @@ Value Value::operator%( const Value &other )
 			return Value((int)value%(int)other.value);
 		break;
 	case ValueType::Userdata:
-		if (this->_userdata->ptr.second)
-			return this->CallMetamethod(this->_userdata->ptr.second, "_mod", &other);
+		if (this->_userdata->prototype)
+			return this->CallMetamethod(this->_userdata->prototype, "_mod", &other);
 		break;
 	case ValueType::Object:
 		if (this->_object->prototype)
 			return this->CallMetamethod("_mod", &other);
 		break;
 	}
-	/*if (type == ValueType::Number && other.type == ValueType::Number)
-	return Value((int)value%(int)other.value);
-	else if (type == ValueType::Object)
-	{
-	if (this->_object->prototype)
-	return this->CallMetamethod("_mod", &other);
-	}*/
 
 	throw RuntimeException("Cannot modulus two non-numeric types! " + (std::string)ValueTypes[(int)this->type] + " and " + (std::string)ValueTypes[(int)other.type]);
 };
@@ -624,21 +614,14 @@ Value Value::operator|( const Value &other )
 			return Value((int)value|(int)other.value);
 		break;
 	case ValueType::Userdata:
-		if (this->_userdata->ptr.second)
-			return this->CallMetamethod(this->_userdata->ptr.second, "_bor", &other);
+		if (this->_userdata->prototype)
+			return this->CallMetamethod(this->_userdata->prototype, "_bor", &other);
 		break;
 	case ValueType::Object:
 		if (this->_object->prototype)
 			return this->CallMetamethod("_bor", &other);
 		break;
 	}
-	/*if (type == ValueType::Number && other.type == ValueType::Number)
-	return Value((int)value|(int)other.value);
-	else if (type == ValueType::Object)
-	{
-	if (this->_object->prototype)
-	return this->CallMetamethod("_bor", &other);
-	}*/
 
 	throw RuntimeException("Cannot binary or two non-numeric types! " + (std::string)ValueTypes[(int)this->type] + " and " + (std::string)ValueTypes[(int)other.type]);
 };
@@ -652,21 +635,14 @@ Value Value::operator&( const Value &other )
 			return Value((int)value&(int)other.value);
 		break;
 	case ValueType::Userdata:
-		if (this->_userdata->ptr.second)
-			return this->CallMetamethod(this->_userdata->ptr.second, "_band", &other);
+		if (this->_userdata->prototype)
+			return this->CallMetamethod(this->_userdata->prototype, "_band", &other);
 		break;
 	case ValueType::Object:
 		if (this->_object->prototype)
 			return this->CallMetamethod("_band", &other);
 		break;
 	}
-	/*if (type == ValueType::Number && other.type == ValueType::Number)
-	return Value((int)value&(int)other.value);
-	else if (type == ValueType::Object)
-	{
-	if (this->_object->prototype)
-	return this->CallMetamethod("_band", &other);
-	}*/
 
 	throw RuntimeException("Cannot binary and two non-numeric types! " + (std::string)ValueTypes[(int)this->type] + " and " + (std::string)ValueTypes[(int)other.type]);
 };
@@ -680,21 +656,14 @@ Value Value::operator^( const Value &other )
 			return Value((int)value^(int)other.value);
 		break;
 	case ValueType::Userdata:
-		if (this->_userdata->ptr.second)
-			return this->CallMetamethod(this->_userdata->ptr.second, "_xor", &other);
+		if (this->_userdata->prototype)
+			return this->CallMetamethod(this->_userdata->prototype, "_xor", &other);
 		break;
 	case ValueType::Object:
 		if (this->_object->prototype)
 			return this->CallMetamethod("_xor", &other);
 		break;
 	}
-	/*if (type == ValueType::Number && other.type == ValueType::Number)
-	return Value((int)value^(int)other.value);
-	else if (type == ValueType::Object)
-	{
-	if (this->_object->prototype)
-	return this->CallMetamethod("_xor", &other);
-	}*/
 
 	throw RuntimeException("Cannot xor two non-numeric types! " + (std::string)ValueTypes[(int)this->type] + " and " + (std::string)ValueTypes[(int)other.type]);
 };
@@ -708,21 +677,14 @@ Value Value::operator<<( const Value &other )
 			return Value((int)value<<(int)other.value);
 		break;
 	case ValueType::Userdata:
-		if (this->_userdata->ptr.second)
-			return this->CallMetamethod(this->_userdata->ptr.second, "_ls", &other);
+		if (this->_userdata->prototype)
+			return this->CallMetamethod(this->_userdata->prototype, "_ls", &other);
 		break;
 	case ValueType::Object:
 		if (this->_object->prototype)
 			return this->CallMetamethod("_ls", &other);
 		break;
 	}
-	/*if (type == ValueType::Number && other.type == ValueType::Number)
-	return Value((int)value<<(int)other.value);
-	else if (type == ValueType::Object)
-	{
-	if (this->_object->prototype)
-	return this->CallMetamethod("_ls", &other);
-	}*/
 
 	throw RuntimeException("Cannot left-shift two non-numeric types! " + (std::string)ValueTypes[(int)this->type] + " and " + (std::string)ValueTypes[(int)other.type]);
 };
@@ -736,21 +698,14 @@ Value Value::operator>>( const Value &other )
 			return Value((int)value>>(int)other.value);
 		break;
 	case ValueType::Userdata:
-		if (this->_userdata->ptr.second)
-			return this->CallMetamethod(this->_userdata->ptr.second, "_rs", &other);
+		if (this->_userdata->prototype)
+			return this->CallMetamethod(this->_userdata->prototype, "_rs", &other);
 		break;
 	case ValueType::Object:
 		if (this->_object->prototype)
 			return this->CallMetamethod("_rs", &other);
 		break;
 	}
-	/*if (type == ValueType::Number && other.type == ValueType::Number)
-	return Value((int)value>>(int)other.value);
-	else if (type == ValueType::Object)
-	{
-	if (this->_object->prototype)
-	return this->CallMetamethod("_rs", &other);
-	}*/
 
 	throw RuntimeException("Cannot right-shift two non-numeric types! " + (std::string)ValueTypes[(int)this->type] + " and " + (std::string)ValueTypes[(int)other.type]);
 };
@@ -762,21 +717,14 @@ Value Value::operator~()
 	case ValueType::Number:
 		return Value(~(int)value);
 	case ValueType::Userdata:
-		if (this->_userdata->ptr.second)
-			return this->CallMetamethod(this->_userdata->ptr.second, "_bnot", 0);
+		if (this->_userdata->prototype)
+			return this->CallMetamethod(this->_userdata->prototype, "_bnot", 0);
 		break;
 	case ValueType::Object:
 		if (this->_object->prototype)
 			return this->CallMetamethod("_bnot", 0);
 		break;
 	}
-	/*if (type == ValueType::Number)
-	return Value(~(int)value);
-	else if (type == ValueType::Object)
-	{
-	if (this->_object->prototype)
-	return this->CallMetamethod("_bnot", 0);
-	}*/
 
 	throw RuntimeException("Cannot binary complement non-numeric type! " + (std::string)ValueTypes[(int)this->type]);
 };
@@ -788,23 +736,14 @@ Value Value::operator-()
 	case ValueType::Number:
 		return Value(-value);
 	case ValueType::Userdata:
-		if (this->_userdata->ptr.second)
-			return this->CallMetamethod(this->_userdata->ptr.second, "_neg", 0);
+		if (this->_userdata->prototype)
+			return this->CallMetamethod(this->_userdata->prototype, "_neg", 0);
 		break;
 	case ValueType::Object:
 		if (this->_object->prototype)
 			return this->CallMetamethod("_neg", 0);
 		break;
 	}
-	/*if (type == ValueType::Number)
-	{
-	return Value(-value);
-	}
-	else if (type == ValueType::Object)
-	{
-	if (this->_object->prototype)
-	return this->CallMetamethod("_neg", 0);
-	}*/
 
 	throw RuntimeException("Cannot negate non-numeric type! " + (std::string)ValueTypes[(int)this->type]);
 }

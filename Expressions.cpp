@@ -96,8 +96,8 @@ void ObjectExpression::Compile(CompilerContext* context)
 	int count = 0;
 	if (this->inits)
 	{
-		//set these up
 		count = this->inits->size();
+		//set these up
 		for (auto ii: *this->inits)
 		{
 			context->String(ii.first);
@@ -113,15 +113,10 @@ void ObjectExpression::Compile(CompilerContext* context)
 
 void ArrayExpression::Compile(CompilerContext* context)
 {
-	int count = 0;
-	if (this->initializers)
-	{
-		count = this->initializers->size();
-		for (auto i: *this->initializers)
-		{
-			i->Compile(context);
-		}
-	}
+	int count = this->initializers.size();
+	for (auto i: this->initializers)
+		i->Compile(context);
+
 	context->NewArray(count);
 
 	//pop off if we dont need the result
@@ -269,6 +264,28 @@ void OperatorExpression::Compile(CompilerContext* context)
 {
 	context->Line(this->_operator.line);
 
+	if (this->_operator.type == TokenType::And)
+	{
+		std::string label = "_endand"+context->GetUUID();
+		this->left->Compile(context);
+		context->JumpFalsePeek(label.c_str());//jump to endand if false
+		context->Pop();
+		this->right->Compile(context);
+		context->Label(label);//put endand label here
+		return;
+	}
+
+	if (this->_operator.type == TokenType::Or)
+	{
+		std::string label = "_endor"+context->GetUUID();
+		this->left->Compile(context);
+		context->JumpTruePeek(label.c_str());//jump to endor if true
+		context->Pop();
+		this->right->Compile(context);
+		context->Label(label);//put endor label here
+		return;
+	}
+
 	this->left->Compile(context);
 	this->right->Compile(context);
 	context->BinaryOperation(this->_operator.type);
@@ -317,9 +334,6 @@ void FunctionExpression::Compile(CompilerContext* context)
 		function->Null();//return nil
 		function->Return();
 	}
-
-	//if (function->isgenerator)
-	//context->out[0].
 
 	context->FinalizeFunction(function);
 

@@ -75,32 +75,31 @@ namespace Jet
 
 	class ArrayExpression: public Expression
 	{
-		std::vector<Expression*>* initializers;
+		std::vector<Expression*> initializers;
 	public:
-		ArrayExpression(std::vector<Expression*>* inits)
+		ArrayExpression(std::vector<Expression*>&& inits) : initializers(inits)
 		{
-			this->initializers = inits;
+
 		}
 
 		~ArrayExpression()
 		{
-			if (this->initializers)
-				for (auto ii: *this->initializers)
-					delete ii;
-
-			delete this->initializers;
+			//if (this->initializers)
+			//{
+			for (auto ii: this->initializers)
+				delete ii;
+			//}
+			//delete this->initializers;
 		}
 
 		virtual void SetParent(Expression* parent)
 		{
 			this->Parent = parent;
-			if (this->initializers)
-			{
-				for (auto ii: *this->initializers)
-				{
-					ii->SetParent(this);
-				}
-			}
+			//if (this->initializers)
+			//{
+			for (auto ii: this->initializers)
+				ii->SetParent(this);
+			//}
 		}
 
 		void Compile(CompilerContext* context);
@@ -110,9 +109,13 @@ namespace Jet
 	{
 		std::vector<std::pair<std::string, Expression*>>* inits;
 	public:
-		ObjectExpression(std::vector<std::pair<std::string, Expression*>>* initializers)
+		ObjectExpression()
 		{
-			this->inits = initializers;
+			inits = 0;
+		}
+
+		ObjectExpression(std::vector<std::pair<std::string, Expression*>>* initializers) : inits(initializers)
+		{
 		}
 
 		~ObjectExpression()
@@ -127,12 +130,8 @@ namespace Jet
 		{
 			this->Parent = parent;
 			if (this->inits)
-			{
 				for (auto ii: *this->inits)
-				{
 					ii.second->SetParent(this);
-				}
-			}
 		}
 
 		void Compile(CompilerContext* context);
@@ -409,14 +408,14 @@ namespace Jet
 
 	public:
 		std::vector<Expression*> statements;
-		BlockExpression(Token token, std::vector<Expression*>&& statements)
+		BlockExpression(Token token, std::vector<Expression*>&& statements) : statements(statements)
 		{
-			this->statements = statements;
+
 		}
 
-		BlockExpression(std::vector<Expression*>&& statements)
+		BlockExpression(std::vector<Expression*>&& statements) : statements(statements)
 		{
-			this->statements = statements;
+
 		}
 
 		~BlockExpression()
@@ -567,10 +566,11 @@ namespace Jet
 
 	class ForEachExpression: public Expression
 	{
-		Token name, container;
+		Token name;
+		Expression* container;
 		ScopeExpression* block;
 	public:
-		ForEachExpression(Token name, Token container, ScopeExpression* block)
+		ForEachExpression(Token name, Expression* container, ScopeExpression* block)
 		{
 			this->container = container;
 			this->block = block;
@@ -580,6 +580,7 @@ namespace Jet
 		~ForEachExpression()
 		{
 			delete this->block;
+			delete this->container;
 		}
 
 		void SetParent(Expression* parent)
@@ -596,9 +597,10 @@ namespace Jet
 			context->RegisterLocal(this->name.text);
 			context->RegisterLocal("_iter");
 
-			context->Load(this->container.text);
+			//context->Load(this->container.text);
+			this->container->Compile(context);
 			context->Duplicate();
-			context->LoadIndex("getIterator");
+			context->LoadIndex("iterator");
 			context->ECall(1);
 			context->Duplicate();
 			context->Store("_iter");
@@ -637,14 +639,33 @@ namespace Jet
 	{
 		BlockExpression* block;
 		Expression* condition;
+
+		Branch(BlockExpression* block, Expression* condition)
+		{
+			this->block = block;
+			this->condition = condition;
+		}
+
+		Branch(Branch&& other)
+		{
+			this->block = other.block;
+			this->condition = other.condition;
+			other.block = 0;
+			other.condition = 0;
+		}
+		~Branch()
+		{
+			delete condition;
+			delete block;
+		}
 	};
 	class IfExpression: public Expression
 	{
-		std::vector<Branch*>* branches;
+		std::vector<Branch*> branches;
 		Branch* Else;
 		Token token;
 	public:
-		IfExpression(Token token, std::vector<Branch*>* branches, Branch* elseBranch)
+		IfExpression(Token token, std::vector<Branch*>&& branches, Branch* elseBranch)
 		{
 			this->branches = branches;
 			this->Else = elseBranch;
@@ -653,21 +674,10 @@ namespace Jet
 
 		~IfExpression()
 		{
-			if (this->Else)
-			{
-				delete this->Else->block;
-				//delete this->Else->condition;
-				delete this->Else;
-			}
-
-			for (auto ii: *this->branches)
-			{
-				delete ii->block;
-				delete ii->condition;
+			delete Else;
+			for (auto ii : this->branches)
 				delete ii;
-			}
-
-			delete this->branches;
+			//delete this->branches;
 		}
 
 		virtual void SetParent(Expression* parent)
@@ -675,7 +685,7 @@ namespace Jet
 			this->Parent = parent;
 			if (this->Else)
 				this->Else->block->SetParent(this);
-			for (auto ii: *branches)
+			for (auto& ii: branches)
 			{
 				ii->block->SetParent(this);
 				ii->condition->SetParent(this);
@@ -690,7 +700,7 @@ namespace Jet
 			std::string bname = "ifstatement_" + uuid + "_I";
 			int pos = 0;
 			bool hasElse = this->Else ? this->Else->block->statements.size() > 0 : false;
-			for (auto ii: *this->branches)
+			for (auto& ii: this->branches)
 			{
 				if (pos != 0)//no jump label needed on first one
 					context->Label(bname);
@@ -698,14 +708,14 @@ namespace Jet
 				ii->condition->Compile(context);
 
 				//if no else and is last go to end
-				if (hasElse == false && pos == (this->branches->size()-1))
+				if (hasElse == false && pos == (this->branches.size()-1))
 					context->JumpFalse(("ifstatementend_"+uuid).c_str());
 				else
 					context->JumpFalse((bname+"I").c_str());
 
 				ii->block->Compile(context);
 
-				if (pos != (this->branches->size()-1) || hasElse)//if isnt last one
+				if (pos != (this->branches.size()-1) || hasElse)//if isnt last one
 					context->Jump(("ifstatementend_"+uuid).c_str());
 
 				bname += "I";
@@ -892,6 +902,9 @@ namespace Jet
 				context->Null();
 
 			context->Yield();
+
+			if (dynamic_cast<BlockExpression*>(this->Parent) !=0)
+				context->Pop();
 		}
 	};
 

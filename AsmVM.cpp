@@ -3,8 +3,8 @@
 //add multiple returns perhaps?
 #ifdef _DEBUG
 #ifndef DBG_NEW      
-//#define DBG_NEW new ( _NORMAL_BLOCK , __FILE__ , __LINE__ )     
-//#define new DBG_NEW   
+#define DBG_NEW new ( _NORMAL_BLOCK , __FILE__ , __LINE__ )     
+#define new DBG_NEW   
 #endif
 
 #define _CRTDBG_MAP_ALLOC
@@ -102,9 +102,6 @@ int main(int argc, char* argv[])
 			}
 		}
 	}
-	//need to make sure function definitions dont just build up forever and make the instructions array huge
-	//	each function needs to store its own instructions, so it can be garbage collected
-	//mess with this to fix all possible memory leaks/buildups, like with functions
 	/*{
 		std::ifstream t("coroutines.txt", std::ios::in | std::ios::binary);
 		int length;
@@ -121,14 +118,14 @@ int main(int argc, char* argv[])
 		}
 		delete[] buffer;
 	}*/
-
+	//_crtBreakAlloc = 22970;
 	while (true)
 	{
 		printf("\n>");
 		char command[800];
-		char arg[50]; char command2[50];
-		memset(arg, 0, 50);
-		memset(command2, 0, 50);
+		char arg[150]; char command2[150];
+		memset(arg, 0, 150);
+		memset(command2, 0, 150);
 		std::cin.getline(command, 800);
 
 		sscanf(command, "%s %s\n", command2, arg);

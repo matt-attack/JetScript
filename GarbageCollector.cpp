@@ -11,51 +11,123 @@ GarbageCollector::GarbageCollector(JetContext* context) : context(context)
 
 void GarbageCollector::Cleanup()
 {
-	for (auto ii: this->userdata)
+	//need to do a two pass system to properly destroy userdata
+	//first pass of destructing
+	for (auto ii: this->gen1)
 	{
-		if (ii->ptr.second)
+		switch (ii->type)
 		{
-			Value ud = Value(ii, ii->ptr.second);
-			Value _gc = (*ii->ptr.second)["_gc"];
-			if (_gc.type == ValueType::NativeFunction)
-				_gc.func(this->context, &ud, 1);
-			else if (_gc.type == ValueType::Function)
-				throw RuntimeException("Non Native _gc Hooks Not Implemented!");//todo
-			else if (_gc.type != ValueType::Null)
-				throw RuntimeException("Invalid _gc Hook!");
+		case ValueType::Function:
+		case ValueType::Object:
+		case ValueType::Array:
+		case ValueType::String:
+			break;
+		case ValueType::Userdata:
+			{
+				Value ud = Value(((JetUserdata*)ii), ((JetUserdata*)ii)->prototype);
+				Value _gc = (*((JetUserdata*)ii)->prototype)["_gc"];
+				if (_gc.type == ValueType::NativeFunction)
+					_gc.func(this->context, &ud, 1);
+				else if (_gc.type == ValueType::Function)
+					throw RuntimeException("Non Native _gc Hooks Not Implemented!");//todo
+				else if (_gc.type != ValueType::Null)
+					throw RuntimeException("Invalid _gc Hook!");
+				break;
+			}
 		}
-		delete ii;
 	}
-	this->userdata.clear();
 
-	for (auto ii: this->arrays)
+	for (auto ii: this->gen2)
 	{
-		delete ii->ptr;
-		delete ii;
+		switch (ii->type)
+		{
+		case ValueType::Function:
+		case ValueType::Object:
+		case ValueType::Array:
+		case ValueType::String:
+			break;
+		case ValueType::Userdata:
+			{
+				Value ud = Value(((JetUserdata*)ii), ((JetUserdata*)ii)->prototype);
+				Value _gc = (*((JetUserdata*)ii)->prototype)["_gc"];
+				if (_gc.type == ValueType::NativeFunction)
+					_gc.func(this->context, &ud, 1);
+				else if (_gc.type == ValueType::Function)
+					throw RuntimeException("Non Native _gc Hooks Not Implemented!");//todo
+				else if (_gc.type != ValueType::Null)
+					throw RuntimeException("Invalid _gc Hook!");
+				break;
+			}
+		}
 	}
-	this->arrays.clear();
 
-	for (auto ii: this->objects)
+	//delete everything else
+	for (auto ii: this->gen1)
 	{
-		delete ii;
+		switch (ii->type)
+		{
+		case ValueType::Function:
+			{
+				Closure* fun = (Closure*)ii;
+				if (fun->numupvals)
+					delete[] fun->upvals;
+				delete fun->generator;
+				delete fun;
+				break;
+			}
+		case ValueType::Object:
+			delete (JetObject*)ii;
+			break;
+		case ValueType::Array:
+			((JetArray*)ii)->data.~vector();
+			delete[] (char*)ii;// ((JetArray*)ii)->data.~vector;
+			break;
+		case ValueType::Userdata:
+			//did in first pass
+			delete (JetUserdata*)ii;
+			break;
+		case ValueType::String:
+			{
+				JetString* str = (JetString*)ii;
+				delete[] str->data;
+				delete str;
+				break;
+			}
+		}
 	}
-	this->objects.clear();
 
-	for (auto ii: this->strings)
+	for (auto ii: this->gen2)
 	{
-		delete ii->ptr;
-		delete ii;
+		switch (ii->type)
+		{
+		case ValueType::Function:
+			{
+				Closure* fun = (Closure*)ii;
+				if (fun->numupvals)
+					delete[] fun->upvals;
+				delete fun->generator;
+				delete fun;
+				break;
+			}
+		case ValueType::Object:
+			delete (JetObject*)ii;
+			break;
+		case ValueType::Array:
+			delete ((JetArray*)ii);
+			break;
+		case ValueType::Userdata:
+			//did in first pass
+			delete (JetUserdata*)ii;
+			break;
+		case ValueType::String:
+			{
+				JetString* str = (JetString*)ii;
+				delete[] str->data;
+				delete str;
+				break;
+			}
+		}
 	}
-	this->strings.clear();
-
-	for (auto ii: this->closures)
-	{
-		if (ii->numupvals)
-			delete[] ii->upvals;
-		delete ii->generator;
-		delete ii;
-	}
-	this->closures.clear();
 }
 
 void GarbageCollector::Mark()
@@ -67,7 +139,10 @@ void GarbageCollector::Mark()
 	this->greys.Push(context->objectiter);
 	this->greys.Push(context->string);
 	this->greys.Push(context->file);
+	this->greys.Push(context->function);
 
+	for (int i = 0; i < this->context->prototypes.size(); i++)
+		this->greys.Push(this->context->prototypes[i]);
 
 	//mark all objects being held by native code
 	for (int i = 0; i < this->nativeRefs.size(); i++)
@@ -213,7 +288,7 @@ void GarbageCollector::Mark()
 				{
 					obj._array->mark = true;
 
-					for (auto ii: *obj._array->ptr)
+					for (auto ii: obj._array->data)
 					{
 						if (ii.type > ValueType::NativeFunction && ii._object->grey == false)
 						{
@@ -276,11 +351,11 @@ void GarbageCollector::Mark()
 				{
 					obj._userdata->mark = true;
 
-					if (obj._userdata->ptr.second && obj._userdata->ptr.second->grey == false)
+					if (obj._userdata->prototype && obj._userdata->prototype->grey == false)
 					{
-						obj._userdata->ptr.second->grey = true;
+						obj._userdata->prototype->grey = true;
 
-						greys.Push(obj._userdata->ptr.second);
+						greys.Push(obj._userdata->prototype);
 					}
 					break;
 				}
@@ -292,6 +367,7 @@ void GarbageCollector::Mark()
 void GarbageCollector::Sweep()
 {
 	bool nextIncremental = ((this->collectionCounter+1)%GC_STEPS)!=0;
+	bool incremental = ((this->collectionCounter)%GC_STEPS)!=0;
 	/*if (this->collectionCounter % GC_STEPS == 0)
 	printf("Full Collection!\n");
 	else
@@ -308,115 +384,116 @@ void GarbageCollector::Sweep()
 	//sweep and free all whites and make all blacks white
 	//iterate through all gc values
 
-	//mark stack variables and globals
+	if (!incremental)//do a gen2 collection
 	{
-		//StackProfile prof("Sweep");
-		auto alist = std::move(this->arrays);
-		this->arrays.clear();
-		for (auto ii: alist)
+		auto g2list = std::move(this->gen2);
+		this->gen2.clear();
+		for (auto ii: g2list)
 		{
 			if (ii->mark || ii->refcount)
 			{
-				if (nextIncremental == false)
-				{
-					ii->mark = false;
-					ii->grey = false;
-				}
-				this->arrays.push_back(ii);
+				ii->mark = false;
+				ii->grey = false;
+
+				this->gen2.push_back(ii);
 			}
 			else
 			{
-				delete ii->ptr;
-				delete ii;
+				//printf("Freeing Gen 2!\n");
+				switch (ii->type)
+				{
+				case ValueType::Function:
+					{
+						Closure* fun = (Closure*)ii;
+						if (fun->numupvals)
+							delete[] fun->upvals;
+						delete fun->generator;
+						delete fun;
+						break;
+					}
+				case ValueType::Object:
+					delete (JetObject*)ii;
+					break;
+				case ValueType::Array:
+					delete (JetArray*)ii;
+					break;
+				case ValueType::Userdata:
+					{
+						Value ud = Value(((JetUserdata*)ii), ((JetUserdata*)ii)->prototype);
+						Value _gc = (*((JetUserdata*)ii)->prototype)["_gc"];
+						if (_gc.type == ValueType::NativeFunction)
+							_gc.func(this->context, &ud, 1);
+						else if (_gc.type == ValueType::Function)
+							throw RuntimeException("Non Native _gc Hooks Not Implemented!");//todo
+						else if (_gc.type != ValueType::Null)
+							throw RuntimeException("Invalid _gc Hook!");
+						delete (JetUserdata*)ii;
+						break;
+					}
+				case ValueType::String:
+					{
+						JetString* str = (JetString*)ii;
+						delete[] str->data;
+						delete str;
+						break;
+					}
+				}
 			}
 		}
+	}
 
-		auto clist = std::move(this->closures);
-		this->closures.clear();
-		for (auto ii: clist)
+	auto g1list = std::move(this->gen1);
+	this->gen1.clear();
+	for (auto ii: g1list)
+	{
+		if (ii->mark || ii->refcount)
 		{
-			if (ii->mark || ii->refcount)
-			{
-				if (nextIncremental == false)
-				{
-					ii->mark = false;
-					ii->grey = false;
-				}
-				this->closures.push_back(ii);
-			}
-			else
-			{
-				if (ii->numupvals)
-					delete[] ii->upvals;
-				delete ii->generator;
-				delete ii;
-			}
+			ii->mark = false;
+			ii->grey = false;
+			this->gen2.push_back(ii);//promote, it SURVIVED
+
+			//printf("Promoting!\n");
 		}
-
-		auto ulist = std::move(this->userdata);
-		this->userdata.clear();
-		for (auto ii: ulist)
+		else
 		{
-			if (ii->mark || ii->refcount)
+			//printf("Freeing!\n");
+			switch (ii->type)
 			{
-				if (nextIncremental == false)
+			case ValueType::Function:
 				{
-					ii->mark = false;
-					ii->grey = false;
+					Closure* fun = (Closure*)ii;
+					if (fun->numupvals)
+						delete[] fun->upvals;
+					delete fun->generator;
+					delete fun;
+					break;
 				}
-				this->userdata.push_back(ii);
-			}
-			else
-			{
-				if (ii->ptr.second)
+			case ValueType::Object:
+				delete (JetObject*)ii;
+				break;
+			case ValueType::Array:
+				delete (JetArray*)ii;
+				break;
+			case ValueType::Userdata:
 				{
-					Value ud = Value(ii, ii->ptr.second);
-					Value _gc = (*ii->ptr.second)["_gc"];
+					Value ud = Value(((JetUserdata*)ii), ((JetUserdata*)ii)->prototype);
+					Value _gc = (*((JetUserdata*)ii)->prototype)["_gc"];
 					if (_gc.type == ValueType::NativeFunction)
 						_gc.func(this->context, &ud, 1);
+					else if (_gc.type == ValueType::Function)
+						throw RuntimeException("Non Native _gc Hooks Not Implemented!");//todo
 					else if (_gc.type != ValueType::Null)
-						throw RuntimeException("Non-native Userdata Finalizers Not Implemented!");
+						throw RuntimeException("Invalid _gc Hook!");
+					delete (JetUserdata*)ii;
+					break;
 				}
-				delete ii;
-			}
-		}
-
-		auto olist = std::move(this->objects);
-		this->objects.clear();
-		for (auto ii: olist)
-		{
-			if (ii->mark || ii->refcount)
-			{
-				if (nextIncremental == false)
+			case ValueType::String:
 				{
-					ii->mark = false;
-					ii->grey = false;
+					JetString* str = (JetString*)ii;
+					delete[] str->data;
+					delete str;
+					break;
 				}
-				this->objects.push_back(ii);
-			}
-			else
-			{
-				delete ii;
-			}
-		}
-
-		auto slist = std::move(this->strings);
-		this->strings.clear();
-		for (auto ii: slist)
-		{
-			if (ii->mark || ii->refcount)
-			{
-				if (nextIncremental == false)
-				{
-					ii->mark = false;
-					ii->grey = false;
-				}
-				this->strings.push_back(ii);
-			}
-			else
-			{
-				delete ii->ptr;
-				delete ii;
 			}
 		}
 	}

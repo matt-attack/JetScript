@@ -1,6 +1,17 @@
 #ifndef _LANG_CONTEXT_HEADER
 #define _LANG_CONTEXT_HEADER
 
+#ifdef _DEBUG
+#ifndef DBG_NEW      
+#define DBG_NEW new ( _NORMAL_BLOCK , __FILE__ , __LINE__ )     
+#define new DBG_NEW   
+#endif
+
+#define _CRTDBG_MAP_ALLOC
+#define _CRTDBG_MAP_ALLOC_NEW
+#include <crtdbg.h>
+#endif
+
 #include <functional>
 #include <string>
 #include <map>
@@ -14,22 +25,13 @@
 #include "JetExceptions.h"
 #include "GarbageCollector.h"
 
-#ifdef _DEBUG
-#ifndef DBG_NEW      
-#define DBG_NEW new ( _NORMAL_BLOCK , __FILE__ , __LINE__ )     
-#define new DBG_NEW   
-#endif
-
-#define _CRTDBG_MAP_ALLOC
-#include <crtdbg.h>
-#endif
 
 #ifdef _WIN32
 #include <Windows.h>
 //#define JET_TIME_EXECUTION
 #endif
 
-#define GC_INTERVAL 100//number of allocations before running the GC
+#define GC_INTERVAL 200//number of allocations before running the GC
 #define GC_STEPS 4//number of incremental runs before a full
 
 #define JET_STACK_SIZE 800
@@ -46,6 +48,7 @@ namespace Jet
 	//builtin function definitions
 	Value gc(JetContext* context,Value* args, int numargs);
 	Value print(JetContext* context,Value* args, int numargs);
+	Value tostring(JetContext* context, Value* args, int numargs);
 	
 	class JetContext
 	{
@@ -56,17 +59,13 @@ namespace Jet
 		VMStack<Value> stack;
 		VMStack<std::pair<unsigned int, Closure*> > callstack;
 
-		//need to go through and find all functions/variables
 		std::map<std::string, Function*> functions;
 		std::vector<Function*> entrypoints;
 		std::map<std::string, unsigned int> variables;//mapping from string to location in vars array
 
 		//actual data being worked on
-		//this instruction array is being moved to each function
-		//std::vector<Instruction> ins;
 		std::vector<Value> vars;//where they are actually stored
 
-		//int labelposition;//used for keeping track in assembler
 		CompilerContext compiler;//root compiler context
 
 		//core library prototypes
@@ -83,6 +82,7 @@ namespace Jet
 
 		//manages memory
 		GarbageCollector gc;
+		std::vector<JetObject*> prototypes;
 
 	public:
 		//these
@@ -90,9 +90,10 @@ namespace Jet
 		Value NewArray();
 		Value NewUserdata(void* data, const Value& proto);
 		Value NewString(const char* string, bool copy = true);
-
-		//a helper function for registering metatables, returns an ValueRef smartpointer
-		ValueRef NewPrototype(const char* Typename);
+		 
+		//a helper function for registering metatables for userdata, these are never gc'd
+		//and are freed with the context
+		Value NewPrototype(const char* Typename);
 
 		JetContext();
 		~JetContext();
@@ -125,7 +126,7 @@ namespace Jet
 
 		//begin executing instructions at iptr index
 		Value Execute(int iptr, Closure* frame);
-		unsigned int Call(const Value* function, unsigned int iptr, unsigned int args);
+		unsigned int Call(const Value* function, unsigned int iptr, unsigned int args);//used for calls in the VM
 
 		//debug functions
 		void GetCode(int ptr, Closure* closure, std::string& ret, unsigned int& line);

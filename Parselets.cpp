@@ -105,9 +105,9 @@ Expression* ForParselet::parse(Parser* parser, Token token)
 			{
 				//ok its a foreach loop
 				parser->Consume();
-				Token name = parser->Consume();
+				auto name = parser->Consume();
 				parser->Consume();
-				Token container = parser->Consume();
+				auto container = parser->parseExpression();//Consume();
 				parser->Consume(TokenType::RightParen);
 
 				auto block = new ScopeExpression(parser->parseBlock());
@@ -128,8 +128,7 @@ Expression* ForParselet::parse(Parser* parser, Token token)
 
 Expression* IfParselet::parse(Parser* parser, Token token)
 {
-	auto branches = new std::vector<Branch*>;
-
+	std::vector<Branch*> branches;
 	//take parens
 	parser->Consume(TokenType::LeftParen);
 	Expression* condition = parser->parseExpression();
@@ -137,10 +136,7 @@ Expression* IfParselet::parse(Parser* parser, Token token)
 
 	BlockExpression* block = parser->parseBlock(true);
 
-	Branch* branch = new Branch;
-	branch->condition = condition;
-	branch->block = block;
-	branches->push_back(branch);
+	branches.push_back(new Branch(block, condition));
 
 	Branch* Else = 0;
 	while(true)
@@ -155,27 +151,21 @@ Expression* IfParselet::parse(Parser* parser, Token token)
 
 			BlockExpression* block = parser->parseBlock(true);
 
-			Branch* branch2 = new Branch;
-			branch2->condition = condition;
-			branch2->block = block;
-			branches->push_back(branch2);
+			branches.push_back(new Branch(block, condition));
 		}
 		else if (parser->MatchAndConsume(TokenType::Else))
 		{
 			//its an else
 			BlockExpression* block = parser->parseBlock(true);
 
-			Branch* branch2 = new Branch;
-			branch2->condition = 0;
-			branch2->block = block;
-			Else = branch2;
+			Else = new Branch(block, 0);
 			break;
 		}
 		else
 			break;//nothing else
 	}
 
-	return new IfExpression(token, branches, Else);
+	return new IfExpression(token, std::move(branches), Else);
 }
 
 Expression* FunctionParselet::parse(Parser* parser, Token token)
@@ -193,7 +183,7 @@ Expression* FunctionParselet::parse(Parser* parser, Token token)
 			Token name = parser->Consume();
 			if (name.type == TokenType::Name)
 			{
-				arguments->push_back(new NameExpression(name.getText()));
+				arguments->push_back(new NameExpression(name.text));
 			}
 			else if (name.type == TokenType::Ellipses)
 			{
@@ -254,7 +244,7 @@ Expression* LambdaParselet::parse(Parser* parser, Token token)
 
 Expression* CallParselet::parse(Parser* parser, Expression* left, Token token)
 {
-	auto arguments = new std::vector<Expression*>;
+	UniquePtr<std::vector<Expression*>*> arguments = new std::vector<Expression*>;
 
 	if (!parser->MatchAndConsume(TokenType::RightParen))
 	{
@@ -266,8 +256,7 @@ Expression* CallParselet::parse(Parser* parser, Expression* left, Token token)
 
 		parser->Consume(TokenType::RightParen);
 	}
-
-	return new CallExpression(token, left, arguments);
+	return new CallExpression(token, left, arguments.Release());
 }
 
 Expression* ReturnParselet::parse(Parser* parser, Token token)
@@ -281,7 +270,7 @@ Expression* ReturnParselet::parse(Parser* parser, Token token)
 
 Expression* LocalParselet::parse(Parser* parser, Token token)
 {
-	std::vector<Token>* names = new std::vector<Token>;
+	UniquePtr<std::vector<Token>*> names = new std::vector<Token>;
 
 	do
 	{
@@ -293,7 +282,7 @@ Expression* LocalParselet::parse(Parser* parser, Token token)
 	parser->Consume(TokenType::Assign);//its possible this wont be here and it may just be a mentioning, but no assignment
 
 	//handle multiple comma expressions
-	std::vector<Expression*>* rights = new std::vector<Expression*>;
+	UniquePtr<std::vector<Expression*>*> rights = new std::vector<Expression*>;
 	do
 	{
 		Expression* right = parser->parseExpression(/*assignment prcedence -1 */);
@@ -304,7 +293,7 @@ Expression* LocalParselet::parse(Parser* parser, Token token)
 
 	parser->Consume(TokenType::Semicolon);
 
-	return new LocalExpression(names, rights);
+	return new LocalExpression(names.Release(), rights.Release());
 }
 
 Expression* ConstParselet::parse(Parser* parser, Token token)
@@ -340,18 +329,18 @@ Expression* ConstParselet::parse(Parser* parser, Token token)
 
 Expression* ArrayParselet::parse(Parser* parser, Token token)
 {
-	auto inits = new std::vector<Expression*>;
+	std::vector<Expression*> inits;// = new std::vector<Expression*>;
 	while(parser->LookAhead().getType() != TokenType::RightBracket)
 	{
 		Expression* e = parser->parseExpression(2);
 
-		inits->push_back(e);
+		inits.push_back(e);
 
 		if (!parser->MatchAndConsume(TokenType::Comma))//check if more
 			break;//we are done
 	}
 	parser->Consume(TokenType::RightBracket);
-	return new ArrayExpression(inits);
+	return new ArrayExpression(std::move(inits));
 }
 
 Expression* IndexParselet::parse(Parser* parser, Expression* left, Token token)
@@ -383,11 +372,11 @@ Expression* ObjectParselet::parse(Parser* parser, Token token)
 	if (parser->MatchAndConsume(TokenType::RightBrace))
 	{
 		//we are done, return null object
-		return new ObjectExpression(0);
+		return new ObjectExpression();
 	}
 
 	//parse initial values
-	auto inits = new std::vector<std::pair<std::string, Expression*>>;
+	std::vector<std::pair<std::string, Expression*>>* inits = new std::vector<std::pair<std::string, Expression*>>;
 	while(parser->LookAhead().type == TokenType::Name || parser->LookAhead().type == TokenType::String || parser->LookAhead().type == TokenType::Number)
 	{
 		Token name = parser->Consume();
@@ -409,6 +398,15 @@ Expression* YieldParselet::parse(Parser* parser, Token token)
 {
 	Expression* right = 0;
 	if (parser->Match(TokenType::Semicolon) == false)
+		right = parser->parseExpression(1);
+
+	return new YieldExpression(token, right);
+}
+
+Expression* InlineYieldParselet::parse(Parser* parser, Token token)
+{
+	Expression* right = 0;
+	if (parser->Match(TokenType::Semicolon) == false && parser->LookAhead().type != TokenType::RightParen)
 		right = parser->parseExpression(1);
 
 	return new YieldExpression(token, right);

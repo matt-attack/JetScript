@@ -1,6 +1,16 @@
 #ifndef _JET_GC_HEADER
 #define _JET_GC_HEADER
 
+#ifdef _DEBUG
+#ifndef DBG_NEW      
+#define DBG_NEW new ( _NORMAL_BLOCK , __FILE__ , __LINE__ )     
+#define new DBG_NEW   
+#endif
+
+#define _CRTDBG_MAP_ALLOC
+#include <crtdbg.h>
+#endif
+
 #include "Value.h"
 #include "VMStack.h"
 #include <vector>
@@ -11,18 +21,92 @@ namespace Jet
 
 	class GarbageCollector
 	{
+		friend class JetObject;
 		friend class Value;
 		//finish moving stuff over to me
 		//must free with GCFree, pointer is a bit offset to leave room for the flag
-		template<class T> 
-		T* GCAllocate()
+
+
+		/*template<class T> 
+		T* GCAllocate2(unsigned int size)
 		{
-#undef new
+		return (T*)((new char[sizeof(T)]));
+		}
+
+		char* GCAllocate(unsigned int size)
+		{
+		//this leads to less indirection, and simplified cleanup
+		char* data = new char[size];//enough room for the flag
+		//this->gcObjects.push_back(data);
+		return data;
+		}
+
+		//need to call destructor first
+		template<class T>
+		void GCFree(T* data)
+		{
+		data->~T();
+		delete[] (((char*)data));
+		}
+
+		template<class T[]>
+		void GCFree(T* data)
+		{
+		data->~T();
+		delete[] (((char*)data));
+		}
+
+		void GCFree(char* data)
+		{
+		delete[] (data);
+		}*/
+
+		JetContext* context;
+	public:
+		//garbage collector stuff
+		//need to unify everything except userdata
+		//std::vector<JetArray*> arrays;
+		//std::vector<JetObject*> objects;
+		//std::vector<JetString*> strings;
+		//std::vector<Closure*> closures;
+		//std::vector<JetUserdata*> userdata;
+
+		struct gcval
+		{
+			bool mark;
+			bool grey;
+			Jet::ValueType type : 8;
+			unsigned char refcount;//used for native functions
+			//void* ptr;
+		};
+		std::vector<gcval*> gen1;
+		std::vector<gcval*> gen2;
+
+		std::vector<Value> nativeRefs;//a list of all objects stored natively to mark
+
+		int allocationCounter;//used to determine when to run the GC
+		int collectionCounter;
+		VMStack<Value> greys;//stack of grey objects for processing
+
+		GarbageCollector(JetContext* context);
+
+		void Cleanup();
+
+		inline void AddObject(gcval* obj)
+		{
+			this->gen1.push_back(obj);
+		}
+
+		template<class T> 
+		T* New()
+		{
 			//need to call constructor
-			char* buf = new char[sizeof(T)+1];
-			this->gcObjects.push_back(buf);
-			new (buf+1) T();
-			return (T*)(buf+1);
+			T* buf = new T;
+#undef new
+			this->gen1.push_back((gcval*)buf);
+			//this->gcObjects.push_back(buf);
+			//new (buf) T();
+			return (T*)(buf);
 
 #ifdef _DEBUG
 #ifndef DBG_NEW      
@@ -32,55 +116,65 @@ namespace Jet
 #endif
 		}
 
+		//hack for objects
 		template<class T> 
-		T* GCAllocate2(unsigned int size)
+		T* New(JetContext* arg1)
 		{
-			return (T*)((new char[sizeof(T)+1])+1);
+			//need to call constructor
+			T* buf = new T(arg1);
+#undef new
+			this->gen1.push_back((gcval*)buf);
+			//this->gcObjects.push_back(buf);
+			//new (buf) T(arg1);
+			return (T*)(buf);
+
+#ifdef _DEBUG
+#ifndef DBG_NEW      
+#define DBG_NEW new ( _NORMAL_BLOCK , __FILE__ , __LINE__ )     
+#define new DBG_NEW   
+#endif
+#endif
 		}
 
-		char* GCAllocate(unsigned int size)
+		//hack for strings
+		template<class T> 
+		T* New(char* arg1)
 		{
-			//this leads to less indirection, and simplified cleanup
-			char* data = new char[size+1];//enough room for the flag
-			this->gcObjects.push_back(data);
-			return data+1;
+			//need to call constructor
+			T* buf = new T(arg1);
+#undef new
+			this->gen1.push_back((gcval*)buf);
+			//this->gcObjects.push_back(buf);
+			//new (buf) T(arg1);
+			return (T*)(buf);
+
+#ifdef _DEBUG
+#ifndef DBG_NEW      
+#define DBG_NEW new ( _NORMAL_BLOCK , __FILE__ , __LINE__ )     
+#define new DBG_NEW   
+#endif
+#endif
 		}
 
-		//need to call destructor first
-		template<class T>
-		void GCFree(T* data)
+		//hack for userdata
+		template<class T> 
+		T* New(void* arg1, JetObject* arg2)
 		{
-			data->~T();
-			delete[] (((char*)data)-1);
+			//need to call constructor
+			T* buf = new T(arg1, arg2);
+#undef new
+			this->gen1.push_back((gcval*)buf);
+			//this->gcObjects.push_back(buf);
+			//new (buf) T(arg1, arg2);
+			return (T*)(buf);
+
+#ifdef _DEBUG
+#ifndef DBG_NEW      
+#define DBG_NEW new ( _NORMAL_BLOCK , __FILE__ , __LINE__ )     
+#define new DBG_NEW   
+#endif
+#endif
 		}
-
-		void GCFree(char* data)
-		{
-			delete[] (data-1);
-		}
-
-		JetContext* context;
-	public:
-		//garbage collector stuff
-		std::vector<JetArray*> arrays;
-		std::vector<JetObject*> objects;
-		std::vector<JetString*> strings;
-		std::vector<JetUserdata*> userdata;
-
-		std::vector<Closure*> closures;
-
-		std::vector<char*> gcObjects;//not used atm
-
-		std::vector<Value> nativeRefs;//a list of all objects stored natively to mark
-
-		int allocationCounter;//used to determine when to run the GC
-		int collectionCounter;
-		VMStack<Value> greys;//stack of grey objects for processing
-
-		GarbageCollector(JetContext* context);
-		//~GarbageCollector(void);
-
-		void Cleanup();
 
 		void Run();
 	private:

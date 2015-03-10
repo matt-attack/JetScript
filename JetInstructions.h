@@ -35,7 +35,9 @@ namespace Jet
 		"LoadFunction",
 		"Jump",
 		"JumpTrue",
+		"JumpTruePeek",
 		"JumpFalse",
+		"JumpFalsePeek",
 		"NewArray",
 		"NewObject",
 
@@ -107,7 +109,9 @@ namespace Jet
 
 		Jump,
 		JumpTrue,
+		JumpTruePeek,
 		JumpFalse,
+		JumpFalsePeek,
 
 		NewArray,
 		NewObject,

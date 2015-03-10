@@ -302,12 +302,23 @@ namespace Jet
 			out.push_back(IntermediateInstruction(InstructionType::JumpTrue, pos));
 		}
 
+		void JumpFalsePeek(const char* pos)
+		{
+			out.push_back(IntermediateInstruction(InstructionType::JumpFalsePeek, pos));
+		
+		}
+
+		void JumpTruePeek(const char* pos)
+		{
+			out.push_back(IntermediateInstruction(InstructionType::JumpTruePeek, pos));
+		}
+
 		void Jump(const char* pos)
 		{
 			out.push_back(IntermediateInstruction(InstructionType::Jump, pos));
 		}
 
-		void Label(const std::string name)
+		void Label(const std::string& name)
 		{
 			out.push_back(IntermediateInstruction(InstructionType::Label, name));
 		}

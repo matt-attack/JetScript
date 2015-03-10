@@ -17,24 +17,6 @@ namespace Jet
 {
 	class JetContext;
 
-	template<class t>
-	struct GCVal
-	{
-		bool mark;
-		bool grey;
-		unsigned char refcount;//used for native functions
-		t ptr;
-
-		GCVal() { }
-
-		GCVal(t tt)
-		{
-			ptr = tt;
-		}
-	};
-
-	struct Value;
-
 	enum class ValueType
 	{
 		//keep all garbage collectable types towards the end after NativeFunction
@@ -48,6 +30,27 @@ namespace Jet
 		Function,
 		Userdata,
 	};
+
+
+	template<class t>
+	struct GCVal
+	{
+		bool mark;
+		bool grey;
+		ValueType type : 8;
+		unsigned char refcount;//used for native functions
+		t data;
+
+		GCVal() { }
+
+		GCVal(t tt)
+		{
+			data = tt;
+		}
+	};
+
+	struct Value;
+
 
 	static const char* ValueTypes[] = { "Null", "Number", "NativeFunction", "String" , "Object", "Array", "Function", "Userdata"};
 
@@ -63,10 +66,24 @@ namespace Jet
 
 	class JetObject;
 	typedef std::vector<Value> _JetArrayBacking;
-	typedef GCVal<_JetArrayBacking* > JetArray;
+	typedef GCVal<_JetArrayBacking> JetArray;
 	typedef _JetArrayBacking::iterator _JetArrayIterator;
 
-	typedef GCVal<std::pair<void*,JetObject*> > JetUserdata;
+	struct JetUserdata
+	{
+		bool mark, grey;
+		ValueType type : 8;
+		unsigned char refcount;
+
+		void* data;
+		JetObject* prototype;
+
+		JetUserdata(void* d, JetObject* o)
+		{
+			data = d;
+			prototype = o;
+		}
+	};
 	typedef GCVal<char*> JetString;
 
 	typedef void _JetFunction;
@@ -134,37 +151,13 @@ namespace Jet
 
 	struct Closure;
 
-	struct Generator
-	{
-		enum class GeneratorState
-		{
-			Running,
-			Suspended,
-			Dead,
-		};
-
-		Generator(JetContext* context, Closure* closure, int args);
-
-		void Yield(JetContext* context, unsigned int iptr);
-
-		unsigned int Resume(JetContext* context);
-
-		void Kill()//what happens when you return
-		{
-			this->state = GeneratorState::Dead;
-			//restore iptr
-		}
-
-		int curiptr;
-		GeneratorState state;
-		Closure* closure;
-		Value* stack;
-	};
+	struct Generator;
 
 	struct Closure
 	{
 		bool mark;
 		bool grey;
+		Jet::ValueType type : 8;
 		unsigned char refcount;
 
 		bool closed;//marks if the closure has gone out of its parent scope and was closed
@@ -181,8 +174,6 @@ namespace Jet
 
 		Closure* prev;//parent closure
 	};
-
-
 
 	struct _JetObject;
 	struct Value
@@ -237,7 +228,7 @@ namespace Jet
 		template<class T>
 		inline T*& GetUserdata()
 		{
-			return (T*&)this->_userdata->ptr.first;
+			return (T*&)this->_userdata->data;
 		}
 
 		const char* Type() const
@@ -430,7 +421,9 @@ namespace Jet
 		friend class GarbageCollector;
 		friend class JetContext;
 
+		//gc header
 		bool mark, grey;
+		Jet::ValueType type : 8;
 		unsigned char refcount;
 
 		JetContext* context;
@@ -550,6 +543,34 @@ namespace Jet
 		{
 			return this->v[c];
 		}
+	};
+
+	struct Generator
+	{
+		enum class GeneratorState
+		{
+			Running,
+			Suspended,
+			Dead,
+		};
+
+		Generator(JetContext* context, Closure* closure, int args);
+
+		void Yield(JetContext* context, unsigned int iptr);
+
+		unsigned int Resume(JetContext* context);
+
+		void Kill()//what happens when you return
+		{
+			this->state = GeneratorState::Dead;
+			//restore iptr
+		}
+
+		int curiptr;
+		GeneratorState state;
+		Closure* closure;
+		Value* stack;
+		Value lastyielded;//used for acting like an iterator
 	};
 }
 
