@@ -14,8 +14,12 @@
 #include <stack>
 #include <fstream>
 #include <memory>
-#undef Yield;
+
+#undef Yield
+
 using namespace Jet;
+
+#define JET_BAD_INSTRUCTION 123456789
 
 Value Jet::gc(JetContext* context,Value* args, int numargs) 
 { 
@@ -36,7 +40,7 @@ Value Jet::tostring(JetContext* context, Value* args, int numargs)
 
 Value JetContext::Callstack(JetContext* context, Value* args, int numargs)
 {
-	context->StackTrace(123456789, 0);
+	context->StackTrace(JET_BAD_INSTRUCTION, 0);
 	return Value();
 }
 
@@ -163,6 +167,23 @@ JetContext::JetContext() : gc(this), stack(500000), callstack(JET_MAX_CALLDEPTH,
 	(*this)["gc"] = ::gc;
 	(*this)["callstack"] = JetContext::Callstack;
 	(*this)["tostring"] = ::tostring;
+
+	//tiny test for "async" like functionality
+	(*this)["createServer"] = [](JetContext* context, Value* v, int args)
+	{
+		Value object = context->NewObject();
+		if (v->IsGenerator())
+		{
+			//make use of this for a simple tcp server
+			Value iterator = v->Call();
+			iterator.Call();//run until it yields
+			Value test = 52;
+			iterator.Call(&test, 1);
+			test = context->NewString("Hello world");
+			iterator.Call(&test, 1);
+		}
+		return object;
+	};
 
 	(*this)["setprototype"] = [](JetContext* context, Value* v, int args)
 	{
@@ -309,7 +330,7 @@ JetContext::JetContext() : gc(this), stack(500000), callstack(JET_MAX_CALLDEPTH,
 		{
 			char* str = new char[v->length+1];
 			memcpy(str, v->_string->data, v->length);
-			for (int i = 0; i < v->length; i++)
+			for (unsigned int i = 0; i < v->length; i++)
 				str[i] = tolower(str[i]);
 			str[v->length] = 0;
 			return context->NewString(str, false);
@@ -322,7 +343,7 @@ JetContext::JetContext() : gc(this), stack(500000), callstack(JET_MAX_CALLDEPTH,
 		{
 			char* str = new char[v->length+1];
 			memcpy(str, v->_string->data, v->length);
-			for (int i = 0; i < v->length; i++)
+			for (unsigned int i = 0; i < v->length; i++)
 				str[i] = toupper(str[i]);
 			str[v->length] = 0;
 			return context->NewString(str, false);
@@ -442,18 +463,6 @@ JetContext::JetContext() : gc(this), stack(500000), callstack(JET_MAX_CALLDEPTH,
 	});
 	this->objectiter = new JetObject(this);
 	this->objectiter->prototype = 0;
-	(*this->objectiter)["next"] = Value([](JetContext* context, Value* v, int args)
-	{
-		struct iter2
-		{
-			JetObject* container;
-			JetObject::Iterator iterator;
-		};
-		auto iterator = v->GetUserdata<iter2>();
-		if (iterator->iterator != iterator->container->end())
-			return Value((*iterator->iterator++).second);
-		//just return null
-	});
 	(*this->objectiter)["current"] = Value([](JetContext* context, Value* v, int args)
 	{
 		struct iter2
@@ -465,7 +474,7 @@ JetContext::JetContext() : gc(this), stack(500000), callstack(JET_MAX_CALLDEPTH,
 		auto iterator = v->GetUserdata<iter2>();
 		if (iterator->iterator != iterator->container->end())
 			return Value((*iterator->iterator).second);
-		//just return null
+		return Value();
 	});
 	(*this->objectiter)["advance"] = Value([](JetContext* context, Value* v, int args)
 	{
@@ -493,18 +502,6 @@ JetContext::JetContext() : gc(this), stack(500000), callstack(JET_MAX_CALLDEPTH,
 
 	this->arrayiter = new JetObject(this);
 	this->arrayiter->prototype = 0;
-	(*this->arrayiter)["next"] = Value([](JetContext* context, Value* v, int args)
-	{
-		struct iter
-		{
-			_JetArrayBacking* container;
-			_JetArrayIterator iterator;
-		};
-		auto iterator = v->GetUserdata<iter>();
-		if (iterator->iterator != iterator->container->end())
-			return Value((*iterator->iterator++));
-		//just return null
-	});
 	(*this->arrayiter)["current"] = Value([](JetContext* context, Value* v, int args)
 	{
 		struct iter
@@ -516,7 +513,9 @@ JetContext::JetContext() : gc(this), stack(500000), callstack(JET_MAX_CALLDEPTH,
 		auto iterator = v->GetUserdata<iter>();
 		if (iterator->iterator != iterator->container->end())
 			return Value((*iterator->iterator));
+		return Value();
 	});
+
 	(*this->arrayiter)["advance"] = Value([](JetContext* context, Value* v, int args)
 	{
 		struct iter
@@ -545,7 +544,7 @@ JetContext::JetContext() : gc(this), stack(500000), callstack(JET_MAX_CALLDEPTH,
 	this->function->prototype = 0;
 	(*this->function)["done"] = Value([](JetContext* context, Value* v, int args)
 	{
-		if (args == 1 && v->type == ValueType::Function && v->_function->generator)
+		if (args >= 1 && v->type == ValueType::Function && v->_function->generator)
 		{
 			if (v->_function->generator->state == Generator::GeneratorState::Dead)
 				return Value(1);
@@ -564,17 +563,20 @@ JetContext::JetContext() : gc(this), stack(500000), callstack(JET_MAX_CALLDEPTH,
 	//only work on functions
 	(*this->function)["iterator"] = Value([](JetContext* context, Value* v, int args)
 	{
-		if (args == 1 && v->type == ValueType::Function && v->_function->prototype->generator)
+		if (args >= 1 && v->type == ValueType::Function && v->_function->prototype->generator)
 		{
+			//fix this hack, if the generator was never started, the first value returned by the for each loop is null
+			if (v->_function->generator)
+				return *v;//hack for foreach loops
+
 			Closure* closure = new Closure;
+			closure->refcount = 0;
 			closure->grey = closure->mark = false;
 			closure->prev = v->_function->prev;
 			closure->numupvals = v->_function->numupvals;
-			closure->closed = false;
-			closure->refcount = v->_function->closed;
 			closure->generator = new Generator(context, v->_function, 0);
 			if (closure->numupvals)
-				closure->upvals = new Value*[closure->numupvals];
+				closure->upvals = new Capture*[closure->numupvals];
 			closure->prototype = v->_function->prototype;
 			context->gc.AddObject((GarbageCollector::gcval*)closure);
 
@@ -592,7 +594,7 @@ JetContext::JetContext() : gc(this), stack(500000), callstack(JET_MAX_CALLDEPTH,
 	//these only work on generators
 	(*this->function)["current"] = Value([](JetContext* context, Value* v, int args)
 	{
-		if (args == 1 && v->type == ValueType::Function && v->_function->generator)
+		if (args >= 1 && v->type == ValueType::Function && v->_function->generator)
 		{
 			//return last yielded value
 			return v->_function->generator->lastyielded;
@@ -600,22 +602,12 @@ JetContext::JetContext() : gc(this), stack(500000), callstack(JET_MAX_CALLDEPTH,
 		throw RuntimeException("");
 	});
 
-	//not needed
-	(*this->function)["next"] = Value([](JetContext* context, Value* v, int args)
-	{
-		if (args == 1 && v->type == ValueType::Function && v->_function->generator)
-		{
-			return Value();
-		}
-		throw RuntimeException("");
-	});
-
 	(*this->function)["advance"] = Value([](JetContext* context, Value* v, int args)
 	{
-		if (args == 1 && v->type == ValueType::Function && v->_function->generator)
+		if (args >= 1 && v->type == ValueType::Function && v->_function->generator)
 		{
 			//execute generator here
-			context->Call(v);
+			context->Call(v);//todo add second arg if we have it
 			if (v->_function->generator->state == Generator::GeneratorState::Dead)
 				return Value(0);
 			else
@@ -654,7 +646,7 @@ typedef signed long long INT64;
 std::vector<IntermediateInstruction> JetContext::Compile(const char* code, const char* filename)
 {
 #ifdef JET_TIME_EXECUTION
-	INT64 start, end;
+	INT64 start, end, rate;
 	QueryPerformanceFrequency( (LARGE_INTEGER *)&rate );
 	QueryPerformanceCounter( (LARGE_INTEGER *)&start );
 #endif
@@ -673,7 +665,6 @@ std::vector<IntermediateInstruction> JetContext::Compile(const char* code, const
 
 #ifdef JET_TIME_EXECUTION
 	QueryPerformanceCounter( (LARGE_INTEGER *)&end );
-
 	INT64 diff = end - start;
 	double dt = ((double)diff)/((double)rate);
 
@@ -704,9 +695,9 @@ public:
 	{
 #ifdef JET_TIME_EXECUTION
 #ifdef _WIN32
-		INT64 end;
+		INT64 end,rate;
 		QueryPerformanceCounter( (LARGE_INTEGER *)&end );
-
+		QueryPerformanceFrequency( (LARGE_INTEGER*)&rate);
 		char o[100];
 		INT64 diff = end - start;
 		float dt = ((float)diff)/((float)rate);
@@ -736,11 +727,11 @@ unsigned int JetContext::Call(const Value* fun, unsigned int iptr, unsigned int 
 				throw RuntimeException("Stack Overflow!");
 
 			curframe = fun->_function;
-			//fix arg passing to resume, also fix in other call function
+
 			if (args == 0)
 				stack.Push(Value());
 			else if (args > 1)
-				for (int i = 1; i < args; i++)
+				for (unsigned int i = 1; i < args; i++)
 					stack.Pop();
 			return fun->_function->generator->Resume(this)-1;
 		}
@@ -752,11 +743,10 @@ unsigned int JetContext::Call(const Value* fun, unsigned int iptr, unsigned int 
 			closure->grey = closure->mark = false;
 			closure->prev = fun->_function->prev;
 			closure->numupvals = fun->_function->numupvals;
-			closure->closed = false;
 			closure->refcount = 0;
 			closure->generator = new Generator(this, fun->_function, args);
 			if (closure->numupvals)
-				closure->upvals = new Value*[closure->numupvals];
+				closure->upvals = new Capture*[closure->numupvals];
 			closure->prototype = fun->_function->prototype;
 			closure->type = ValueType::Function;
 			this->gc.AddObject((GarbageCollector::gcval*)closure);
@@ -771,7 +761,7 @@ unsigned int JetContext::Call(const Value* fun, unsigned int iptr, unsigned int 
 		sptr += curframe->prototype->locals;
 
 		//clean out the new stack for the gc
-		for (int i = 0; i < fun->_function->prototype->locals; i++)
+		for (unsigned int i = 0; i < fun->_function->prototype->locals; i++)
 			sptr[i] = Value();
 
 		if ((sptr - localstack) >= JET_STACK_SIZE)
@@ -779,27 +769,31 @@ unsigned int JetContext::Call(const Value* fun, unsigned int iptr, unsigned int 
 
 		curframe = fun->_function;
 
-		if (curframe->closed)
+		/*if (false)//curframe->closed)
 		{
-			//allocate new local frame here
-			Closure* closure = new Closure;
-			closure->grey = closure->mark = false;
-			closure->prev = curframe->prev;
-			closure->numupvals = curframe->numupvals;
-			closure->closed = false;
-			closure->refcount = 0;
-			closure->generator = 0;
-			closure->type = ValueType::Function;
-			if (closure->numupvals)
-				closure->upvals = new Value*[closure->numupvals];
-			closure->prototype = curframe->prototype;
-			gc.AddObject((GarbageCollector::gcval*)closure);
-
-			curframe = closure;
-
-			if (gc.allocationCounter++%GC_INTERVAL == 0)
-				this->RunGC();
+		//allocate new local frame here
+		Closure* closure = new Closure;
+		closure->grey = closure->mark = false;
+		closure->prev = curframe->prev;
+		closure->numupvals = curframe->numupvals;
+		closure->closed = false;
+		closure->refcount = 0;
+		closure->generator = 0;
+		closure->type = ValueType::Function;
+		if (closure->numupvals)
+		{
+		closure->upvals = new Value*[closure->numupvals];
+		for (int i = 0; i < closure->numupvals; i++)
+		closure->upvals[i] = (Value*)0xcdcdcdcd;
 		}
+		closure->prototype = curframe->prototype;
+		gc.AddObject((GarbageCollector::gcval*)closure);
+
+		curframe = closure;
+
+		if (gc.allocationCounter++%GC_INTERVAL == 0)
+		this->RunGC();
+		}*/
 		//printf("ECall: Stack Ptr At: %d\n", sptr - localstack);
 
 		Function* func = curframe->prototype;
@@ -848,11 +842,13 @@ unsigned int JetContext::Call(const Value* fun, unsigned int iptr, unsigned int 
 		//ok fix this to be cleaner and resolve stack printing
 		//should just push a value to indicate that we are in a native function call
 		callstack.Push(std::pair<unsigned int, Closure*>(iptr, curframe));
-		callstack.Push(std::pair<unsigned int, Closure*>(123456789, 0));
+		callstack.Push(std::pair<unsigned int, Closure*>(JET_BAD_INSTRUCTION, 0));
 		Closure* temp = curframe;
+		sptr += temp->prototype->locals;
 		curframe = 0;
 		Value ret = (*fun->func)(this,tmp,args);
 		stack.QuickPop(args);
+		sptr -= temp->prototype->locals;		
 		curframe = temp;
 		callstack.QuickPop(2);
 		stack.Push(ret);
@@ -885,13 +881,9 @@ Value JetContext::Execute(int iptr, Closure* frame)
 	unsigned int startstack = this->stack.size();
 	auto startlocalstack = this->sptr;
 
-	callstack.Push(std::pair<unsigned int, Closure*>(123456789, 0));//bad value to get it to return;
+	callstack.Push(std::pair<unsigned int, Closure*>(JET_BAD_INSTRUCTION, 0));//bad value to get it to return;
 	curframe = frame;
 
-	//ignore metamethods for now
-	//main issue is getting callstack info for metamethods
-	//need to have callstack contain all frames so gc works correctly
-	//Closure* curframe = frame;
 	//printf("Execute: Stack Ptr At: %d\n", sptr - localstack);
 
 	try
@@ -1189,10 +1181,9 @@ Value JetContext::Execute(int iptr, Closure* frame)
 					while ( index++ < 0)
 						frame = frame->prev;
 
-					if (frame->closed)
-						stack.Push(frame->cupvals[in.value]);
-					else
-						stack.Push(*frame->upvals[in.value]);
+					stack.Push(*frame->upvals[in.value]->v);
+					//printf("Read Capture %d %s in %s\n", in.value, frame->upvals[in.value]->v->ToString().c_str(), frame->prototype->name.c_str());
+
 					break;
 				}
 			case InstructionType::CStore:
@@ -1202,17 +1193,29 @@ Value JetContext::Execute(int iptr, Closure* frame)
 					while ( index++ < 0)
 						frame = frame->prev;
 
-					//write barrier
-					if (frame->grey == true)
+					if (frame->mark)
 					{
 						frame->mark = false;
 						gc.greys.Push(frame);
 					}
 
-					if (frame->closed)
-						frame->cupvals[in.value] = stack.Pop();
+					if (frame->upvals[in.value]->closed)
+					{
+						frame->upvals[in.value]->value = stack.Pop();
+
+						//do a write barrier
+						/*if (frame->upvals[in.value]->value.type > ValueType::NativeFunction && frame->upvals[in.value]->value._object->grey == false)
+						{
+						frame->upvals[in.value]->value._object->grey = true;
+						this->gc.greys.Push(frame->upvals[in.value]->value);
+						}*/
+					}
 					else
-						*frame->upvals[in.value] = stack.Pop();
+					{
+						*frame->upvals[in.value]->v = stack.Pop();
+					}
+					//printf("Wrote Capture %d %s in %s\n", in.value, frame->upvals[in.value]->v->ToString().c_str(), frame->prototype->name.c_str());
+
 					break;
 				}
 			case InstructionType::LoadFunction:
@@ -1225,9 +1228,16 @@ Value JetContext::Execute(int iptr, Closure* frame)
 					closure->refcount = 0;
 					closure->generator = 0;
 					closure->numupvals = in.func->upvals;
-					closure->closed = false;
 					if (in.func->upvals)
-						closure->upvals = new Value*[in.func->upvals];
+					{
+						closure->upvals = new Capture*[in.func->upvals];
+						//#ifdef _DEBUG
+						for (unsigned int i = 0; i < in.func->upvals; i++)
+							closure->upvals[i] = 0;//this is done for the GC
+						//#endif
+						this->lastadded = closure;
+					}
+
 					closure->prototype = in.func;
 					closure->type = ValueType::Function;
 					gc.AddObject((GarbageCollector::gcval*)closure);
@@ -1241,23 +1251,118 @@ Value JetContext::Execute(int iptr, Closure* frame)
 			case InstructionType::CInit:
 				{
 					//allocate and add new upvalue
-					curframe->upvals[in.value2] = &sptr[in.value];
+					auto frame = lastadded;
+					//first see if we already have this closure open for this variable
+					//fix me later
+					bool found = false;
+					for (auto ii: opencaptures)
+					{
+						if (ii->v == &sptr[in.value])
+						{
+							//we found it
+							frame->upvals[in.value2] = ii;
+							ii->usecount++;
+							found = true;
+							//printf("Reused Capture %d %s in %s\n", in.value2, sptr[in.value].ToString().c_str(), curframe->prototype->name.c_str());
+
+							if (frame->mark)
+							{
+								frame->mark = false;
+								gc.greys.Push(frame);
+							}
+							break;
+						}
+					}
+
+					if (!found)
+					{
+						//allocate closure here
+						auto capture = gc.New<Capture>();
+						capture->closed = false;
+						capture->grey = capture->mark = false;
+						capture->refcount = 0;
+						capture->usecount = 1;
+						capture->type = ValueType::Capture;
+						capture->v = &sptr[in.value];
+						capture->owner = frame;
+						frame->upvals[in.value2] = capture;
+						//frame->upvals[in.value2]->v = &sptr[in.value];
+						//printf("Initalized Capture %d %s in %s\n", in.value2, sptr[in.value].ToString().c_str(), curframe->prototype->name.c_str());
+						this->opencaptures.push_back(capture);
+
+						if (frame->mark)
+						{
+							frame->mark = false;
+							gc.greys.Push(frame);
+						}
+
+						if (gc.allocationCounter++%GC_INTERVAL == 0)
+							this->RunGC();
+					}
+
 
 					break;
 				}
 			case InstructionType::Close:
 				{
-					auto cur = curframe;
-					if (cur && cur->numupvals && cur->closed == false)
+					//auto cur = curframe;
+					//remove from the back
+					while (opencaptures.size() > 0)
 					{
-						auto tmp = new Value[cur->numupvals];
-						for (int i = 0; i < cur->numupvals; i++)
-							tmp[i] = *cur->upvals[i];
+						auto cur = opencaptures.back();
+						//auto tmp = new Value[cur->numupvals];
+						int index = cur->v-sptr;
+						if (index < in.value)
+							break;
 
-						delete[] cur->upvals;
 						cur->closed = true;
-						cur->cupvals = tmp;
+						cur->value = *cur->v;
+						cur->v = &cur->value;
+						//printf("Closed capture with value %s\n", cur->value.ToString().c_str());
+						//printf("Closed capture %d in %d as %s\n", i, cur, cur->upvals[i]->v->ToString().c_str());
+
+						/*for (int i = 0; i < cur->numupvals; i++)
+						{
+						if (cur->upvals[i]->closed)
+						continue;
+
+						cur->upvals[i]->value = *cur->upvals[i]->v;
+						cur->upvals[i]->v = &cur->upvals[i]->value;
+						cur->upvals[i]->closed = true;
+						}
+
+						//delete[] cur->upvals;
+						cur->closed = true;
+						//cur->cupvals = tmp;*/
+						//cur->mark = true;
+						//do a write barrier
+						if (cur->value.type > ValueType::NativeFunction && cur->value._object->grey == false)
+						{
+							cur->value._object->grey = true;
+							this->gc.greys.Push(cur->value);
+						}
+						opencaptures.pop_back();
 					}
+					/*if (cur && cur->numupvals && cur->closed == false)
+					{
+					auto tmp = new Value[cur->numupvals];
+					for (int i = in.value; i < cur->numupvals; i++)
+					{
+					printf("Closed capture %d in %d as %s\n", i, cur, cur->upvals[i]->ToString().c_str());
+					tmp[i] = *cur->upvals[i];
+					}
+
+					delete[] cur->upvals;
+					cur->closed = true;
+					cur->cupvals = tmp;
+
+					//do a write barrier
+					if (cur->mark)
+					{
+					cur->mark = false;
+					this->gc.greys.Push(cur);
+					}
+					}*/
 
 					break;
 				}
@@ -1298,7 +1403,7 @@ Value JetContext::Execute(int iptr, Closure* frame)
 					if (curframe && curframe->generator)
 						curframe->generator->Kill();
 
-					if (oframe.first != 123456789)
+					if (oframe.first != JET_BAD_INSTRUCTION)
 					{
 #ifdef _DEBUG
 						//this makes sure that the gc doesnt overrun its boundaries
@@ -1373,6 +1478,8 @@ Value JetContext::Execute(int iptr, Closure* frame)
 						else
 							throw RuntimeException("Could not index a non array/object value!");
 
+						//this may be redundant and already done in object
+						//check me
 						if (loc._object->mark)
 						{
 							//reset to grey and push back for reprocessing
@@ -1390,9 +1497,10 @@ Value JetContext::Execute(int iptr, Closure* frame)
 
 						if (loc.type == ValueType::Array)
 						{
-							if ((int)index >= loc._array->data.size() || (int)index < 0)
+							int in = (int)index;
+							if (in >= loc._array->data.size() || in < 0)
 								throw RuntimeException("Array index out of range!");
-							loc._array->data[(int)index] = val;
+							loc._array->data[in] = val;
 
 							//write barrier
 							if (loc._array->mark)
@@ -1408,6 +1516,8 @@ Value JetContext::Execute(int iptr, Closure* frame)
 							(*loc._object)[index] = val;
 
 							//write barrier
+							//this may be redundant, lets check
+							//its also done in the object object
 							if (loc._object->mark)
 							{
 								//reset to grey and push back for reprocessing
@@ -1474,16 +1584,17 @@ Value JetContext::Execute(int iptr, Closure* frame)
 
 						if (loc.type == ValueType::Array)
 						{
-							if ((int)index >= loc._array->data.size())
+							int in = (int)index;
+							if (in >= loc._array->data.size() || in < 0)
 								throw RuntimeException("Array index out of range!");
-							stack.Push(loc._array->data[(int)index]);
+							stack.Push(loc._array->data[in]);
 						}
 						else if (loc.type == ValueType::Object)
-							stack.Push((*loc._object)[index]);
+							stack.Push((*loc._object).get(index));
 						else if (loc.type == ValueType::String)
 						{
 							int in = (int)index;
-							if (in >= loc.length || in < 0)
+							if (in >= (int)loc.length || in < 0)
 								throw RuntimeException("String index out of range!");
 
 							stack.Push(Value(loc._string->data[in]));
@@ -1532,9 +1643,7 @@ Value JetContext::Execute(int iptr, Closure* frame)
 					break;
 				}
 			default:
-				{
-					throw RuntimeException("Unimplemented Instruction!");
-				}
+				throw RuntimeException("Unimplemented Instruction!");
 			}
 
 			iptr++;
@@ -1552,11 +1661,11 @@ Value JetContext::Execute(int iptr, Closure* frame)
 			printf("\nLocals:\n");
 			if (curframe)
 			{
-				for (int i = 0; i < curframe->prototype->locals; i++)
+				for (unsigned int i = 0; i < curframe->prototype->locals; i++)
 				{
 					Value v = this->sptr[i];
 					if (v.type >= ValueType(0))
-						printf("%d = %s\n", i, v.ToString().c_str());
+						printf("%s = %s\n", curframe->prototype->debuglocal[i].c_str(), v.ToString().c_str());
 				}
 			}
 
@@ -1683,7 +1792,7 @@ void JetContext::StackTrace(int curiptr, Closure* cframe)
 		auto top = tempcallstack.Pop();
 		int greatest = -1;
 
-		if (top.first == 123456789)
+		if (top.first == JET_BAD_INSTRUCTION)
 			printf("{Native}\n");
 		else
 		{
@@ -1772,6 +1881,12 @@ Value JetContext::Assemble(const std::vector<IntermediateInstruction>& code)
 		switch (inst.type)
 		{
 		case InstructionType::Comment:
+			{
+				current->debuglocal.push_back(inst.string);
+
+				delete[] inst.string;
+				break;
+			}
 		case InstructionType::Label:
 			{
 				break;
@@ -1781,7 +1896,7 @@ Value JetContext::Assemble(const std::vector<IntermediateInstruction>& code)
 				//this should contain line/file info
 				Function::DebugInfo info;
 				info.file = inst.string;
-				info.line = inst.second;
+				info.line = (unsigned int)inst.second;
 				info.code = current->instructions.size();
 				current->debuginfo.push_back(info);
 				//push something into the array at the instruction pointer
@@ -1802,7 +1917,7 @@ Value JetContext::Assemble(const std::vector<IntermediateInstruction>& code)
 				ins.string = inst.string;
 				ins.value = inst.first;
 				if (inst.string == 0 || inst.type == InstructionType::Call)
-					ins.value2 = inst.second;
+					ins.value2 = (int)inst.second;
 
 				switch (inst.type)
 				{
@@ -1875,15 +1990,14 @@ Value JetContext::Assemble(const std::vector<IntermediateInstruction>& code)
 	frame->grey = frame->mark = false;
 	frame->refcount = 0;
 	frame->prev = 0;
-	frame->closed = false;
 	frame->generator = 0;
 	frame->prototype = this->functions["{Entry Point}"];
 	frame->numupvals = frame->prototype->upvals;
 	frame->type = ValueType::Function;
-	if (frame->numupvals)
-		frame->upvals = new Value*[frame->numupvals];
-	else
-		frame->upvals = 0;
+	//if (frame->numupvals)
+	//frame->upvals = new Value*[frame->numupvals];
+	//else
+	frame->upvals = 0;
 
 	gc.AddObject((GarbageCollector::gcval*)frame);
 
@@ -1936,6 +2050,28 @@ Value JetContext::Call(const Value* fun, Value* args, unsigned int numargs)
 		return this->Execute(iptr, fun->_function);
 	}
 
+	if (fun->_function->prototype->generator)
+	{
+		//create generator and return it
+		Closure* closure = new Closure;
+		closure->grey = closure->mark = false;
+		closure->refcount = 0;
+
+		closure->prev = fun->_function->prev;
+		closure->numupvals = fun->_function->numupvals;
+		closure->generator = new Generator(fun->_function->prototype->context, fun->_function, numargs);
+		if (closure->numupvals)
+		{
+			closure->upvals = new Capture*[closure->numupvals];
+			memset(closure->upvals, 0, sizeof(Capture*)*closure->numupvals);
+		}
+		closure->prototype = fun->_function->prototype;
+		closure->type = ValueType::Function;
+		this->gc.AddObject((GarbageCollector::gcval*)closure);
+
+		return Value(closure);
+	}
+
 	bool pushed = false;
 	if (this->curframe)
 	{
@@ -1946,7 +2082,7 @@ Value JetContext::Call(const Value* fun, Value* args, unsigned int numargs)
 	}
 
 	//clear stack values for the gc
-	for (int i = 0; i < fun->_function->prototype->locals; i++)
+	for (unsigned int i = 0; i < fun->_function->prototype->locals; i++)
 		sptr[i] = Value();
 
 	//push args onto stack

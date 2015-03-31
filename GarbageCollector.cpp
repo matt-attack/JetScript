@@ -3,6 +3,8 @@
 
 using namespace Jet;
 
+//#define JETGCDEBUG
+
 GarbageCollector::GarbageCollector(JetContext* context) : context(context)
 {
 	this->allocationCounter = 1;//messes up if these start at 0
@@ -25,7 +27,7 @@ void GarbageCollector::Cleanup()
 		case ValueType::Userdata:
 			{
 				Value ud = Value(((JetUserdata*)ii), ((JetUserdata*)ii)->prototype);
-				Value _gc = (*((JetUserdata*)ii)->prototype)["_gc"];
+				Value _gc = (*((JetUserdata*)ii)->prototype).get("_gc");
 				if (_gc.type == ValueType::NativeFunction)
 					_gc.func(this->context, &ud, 1);
 				else if (_gc.type == ValueType::Function)
@@ -49,7 +51,7 @@ void GarbageCollector::Cleanup()
 		case ValueType::Userdata:
 			{
 				Value ud = Value(((JetUserdata*)ii), ((JetUserdata*)ii)->prototype);
-				Value _gc = (*((JetUserdata*)ii)->prototype)["_gc"];
+				Value _gc = (*((JetUserdata*)ii)->prototype).get("_gc");
 				if (_gc.type == ValueType::NativeFunction)
 					_gc.func(this->context, &ud, 1);
 				else if (_gc.type == ValueType::Function)
@@ -93,6 +95,12 @@ void GarbageCollector::Cleanup()
 				delete str;
 				break;
 			}
+		case ValueType::Capture:
+			{
+				Capture* c = (Capture*)ii;
+				delete c;
+				break;
+			}
 		}
 	}
 
@@ -126,6 +134,12 @@ void GarbageCollector::Cleanup()
 				delete str;
 				break;
 			}
+		case ValueType::Capture:
+			{
+				Capture* c = (Capture*)ii;
+				delete c;
+				break;
+			}
 		}
 	}
 }
@@ -141,11 +155,11 @@ void GarbageCollector::Mark()
 	this->greys.Push(context->file);
 	this->greys.Push(context->function);
 
-	for (int i = 0; i < this->context->prototypes.size(); i++)
+	for (unsigned int i = 0; i < this->context->prototypes.size(); i++)
 		this->greys.Push(this->context->prototypes[i]);
 
 	//mark all objects being held by native code
-	for (int i = 0; i < this->nativeRefs.size(); i++)
+	for (unsigned int i = 0; i < this->nativeRefs.size(); i++)
 	{
 		if (this->nativeRefs[i]._object->grey == false)
 		{
@@ -163,8 +177,8 @@ void GarbageCollector::Mark()
 	//this means globals
 	{
 		//StackProfile profile("Mark Globals as Grey");
-		for (int i = 0; i < context->vars.size(); i++)
-		{
+		for (unsigned int i = 0; i < context->vars.size(); i++)
+		{//ok so function was here and second generation, this indicates that not all children are getting updated
 			if (context->vars[i].type > ValueType::NativeFunction)
 			{
 				if (context->vars[i]._object->grey == false)
@@ -180,7 +194,7 @@ void GarbageCollector::Mark()
 	if (context->stack.size() > 0)
 	{
 		//StackProfile prof("Make Stack Grey");
-		for (int i = 0; i < context->stack.size(); i++)
+		for (unsigned int i = 0; i < context->stack.size(); i++)
 		{
 			if (context->stack.mem[i].type > ValueType::NativeFunction)
 			{
@@ -207,7 +221,7 @@ void GarbageCollector::Mark()
 		}
 
 		int sp = 0;
-		for (int i = 0; i < context->callstack.size(); i++)
+		for (unsigned int i = 0; i < context->callstack.size(); i++)
 		{
 			auto closure = context->callstack[i].second;
 			if (closure == 0)
@@ -305,6 +319,11 @@ void GarbageCollector::Mark()
 
 					break;
 				}
+			case ValueType::Capture:
+				{
+					throw RuntimeException("There should not be an upvalue in the grey loop");
+					break;
+				}
 			case ValueType::Function:
 				{
 					obj._function->mark = true;
@@ -315,17 +334,28 @@ void GarbageCollector::Mark()
 						greys.Push(Value(obj._function->prev));
 					}
 
-					if (obj._function->closed)
+					if (obj._function->numupvals)
 					{
-						for (int i = 0; i < obj._function->numupvals; i++)
+						for (unsigned int i = 0; i < obj._function->numupvals; i++)
 						{
-							if (obj._function->cupvals[i].type > ValueType::NativeFunction)
+							auto uv = obj._function->upvals[i];
+							if (uv && uv->grey == false)
 							{
-								if (obj._function->cupvals[i]._object->grey == false)
+								if (uv->closed)
 								{
-									obj._function->cupvals[i]._object->grey = true;
-									greys.Push(obj._function->cupvals[i]);
+									//mark the value stored in it
+									if (uv->value.type > ValueType::NativeFunction)
+									{
+										if (uv->value._object->grey == false)
+										{
+											uv->value._object->grey = true;
+											greys.Push(uv->value);
+										}
+									}
 								}
+								//mark it
+								uv->grey = true;
+								uv->mark = true;
 							}
 						}
 					}
@@ -333,7 +363,7 @@ void GarbageCollector::Mark()
 					if (obj._function->generator)
 					{
 						//mark generator stack
-						for (int i = 0; i < obj._function->prototype->locals; i++)
+						for (unsigned int i = 0; i < obj._function->prototype->locals; i++)
 						{
 							if (obj._function->generator->stack[i].type > ValueType::NativeFunction)
 							{
@@ -383,6 +413,10 @@ void GarbageCollector::Sweep()
 	//finally sweep through
 	//sweep and free all whites and make all blacks white
 	//iterate through all gc values
+#ifdef _DEBUG
+	if (this->greys.size() > 0)
+		throw RuntimeException("Runtime Error: Garbage collector grey array not empty when collecting!");
+#endif
 
 	if (!incremental)//do a gen2 collection
 	{
@@ -399,45 +433,8 @@ void GarbageCollector::Sweep()
 			}
 			else
 			{
-				//printf("Freeing Gen 2!\n");
-				switch (ii->type)
-				{
-				case ValueType::Function:
-					{
-						Closure* fun = (Closure*)ii;
-						if (fun->numupvals)
-							delete[] fun->upvals;
-						delete fun->generator;
-						delete fun;
-						break;
-					}
-				case ValueType::Object:
-					delete (JetObject*)ii;
-					break;
-				case ValueType::Array:
-					delete (JetArray*)ii;
-					break;
-				case ValueType::Userdata:
-					{
-						Value ud = Value(((JetUserdata*)ii), ((JetUserdata*)ii)->prototype);
-						Value _gc = (*((JetUserdata*)ii)->prototype)["_gc"];
-						if (_gc.type == ValueType::NativeFunction)
-							_gc.func(this->context, &ud, 1);
-						else if (_gc.type == ValueType::Function)
-							throw RuntimeException("Non Native _gc Hooks Not Implemented!");//todo
-						else if (_gc.type != ValueType::Null)
-							throw RuntimeException("Invalid _gc Hook!");
-						delete (JetUserdata*)ii;
-						break;
-					}
-				case ValueType::String:
-					{
-						JetString* str = (JetString*)ii;
-						delete[] str->data;
-						delete str;
-						break;
-					}
-				}
+				//printf("Freeing Gen 2, %d!\n", ii->type);
+				this->Free(ii);
 			}
 		}
 	}
@@ -448,53 +445,16 @@ void GarbageCollector::Sweep()
 	{
 		if (ii->mark || ii->refcount)
 		{
-			ii->mark = false;
-			ii->grey = false;
+			//ii->mark = false;//perhaps do this ONLY IF we just did a gen2 collection
+			//ii->grey = false;
 			this->gen2.push_back(ii);//promote, it SURVIVED
 
-			//printf("Promoting!\n");
+			//printf("Promoting %d!\n", ii->type);
 		}
 		else
 		{
-			//printf("Freeing!\n");
-			switch (ii->type)
-			{
-			case ValueType::Function:
-				{
-					Closure* fun = (Closure*)ii;
-					if (fun->numupvals)
-						delete[] fun->upvals;
-					delete fun->generator;
-					delete fun;
-					break;
-				}
-			case ValueType::Object:
-				delete (JetObject*)ii;
-				break;
-			case ValueType::Array:
-				delete (JetArray*)ii;
-				break;
-			case ValueType::Userdata:
-				{
-					Value ud = Value(((JetUserdata*)ii), ((JetUserdata*)ii)->prototype);
-					Value _gc = (*((JetUserdata*)ii)->prototype)["_gc"];
-					if (_gc.type == ValueType::NativeFunction)
-						_gc.func(this->context, &ud, 1);
-					else if (_gc.type == ValueType::Function)
-						throw RuntimeException("Non Native _gc Hooks Not Implemented!");//todo
-					else if (_gc.type != ValueType::Null)
-						throw RuntimeException("Invalid _gc Hook!");
-					delete (JetUserdata*)ii;
-					break;
-				}
-			case ValueType::String:
-				{
-					JetString* str = (JetString*)ii;
-					delete[] str->data;
-					delete str;
-					break;
-				}
-			}
+			//printf("Freeing %d!\n", ii->type);
+			this->Free(ii);
 		}
 	}
 
@@ -533,6 +493,81 @@ void GarbageCollector::Run()
 
 	printf("Took %lf seconds to collect garbage\n\n", dt);
 #endif
-	//this->StackTrace(curframe->prototype->ptr);
+	//printf("collection done\n");
 	//printf("GC Complete: %d Greys, %d Globals, %d Stack\n%d Closures, %d Arrays, %d Objects, %d Userdata\n", this->greys.size(), this->vars.size(), 0, this->closures.size(), this->arrays.size(), this->objects.size(), this->userdata.size());
+}
+
+void GarbageCollector::Free(gcval* ii)
+{
+	switch (ii->type)
+	{
+	case ValueType::Function:
+		{
+			Closure* fun = (Closure*)ii;
+#ifdef JETGCDEBUG
+			printf("GC Freeing Function %d\n", ii);
+
+			fun->generator = (Generator*)0xcdcdcdcd;
+#else
+			if (fun->numupvals)
+				delete[] fun->upvals;
+
+			delete fun->generator;
+			delete fun;
+#endif
+			break;
+		}
+	case ValueType::Object:
+		{
+#ifdef JETGCDEBUG
+			JetObject* obj = (JetObject*)ii;
+			obj->nodes = (ObjNode*)0xcdcdcdcd;
+#else
+			delete (JetObject*)ii;
+#endif
+			break;
+		}
+	case ValueType::Array:
+		{
+#ifdef JETGCDEBUG
+			JetArray* arr = (JetArray*)ii;
+			arr->data.clear();
+#endif
+			delete (JetArray*)ii;
+			//#endif
+			break;
+		}
+	case ValueType::Userdata:
+		{
+			Value ud = Value(((JetUserdata*)ii), ((JetUserdata*)ii)->prototype);
+			Value _gc = (*((JetUserdata*)ii)->prototype).get("_gc");
+			if (_gc.type == ValueType::NativeFunction)
+				_gc.func(this->context, &ud, 1);
+			else if (_gc.type == ValueType::Function)
+				throw RuntimeException("Non Native _gc Hooks Not Implemented!");//todo
+			else if (_gc.type != ValueType::Null)
+				throw RuntimeException("Invalid _gc Hook!");
+			delete (JetUserdata*)ii;
+			break;
+		}
+	case ValueType::String:
+		{
+			JetString* str = (JetString*)ii;
+			delete[] str->data;
+			delete str;
+			break;
+		}
+	case ValueType::Capture:
+		{
+			//perhaps these are holding references to the functions and being a circular issue, run test for a while to debug
+			Capture* uv = (Capture*)ii;
+			delete uv;// we have a capture getting deleted that shouldnt
+			//printf("Freeing capture!\n");
+			break;
+		}
+#ifdef _DEBUG
+	default:
+		throw RuntimeException("Runtime Error: Invalid GC Object Typeid!");
+#endif
+	}
 }

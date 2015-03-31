@@ -29,6 +29,7 @@ namespace Jet
 		Array,
 		Function,
 		Userdata,
+		Capture,//you will never see this in the VM
 	};
 
 
@@ -128,7 +129,8 @@ namespace Jet
 					&& ii.instruction != InstructionType::LdNum 
 					&& ii.instruction != InstructionType::Call
 					&& ii.instruction != InstructionType::Load
-					&& ii.instruction != InstructionType::Store)
+					&& ii.instruction != InstructionType::Store
+					&& ii.instruction != InstructionType::CStore)
 					delete[] ii.string;
 		}
 
@@ -147,12 +149,12 @@ namespace Jet
 			unsigned int line;
 		};
 		std::vector<DebugInfo> debuginfo;
+		std::vector<std::string> debuglocal;//add local variable debug info
 	};
 
-	struct Closure;
-
+	
+	struct Capture;
 	struct Generator;
-
 	struct Closure
 	{
 		bool mark;
@@ -160,18 +162,13 @@ namespace Jet
 		Jet::ValueType type : 8;
 		unsigned char refcount;
 
-		bool closed;//marks if the closure has gone out of its parent scope and was closed
 		unsigned char numupvals;
 
 		Function* prototype;
 		Generator* generator;
 
-		union
-		{
-			Value* cupvals;//captured values used while closed
-			Value** upvals;//captured values used while not closed
-		};
-
+		Capture** upvals;
+	
 		Closure* prev;//parent closure
 	};
 
@@ -191,6 +188,9 @@ namespace Jet
 					JetObject* _object;
 					JetArray* _array;
 					JetUserdata* _userdata;
+					Closure* _function;//jet function
+					//DO NOT USE ME
+					Capture* _capture;
 				};
 				union
 				{
@@ -198,7 +198,6 @@ namespace Jet
 				};
 			};
 
-			Closure* _function;//jet function
 			JetNativeFunc func;//native func
 		};
 
@@ -207,6 +206,7 @@ namespace Jet
 		Value(JetString* str);
 		Value(JetObject* obj);
 		Value(JetArray* arr);
+		Value(Capture* cpt) { this->_capture = cpt; this->type = ValueType::Capture; }
 
 		Value(double val);
 		Value(int val);
@@ -242,7 +242,7 @@ namespace Jet
 				return (int)value;
 
 			throw RuntimeException("Cannot convert type " + (std::string)ValueTypes[(int)this->type] + " to int!");
-		};
+		}
 
 		operator double()
 		{
@@ -251,35 +251,22 @@ namespace Jet
 
 			throw RuntimeException("Cannot convert type " + (std::string)ValueTypes[(int)this->type] + " to double!");
 		}
+		
+		Value operator() (JetContext* context, Value* v = 0, int args = 0);
+		Value Call(Value* v = 0, int args = 0);//not recommended, but works for non native functions
+
+		inline bool IsGenerator()
+		{
+			if (this->type == ValueType::Function)
+				return this->_function->prototype->generator;
+			return false;
+		}
 
 		JetObject* GetPrototype();
 
 		//reference counting stuff
 		void AddRef();
 		void Release();
-
-		/*template<typename First, typename... Types>
-		Value operator() (First f, Types... args)
-		{
-		print("hi");
-		//this->CallHelper(args...);
-		}*/
-		/*template<typename First, typename Second>
-		Value operator() (JetContext* context, First first, First second)
-		{
-
-		}
-
-		template<typename First>
-		Value operator() (JetContext* context, First first)
-		{
-
-		}
-
-		Value operator() (JetContext* context)
-		{
-
-		}*/
 
 		/*template<typename First>
 		Value operator() (First f)
@@ -340,6 +327,22 @@ namespace Jet
 		friend class JetContext;
 	};
 
+	struct Capture
+	{
+		//garbage collector header
+		bool mark;
+		bool grey;
+		Jet::ValueType type : 8;
+		unsigned char refcount;
+
+		Value* v;//points to self when closed, or stack when open
+		Value value;
+		bool closed;
+
+		//debug info
+		int usecount;
+		Closure* owner;
+	};
 
 	struct ObjNode
 	{
@@ -417,7 +420,7 @@ namespace Jet
 	class JetObject
 	{
 		friend class ObjIterator<Value>;
-		friend class Value;
+		friend struct Value;
 		friend class GarbageCollector;
 		friend class JetContext;
 
@@ -452,6 +455,18 @@ namespace Jet
 			return Iterator(this, node);
 		}
 
+		//this are faster versions used in the VM
+		Value get(const Value& key)
+		{
+			auto node = this->findNode(&key);
+			return node ? node->second : Value();
+		}
+		Value get(const char* key)
+		{
+			auto node = this->findNode(key);
+			return node ? node->second : Value();
+		}
+
 		//just looks for a node
 		ObjNode* findNode(const Value* key);
 		ObjNode* findNode(const char* key);
@@ -462,10 +477,8 @@ namespace Jet
 
 		//try not to use these in the vm
 		Value& operator [](const Value& key);
-
-		//special operator for strings to deal with insertions
-		Value& operator [](const char* key);
-
+		Value& operator [](const char* key);//special operator for strings to deal with insertions
+		
 		Iterator end()
 		{
 			return Iterator(this);
@@ -473,7 +486,7 @@ namespace Jet
 
 		Iterator begin()
 		{
-			for (int i = 0; i < this->nodecount; i++)
+			for (unsigned int i = 0; i < this->nodecount; i++)
 				if (this->nodes[i].first.type != ValueType::Null)
 					return Iterator(this, &nodes[i]);
 			return end();
@@ -554,7 +567,7 @@ namespace Jet
 			Dead,
 		};
 
-		Generator(JetContext* context, Closure* closure, int args);
+		Generator(JetContext* context, Closure* closure, unsigned int args);
 
 		void Yield(JetContext* context, unsigned int iptr);
 

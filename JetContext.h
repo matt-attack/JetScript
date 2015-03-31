@@ -31,8 +31,8 @@
 //#define JET_TIME_EXECUTION
 #endif
 
-#define GC_INTERVAL 200//number of allocations before running the GC
-#define GC_STEPS 4//number of incremental runs before a full
+#define GC_INTERVAL 2//number of allocations before running the GC
+#define GC_STEPS 4//number of g0 collections before a gen1 collection
 
 #define JET_STACK_SIZE 800
 #define JET_MAX_CALLDEPTH 400
@@ -52,8 +52,8 @@ namespace Jet
 	
 	class JetContext
 	{
-		friend class Generator;
-		friend class Value;
+		friend struct Generator;
+		friend struct Value;
 		friend class JetObject;
 		friend class GarbageCollector;
 		VMStack<Value> stack;
@@ -84,12 +84,16 @@ namespace Jet
 		GarbageCollector gc;
 		std::vector<JetObject*> prototypes;
 
+		//terrible way to implement this, fixme later
+		Closure* lastadded;
+		std::deque<Capture*> opencaptures;
+
 	public:
 		//these
 		Value NewObject();
 		Value NewArray();
 		Value NewUserdata(void* data, const Value& proto);
-		Value NewString(const char* string, bool copy = true);
+		Value NewString(const char* string, bool copy = true);//if copy is false, it takes ownership of the char array
 		 
 		//a helper function for registering metatables for userdata, these are never gc'd
 		//and are freed with the context

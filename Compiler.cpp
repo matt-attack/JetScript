@@ -50,7 +50,7 @@ CompilerContext::~CompilerContext(void)
 void CompilerContext::PrintAssembly()
 {
 	int index = 0;
-	for (int i = 0; i < this->out.size(); i++)
+	for (unsigned int i = 0; i < this->out.size(); i++)
 	{
 		auto ins = this->out[i];
 		if (ins.type == InstructionType::Function)
@@ -65,11 +65,21 @@ void CompilerContext::PrintAssembly()
 			}
 			continue;
 		}
-
-		if (ins.string)
-			printf("\n[%d]\t%-15s %-5.0lf %s", index++, Instructions[(int)ins.type], ins.second, ins.string);
+		else if (ins.type == InstructionType::Comment)
+		{
+			printf("\nLocal\t%s", ins.string);
+		}
+		else if (ins.type == InstructionType::Label)
+		{
+			printf("\nLabel\t%s", ins.string);
+		}
 		else
-			printf("\n[%d]\t%-15s %-5d %.0lf", index++, Instructions[(int)ins.type], ins.first, ins.second);
+		{
+			if (ins.string)
+				printf("\n[%d]\t%-15s %-5.0lf %s", index++, Instructions[(int)ins.type], ins.second, ins.string);
+			else
+				printf("\n[%d]\t%-15s %-5d %.0lf", index++, Instructions[(int)ins.type], ins.first, ins.second);
+		}
 
 		if (i+1 < this->out.size() && out[i+1].type == InstructionType::DebugLine)
 		{
@@ -175,8 +185,11 @@ bool CompilerContext::RegisterLocal(const std::string name)
 	LocalVariable var;
 	var.local = this->localindex++;
 	var.name = name;
-	var.capture = -1;
+	//var.capture = -1;
 	this->scope->localvars.push_back(var);
+
+	out.push_back(IntermediateInstruction(InstructionType::Comment, var.name, 0));
+
 	return true;
 }
 
@@ -285,22 +298,35 @@ void CompilerContext::FinalizeFunction(CompilerContext* c)
 	this->uuid = c->uuid + 1;
 
 	//move upvalues
+	//check all children
+	for (auto ii: this->functions)
+	{
+		for (auto& i: ii.second->captures)
+		{
+			if (i.second.uploaded == false)
+			{
+				i.second.uploaded = true;
+				//printf("closed %d %d\n", i.second.captureindex, i.second.localindex);
+				out.push_back(IntermediateInstruction(InstructionType::CInit,i.second.localindex/*ptr->localvars[i].local*/, i.second.captureindex/*ptr->localvars[i].capture*/));
+			}
+		}
+	}
+	return;
+
 	auto ptr = this->scope;
 	while (ptr)
 	{
 		//look for var in locals
 		for (unsigned int i = 0; i < ptr->localvars.size(); i++)
 		{
-			if (ptr->localvars[i].capture >= 0 && ptr->localvars[i].uploaded == false)
+			if (false)//ptr->localvars[i].capture >= 0 && ptr->localvars[i].uploaded == false)
 			{
 				//printf("We found use of a captured var: %s at level %d, index %d\n", ptr->localvars[i].second.c_str(), level, ptr->localvars[i].first);
 				//exit the loops we found it
 				ptr->localvars[i].uploaded = true;
 				//this->output += ".local " + variable + " " + ::std::to_string(i) + ";\n";
-				out.push_back(IntermediateInstruction(InstructionType::CInit,ptr->localvars[i].local, ptr->localvars[i].capture));
+				//out.push_back(IntermediateInstruction(InstructionType::CInit,ptr->localvars[i].local, ptr->localvars[i].capture));
 				//push instruction to set closure location
-				//out.push_back(IntermediateInstruction(InstructionType::LLoad, ptr->localvars[i].first, 0));//i, ptr->level));
-				//out.push_back(IntermediateInstruction(InstructionType::CStore, ptr->localvars[i].third, level));//i, ptr->level));
 			}
 		}
 		if (ptr)

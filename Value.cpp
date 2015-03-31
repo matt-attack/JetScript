@@ -14,7 +14,7 @@ using namespace Jet;
 #include <crtdbg.h>
 #endif
 
-Generator::Generator(JetContext* context, Closure* closure, int args)
+Generator::Generator(JetContext* context, Closure* closure, unsigned int args)
 {
 	state = GeneratorState::Suspended;
 	this->closure = closure;
@@ -69,7 +69,7 @@ void Generator::Yield(JetContext* context, unsigned int iptr)
 	this->lastyielded = context->stack.Peek();
 
 	//store stack
-	for (int i = 0; i < this->closure->prototype->locals; i++)
+	for (unsigned int i = 0; i < this->closure->prototype->locals; i++)
 		this->stack[i] = context->sptr[i];
 }
 
@@ -83,7 +83,7 @@ unsigned int Generator::Resume(JetContext* context)
 	this->state = GeneratorState::Running;
 
 	//restore stack
-	for (int i = 0; i < this->closure->prototype->locals; i++)
+	for (unsigned int i = 0; i < this->closure->prototype->locals; i++)
 		context->sptr[i] = this->stack[i];
 
 	if (this->curiptr == 0)
@@ -163,7 +163,7 @@ JetObject* Value::GetPrototype()
 	case ValueType::String:
 		return 0;
 	case ValueType::Userdata:
-		return this->_userdata->prototype;//prototype;
+		return this->_userdata->prototype;
 	default:
 		return 0;
 	}
@@ -220,7 +220,7 @@ void Value::Release()
 			JetContext* context = this->_object->context;
 			if (context->gc.nativeRefs.size() > 1)
 			{
-				for (int i = 0; i < context->gc.nativeRefs.size(); i++)
+				for (unsigned int i = 0; i < context->gc.nativeRefs.size(); i++)
 				{
 					if (context->gc.nativeRefs[i] == *this)
 					{
@@ -245,7 +245,7 @@ void Value::Release()
 			JetContext* context = this->_function->prototype->context;
 			if (context->gc.nativeRefs.size() > 1)
 			{
-				for (int i = 0; i < context->gc.nativeRefs.size(); i++)
+				for (unsigned int i = 0; i < context->gc.nativeRefs.size(); i++)
 				{
 					if (context->gc.nativeRefs[i] == *this)
 					{
@@ -270,7 +270,7 @@ std::string Value::ToString(int depth) const
 	case ValueType::String:
 		return this->_string->data;
 	case ValueType::Function:
-		return "[Function "+this->_function->prototype->name+"]";
+		return "[Function "+this->_function->prototype->name+" " + std::to_string((unsigned int)this->_function)+"]";
 	case ValueType::NativeFunction:
 		return "[NativeFunction "+std::to_string((unsigned int)this->func)+"]";
 	case ValueType::Array:
@@ -415,6 +415,25 @@ bool Value::TryCallMetamethod(const char* name, const Value* iargs, int numargs,
 	return false;
 }
 
+Value Value::operator()(JetContext* context, Value* v, int args)
+{
+	return context->Call(this, v, args);
+}
+
+Value Value::Call(Value* v, int args)
+{
+	if (this->type == ValueType::Function)
+	{
+		return this->_function->prototype->context->Call(this, v, args);
+	}
+	else if (this->type == ValueType::NativeFunction)
+	{
+		throw RuntimeException("Not implemented!");
+	}
+
+	throw RuntimeException("Cannot call non function!");
+}
+
 bool Value::operator== (const Value& other) const
 {
 	if (other.type != this->type)
@@ -446,13 +465,9 @@ Value& Value::operator[] (int key)
 	switch (type)
 	{
 	case ValueType::Array:
-		{
-			return this->_array->data[key];
-		}
+		return this->_array->data[key];
 	case ValueType::Object:
-		{
-			return (*this->_object)[key];
-		}
+		return (*this->_object)[key];
 	default:
 		throw RuntimeException("Cannot index type " + (std::string)ValueTypes[(int)this->type]);
 	}

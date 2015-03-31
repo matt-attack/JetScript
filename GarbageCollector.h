@@ -22,10 +22,8 @@ namespace Jet
 	class GarbageCollector
 	{
 		friend class JetObject;
-		friend class Value;
-		//finish moving stuff over to me
+		friend struct Value;
 		//must free with GCFree, pointer is a bit offset to leave room for the flag
-
 
 		/*template<class T> 
 		T* GCAllocate2(unsigned int size)
@@ -65,27 +63,21 @@ namespace Jet
 	public:
 		//garbage collector stuff
 		//need to unify everything except userdata
-		//std::vector<JetArray*> arrays;
-		//std::vector<JetObject*> objects;
-		//std::vector<JetString*> strings;
-		//std::vector<Closure*> closures;
-		//std::vector<JetUserdata*> userdata;
-
 		struct gcval
 		{
 			bool mark;
 			bool grey;
 			Jet::ValueType type : 8;
-			unsigned char refcount;//used for native functions
-			//void* ptr;
+			unsigned char refcount;
 		};
 		std::vector<gcval*> gen1;
 		std::vector<gcval*> gen2;
+		//std::vector<gcval*> gen3;basically permanent objects, todo
 
 		std::vector<Value> nativeRefs;//a list of all objects stored natively to mark
 
 		int allocationCounter;//used to determine when to run the GC
-		int collectionCounter;
+		int collectionCounter;//state of the gc
 		VMStack<Value> greys;//stack of grey objects for processing
 
 		GarbageCollector(JetContext* context);
@@ -104,7 +96,6 @@ namespace Jet
 			T* buf = new T;
 #undef new
 			this->gen1.push_back((gcval*)buf);
-			//this->gcObjects.push_back(buf);
 			//new (buf) T();
 			return (T*)(buf);
 
@@ -124,7 +115,6 @@ namespace Jet
 			T* buf = new T(arg1);
 #undef new
 			this->gen1.push_back((gcval*)buf);
-			//this->gcObjects.push_back(buf);
 			//new (buf) T(arg1);
 			return (T*)(buf);
 
@@ -144,7 +134,6 @@ namespace Jet
 			T* buf = new T(arg1);
 #undef new
 			this->gen1.push_back((gcval*)buf);
-			//this->gcObjects.push_back(buf);
 			//new (buf) T(arg1);
 			return (T*)(buf);
 
@@ -164,7 +153,6 @@ namespace Jet
 			T* buf = new T(arg1, arg2);
 #undef new
 			this->gen1.push_back((gcval*)buf);
-			//this->gcObjects.push_back(buf);
 			//new (buf) T(arg1, arg2);
 			return (T*)(buf);
 
@@ -177,9 +165,12 @@ namespace Jet
 		}
 
 		void Run();
+
 	private:
 		void Mark();
 		void Sweep();
+
+		void Free(gcval* val);
 	};
 }
 #endif

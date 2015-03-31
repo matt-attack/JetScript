@@ -445,6 +445,7 @@
     <ClInclude Include="JetExceptions.h" />
     <ClInclude Include="JetInstructions.h" />
     <ClInclude Include="Lexer.h" />
+    <ClInclude Include="Libraries\Net.h" />
     <ClInclude Include="Parselets.h" />
     <ClInclude Include="Parser.h" />
     <ClInclude Include="stdafx.h" />

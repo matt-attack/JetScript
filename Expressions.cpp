@@ -310,7 +310,7 @@ void FunctionExpression::Compile(CompilerContext* context)
 	int start = context->out.size();
 
 	//ok push locals, in opposite order
-	for (int i = 0; i < this->args->size(); i++)
+	for (unsigned int i = 0; i < this->args->size(); i++)
 	{
 		auto aname = static_cast<NameExpression*>((*this->args)[i]);
 		function->RegisterLocal(aname->GetName());

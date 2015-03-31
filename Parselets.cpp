@@ -22,7 +22,7 @@ Expression* NameParselet::parse(Parser* parser, Token token)
 
 Expression* AssignParselet::parse(Parser* parser, Expression* left, Token token)
 {
-	Expression* right = parser->parseExpression(/*assignment prcedence -1 */);
+	Expression* right = parser->parseExpression(Precedence::ASSIGNMENT-1/*assignment prcedence -1 */);
 
 	if (dynamic_cast<IStorableExpression*>(left) == 0)
 	{
@@ -34,7 +34,7 @@ Expression* AssignParselet::parse(Parser* parser, Expression* left, Token token)
 
 Expression* OperatorAssignParselet::parse(Parser* parser, Expression* left, Token token)
 {
-	UniquePtr<Expression*> right = parser->parseExpression(/*assignment prcedence -1 */);
+	UniquePtr<Expression*> right = parser->parseExpression(Precedence::ASSIGNMENT-1/*assignment prcedence -1 */);
 
 	if (dynamic_cast<IStorableExpression*>(left) == 0)
 		throw CompilerException(parser->filename, token.line, "OperatorAssignParselet: Left hand side must be a storable location!");
@@ -44,7 +44,7 @@ Expression* OperatorAssignParselet::parse(Parser* parser, Expression* left, Toke
 
 Expression* SwapParselet::parse(Parser* parser, Expression* left, Token token)
 {
-	UniquePtr<Expression*> right = parser->parseExpression(/*assignment prcedence -1 */);
+	UniquePtr<Expression*> right = parser->parseExpression(Precedence::ASSIGNMENT-1/*assignment prcedence -1 */);
 
 	if (dynamic_cast<IStorableExpression*>(left) == 0)
 		throw CompilerException(parser->filename, token.line, "SwapParselet: Left hand side must be a storable location!");
@@ -250,7 +250,7 @@ Expression* CallParselet::parse(Parser* parser, Expression* left, Token token)
 	{
 		do
 		{
-			arguments->push_back(parser->parseExpression(1));
+			arguments->push_back(parser->parseExpression(Precedence::ASSIGNMENT));
 		}
 		while( parser->MatchAndConsume(TokenType::Comma));
 
@@ -263,7 +263,7 @@ Expression* ReturnParselet::parse(Parser* parser, Token token)
 {
 	Expression* right = 0;
 	if (parser->Match(TokenType::Semicolon) == false)
-		right = parser->parseExpression(1);
+		right = parser->parseExpression(Precedence::ASSIGNMENT);
 
 	return new ReturnExpression(token, right);
 }
@@ -285,7 +285,7 @@ Expression* LocalParselet::parse(Parser* parser, Token token)
 	UniquePtr<std::vector<Expression*>*> rights = new std::vector<Expression*>;
 	do
 	{
-		Expression* right = parser->parseExpression(/*assignment prcedence -1 */);
+		Expression* right = parser->parseExpression(Precedence::ASSIGNMENT-1/*assignment prcedence -1 */);
 
 		rights->push_back(right);
 	}
@@ -314,7 +314,7 @@ Expression* ConstParselet::parse(Parser* parser, Token token)
 	std::vector<Expression*>* rights = new std::vector<Expression*>;
 	do
 	{
-		Expression* right = parser->parseExpression(/*assignment prcedence -1 */);
+		Expression* right = parser->parseExpression(Precedence::ASSIGNMENT-1/*assignment prcedence -1 */);
 
 		rights->push_back(right);
 	}
@@ -354,7 +354,7 @@ Expression* IndexParselet::parse(Parser* parser, Expression* left, Token token)
 Expression* MemberParselet::parse(Parser* parser, Expression* left, Token token)
 {
 	//this is for const members
-	Expression* member = parser->parseExpression(9);
+	Expression* member = parser->parseExpression(Precedence::CALL);
 	UniquePtr<NameExpression*> name = dynamic_cast<NameExpression*>(member);
 	if (name == 0)
 	{
@@ -384,7 +384,7 @@ Expression* ObjectParselet::parse(Parser* parser, Token token)
 		parser->Consume(TokenType::Assign);
 
 		//parse the data;
-		Expression* e = parser->parseExpression(2);
+		Expression* e = parser->parseExpression(Precedence::LOGICAL);
 
 		inits->push_back(std::pair<std::string, Expression*>(name.text, e));
 		if (!parser->MatchAndConsume(TokenType::Comma))//is there more to parse?
@@ -398,7 +398,7 @@ Expression* YieldParselet::parse(Parser* parser, Token token)
 {
 	Expression* right = 0;
 	if (parser->Match(TokenType::Semicolon) == false)
-		right = parser->parseExpression(1);
+		right = parser->parseExpression(Precedence::ASSIGNMENT);
 
 	return new YieldExpression(token, right);
 }
@@ -407,21 +407,21 @@ Expression* InlineYieldParselet::parse(Parser* parser, Token token)
 {
 	Expression* right = 0;
 	if (parser->Match(TokenType::Semicolon) == false && parser->LookAhead().type != TokenType::RightParen)
-		right = parser->parseExpression(1);
+		right = parser->parseExpression(Precedence::ASSIGNMENT);
 
 	return new YieldExpression(token, right);
 }
 
 Expression* ResumeParselet::parse(Parser* parser, Token token)
 {
-	Expression* right = parser->parseExpression(1);
+	Expression* right = parser->parseExpression(Precedence::ASSIGNMENT);
 
 	return new ResumeExpression(token, right);
 }
 
 Expression* ResumePrefixParselet::parse(Parser* parser, Token token)
 {
-	Expression* right = parser->parseExpression(1);
+	Expression* right = parser->parseExpression(Precedence::ASSIGNMENT);
 
 	return new ResumeExpression(token, right);
 }

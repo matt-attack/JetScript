@@ -34,7 +34,7 @@ namespace Jet
 		virtual ~Expression()
 		{
 
-		};
+		}
 
 		Expression* Parent;
 		virtual void SetParent(Expression* parent)
@@ -155,6 +155,13 @@ namespace Jet
 
 			delete this->_right;
 			delete this->_names;
+		}
+
+		virtual void SetParent(Expression* parent)
+		{
+			this->Parent = parent;
+			for (auto ii: *_right)
+				ii->SetParent(this);
 		}
 
 		void Compile(CompilerContext* context);
@@ -892,6 +899,8 @@ namespace Jet
 		void SetParent(Expression* parent)
 		{
 			this->Parent = parent;
+			if (right)
+				right->SetParent(this);
 		}
 
 		void Compile(CompilerContext* context)
@@ -922,6 +931,8 @@ namespace Jet
 		void SetParent(Expression* parent)
 		{
 			this->Parent = parent;
+			if (right)
+				right->SetParent(this);
 		}
 
 		void Compile(CompilerContext* context)

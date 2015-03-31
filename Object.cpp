@@ -13,15 +13,17 @@ using namespace Jet;
 #include <crtdbg.h>
 #endif
 
-size_t stringhash(const char* p)
+size_t stringhash(const char* str)
 {
-	//fix this
-	size_t tot = *p;
-	while (*(p++))
-	{
-		tot += *p;
-	}
-	return tot;
+	/*size_t hash = *str;
+	while (*(str++))
+	hash += *str;*/
+
+	size_t hash = 5381;
+	char c;
+	while (c = *str++)
+		hash = ((hash << 5) + hash) + c;
+	return hash;
 }
 
 JetObject::JetObject(JetContext* jcontext)
@@ -49,17 +51,18 @@ std::size_t JetObject::key(const Value* v) const
 	case ValueType::Null:
 		return 0;
 	case ValueType::Array:
-	case ValueType::NativeFunction:
+	case ValueType::Userdata:
+	case ValueType::Function:
 	case ValueType::Object:
 		return (size_t)v->_array;
 	case ValueType::Number:
-		return v->value;
+		return (size_t)v->value;
 	case ValueType::String:
 		return stringhash(v->_string->data);
-	case ValueType::Function:
-		return (size_t)v->_function;
+	case ValueType::NativeFunction:
+		return (size_t)v->func;
 	}
-};
+}
 
 //just looks for a node
 ObjNode* JetObject::findNode(const Value* key)
@@ -95,8 +98,6 @@ ObjNode* JetObject::findNode(const char* key)
 	}	
 	return 0;
 }
-
-//fix strings being garbage collected wrongly
 
 //finds node for key or creates one if doesnt exist
 ObjNode* JetObject::getNode(const Value* key)
@@ -235,7 +236,7 @@ ObjNode* JetObject::getNode(const char* key)
 
 ObjNode* JetObject::getFreePosition()
 {
-	for (int i = 0; i < this->nodecount; i++)
+	for (unsigned int i = 0; i < this->nodecount; i++)
 	{
 		if (this->nodes[i].first.type == ValueType::Null)
 			return &this->nodes[i];
@@ -251,7 +252,7 @@ void JetObject::resize()
 	auto osize = this->nodecount;
 	this->nodecount *= 2;
 	this->Size = 0;//cheat
-	for (int i = 0; i < osize; i++)
+	for (unsigned int i = 0; i < osize; i++)
 	{
 		//reinsert into hashtable
 		ObjNode* n = &t[i];
@@ -302,7 +303,7 @@ Value& JetObject::operator [](const char* key)
 void JetObject::DebugPrint()
 {
 	printf("JetObject Changed:\n");
-	for (int i = 0; i < this->nodecount; i++)
+	for (unsigned int i = 0; i < this->nodecount; i++)
 	{
 		auto k = this->nodes[i].first.ToString();
 		auto v = this->nodes[i].second.ToString();
@@ -316,7 +317,7 @@ void JetObject::Barrier()
 	if (this->mark)
 	{
 		//reset to grey and push back for reprocessing
-		//printf("write barrier triggered!\n");
+		//printf("object write barrier triggered!\n");
 		this->mark = false;
 		this->context->gc.greys.Push(this);//push to grey stack
 	}

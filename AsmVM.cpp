@@ -103,20 +103,20 @@ int main(int argc, char* argv[])
 		}
 	}
 	/*{
-		std::ifstream t("coroutines.txt", std::ios::in | std::ios::binary);
-		int length;
-		t.seekg(0, std::ios::end);    // go to the end
-		length = t.tellg();           // report location (this is the length)
-		t.seekg(0, std::ios::beg);    // go back to the beginning
-		char* buffer = new char[length];    // allocate memory for a buffer of appropriate dimension
-		t.read(buffer, length);       // read the whole file into the buffer
-		buffer[length] = 0;
-		t.close();
-		for (int i = 0; i < 10000; i++)
-		{
-			context.Script(buffer, "coroutines.txt");
-		}
-		delete[] buffer;
+	std::ifstream t("coroutines.txt", std::ios::in | std::ios::binary);
+	int length;
+	t.seekg(0, std::ios::end);    // go to the end
+	length = t.tellg();           // report location (this is the length)
+	t.seekg(0, std::ios::beg);    // go back to the beginning
+	char* buffer = new char[length];    // allocate memory for a buffer of appropriate dimension
+	t.read(buffer, length);       // read the whole file into the buffer
+	buffer[length] = 0;
+	t.close();
+	for (int i = 0; i < 10000; i++)
+	{
+	context.Script(buffer, "coroutines.txt");
+	}
+	delete[] buffer;
 	}*/
 	//_crtBreakAlloc = 22970;
 	while (true)
@@ -138,7 +138,7 @@ int main(int argc, char* argv[])
 				if (t)
 				{
 					t.seekg(0, std::ios::end);    // go to the end
-					int length = t.tellg();           // report location (this is the length)
+					std::streamoff length = t.tellg();           // report location (this is the length)
 					t.seekg(0, std::ios::beg);    // go back to the beginning
 					buffer = new char[length+1];    // allocate memory for a buffer of appropriate dimension
 					t.read(buffer, length);       // read the whole file into the buffer
@@ -167,12 +167,13 @@ int main(int argc, char* argv[])
 		}
 		else if (strcmp(command2, "test") == 0 && arg[0] == 0)
 		{
+			//add a bunch of garbage collector test cases
 			try
 			{
-				JetContext context;//create new context for this
+				JetContext tcontext;//create new context for this
 				printf("Running tests....\n");
 				//make me into a test for unary operators
-				context["effect_move"] = [](JetContext* context, Value* arguments, int nargs)
+				tcontext["effect_move"] = [](JetContext* context, Value* arguments, int nargs)
 				{
 					Jet::Value a = arguments[0];   // Number , -100 <- Lost string value
 					Jet::Value b = arguments[1];   // Number , -100
@@ -180,11 +181,11 @@ int main(int argc, char* argv[])
 					Jet::Value d = arguments[3];   // Number , 6
 					return Value();
 				};
-				context.Script("effect_move(\"hi\", -100, 120, 6);");
+				tcontext.Script("effect_move(\"hi\", -100, 120, 6);");
 
 				try
 				{
-					Value ret = context.Script(
+					Value ret = tcontext.Script(
 						"fail = 0;"
 						"if (++5 != 6) fail = 1;"
 						"if (5++ != 5) fail = 1;"
@@ -197,10 +198,10 @@ int main(int argc, char* argv[])
 					if ((int)ret != -3)
 						throw 7;
 
-					if ((int)context["y"] != -5)
+					if ((int)tcontext["y"] != -5)
 						throw 7;
 
-					if ((int)context["fail"] != 1)
+					if ((int)tcontext["fail"] != 1)
 						throw 7;
 				}
 				catch (...)
@@ -210,9 +211,9 @@ int main(int argc, char* argv[])
 
 				try
 				{
-					context.Script("fun main(dt, f2, a3) { print(dt); return dt; } ");
+					tcontext.Script("fun main(dt, f2, a3) { print(dt); return dt; } ");
 					Value va = 52;
-					auto out = context.Call("main", &va, 1);
+					auto out = tcontext.Call("main", &va, 1);
 					if ((int)out != 52)
 						throw 7;
 				}
@@ -223,7 +224,31 @@ int main(int argc, char* argv[])
 
 				try
 				{
-					Value out = context.Script("x = { _call = fun(x,y,z) { return z; }};"
+					tcontext.Script("fun struct(aa,bb) {"
+						"local x = fun (a,b) {"
+						"local value = {};"
+						"value[aa] = a;"
+						"value[bb] = b;"
+						"return value;"
+						"};"
+						"return x;"
+						"}"
+
+						"Point = struct(\"x\", \"y\");"
+						"local p1 = Point(1, 2);"
+						"print(p1.x, p1.y);"
+						"local p2 = Point(10, 20);"
+						"print(p2.x, p2.y);"
+						);
+				}
+				catch(...)
+				{
+					throw RuntimeException("A General Test Failed!");
+				}
+
+				try
+				{
+					Value out = tcontext.Script("x = { _call = fun(x,y,z) { return z; }};"
 						"y = {}; setprototype(y,x); return y(1,2,3);");
 
 					if ((int)out != 3)
@@ -235,13 +260,13 @@ int main(int argc, char* argv[])
 				}
 
 				//test reading and setting vars
-				context["x"] = 52;
-				int vp = context["x"];
+				tcontext["x"] = 52;
+				int vp = tcontext["x"];
 				if (vp != 52)
 					throw CompilerException("", 0, "getting/setting var test failed\n");
 
-				context.Set("x", 56);
-				if ((int)context.Get("x") != 56)
+				tcontext.Set("x", 56);
+				if ((int)tcontext.Get("x") != 56)
 					throw CompilerException("", 0, "explicit getting/setting var test failed\n");
 
 				//recursive calling checks
@@ -250,28 +275,28 @@ int main(int argc, char* argv[])
 					return context->Call("h");
 				};
 
-				context["inception"] = Value(f);
-				context.Script("fun h() { return 7; } inception(); print(\"hi im still alive\"); print(inception());");
+				tcontext["inception"] = Value(f);
+				tcontext.Script("fun h() { return 7; } inception(); print(\"hi im still alive\"); print(inception());");
 
 				//this should not crash or leave anything on the callstack
 				//context.Script("fun h() { return p[7]; } inception(); print(\"hi im still alive\");");
 
 
-				Value v = context.Script("if (5 >= 5) return \"ok\"; else return \"not ok\";", "Test 1");
+				Value v = tcontext.Script("if (5 >= 5) return \"ok\"; else return \"not ok\";", "Test 1");
 				//if test
-				v = context.Script("if (0) return 5; else if (2) return 6; else return 7;");
+				v = tcontext.Script("if (0) return 5; else if (2) return 6; else return 7;");
 				if ((double)v != 6.0f)
 				{
 					printf("If Statement Test Failed!\n");
 				}
 
 				//native function test
-				context["ih"] = Value([](JetContext* context, Value* args, int numargs) 
+				tcontext["ih"] = Value([](JetContext* context, Value* args, int numargs) 
 				{ 
 					return args[0];
 				});
 
-				if ((v = context.Script("return ih(\"test\");")).ToString() != "test")
+				if ((v = tcontext.Script("return ih(\"test\");")).ToString() != "test")
 				{
 					printf("Native Function Test Failed!\n");
 				}
@@ -280,7 +305,7 @@ int main(int argc, char* argv[])
 				//test meta tables and userdata
 				try
 				{
-					ValueRef meta = context.NewPrototype("Test");//ok, lets give me a type
+					ValueRef meta = tcontext.NewPrototype("Test");//ok, lets give me a type
 					meta["t1"] = [](JetContext* context, Value* v, int args)
 					{
 						printf("hi from metatable\n");
@@ -296,13 +321,13 @@ int main(int argc, char* argv[])
 					{
 						return Value();
 					};
-					context["mttest"] = context.NewUserdata(0, meta);
-					auto out = context.Script("mttest.t1();\n"
+					tcontext["mttest"] = tcontext.NewUserdata(0, meta);
+					auto out = tcontext.Script("mttest.t1();\n"
 						"getprototype(mttest).t3 = fun() { print(\"hi from t3\n\");}; mttest.t3(); return mttest.t2();");
 					if ((double)out != 7.0)
 						throw 7;
 
-					ValueRef t2 = context.NewPrototype("hi");
+					ValueRef t2 = tcontext.NewPrototype("hi");
 				}
 				catch(...)
 				{
@@ -312,24 +337,28 @@ int main(int argc, char* argv[])
 				//loop test
 				try
 				{
-					context.Script("x = [1,2,3,4,5];"
+					tcontext.Script("x = [1,2,3,4,5];"
 						"z = [];"
 						"for (local i in x)"
 						"	z:add(i);");
-					if ((int)context["z"][0] != 1)
+					if ((int)tcontext["z"][0] != 1)
 						throw 7;
-					if ((int)context["z"][4] != 5)
+					if ((int)tcontext["z"][4] != 5)
 						throw 7;
 
-					context.Script("x = {a=1,b=2,c=3,d=4,e=5};"
+					tcontext.Script("x = {a=1,b=2,c=3,d=4,e=5};"
 						"z = [];"
 						"print(x);"
 						"for (local i in x) {"
 						" print(i);"
 						"	z:add(i); }");
-					if ((int)context["z"][0] != 1)
+					if ((int)tcontext["x"]["a"] != 1)
 						throw 7;
-					if ((int)context["z"][4] != 5)
+					if ((int)tcontext["x"]["e"] != 5)
+						throw 7;
+
+					auto v = tcontext["z"][0];
+					if (v == Value())
 						throw 7;
 				}
 				catch(RuntimeException e)
@@ -341,11 +370,37 @@ int main(int argc, char* argv[])
 					throw CompilerException("", 0, "Loop test failed!\n");
 				}
 
+				//closure test
+				try
+				{
+					Value result = tcontext.Script(
+						"fun startAt(x) {"
+						"return fun (y) { print(x,y); x += y; return x; };"
+						"}"
+						"local counter = startAt(1);"
+						"counter(10);"
+						"return counter(2);");
+					if ((int)result != 13)
+						throw 7;
+				}
+				catch(RuntimeException e)
+				{
+					throw CompilerException("", 0, "Closure test failed!\n");
+				}
+				catch (CompilerException e)
+				{
+					throw e;
+				}
+				catch(...)
+				{
+					throw CompilerException("", 0, "Closure test failed!\n");
+				}
+
 				//== operator test
 				try
 				{
-					context.Script("fun h(v) { return v == null; } x = h(1==1);");
-					if ((double)context["x"] != 0.0f)
+					tcontext.Script("fun h(v) { return v == null; } x = h(1==1);");
+					if ((double)tcontext["x"] != 0.0f)
 					{
 						throw 7;
 					}
@@ -355,14 +410,14 @@ int main(int argc, char* argv[])
 					throw CompilerException("", 0, "== operator precedence test failed\n");
 				}
 
-				context.Script("apples = {};", "Test 2");
-				context.Script("while(1) { print(\"this should print\"); break; print(\"this should not print\"); continue; } ", "Test 3");
-				context.Script("test = [5,6,7,6,\"hello\"]; return 1;", "Test 4");
-				context.Script("local apple = {}; gc(); global = apple; global[\"test\"] = 7; return 2;", "Test 5");
-				context.Script("fun hi() { local z = 2; z++; x++; fun test(a,b,x) { return a+b+x;} test(); while (true) { h = 2; } ap = \"test\"; } return 7;", "Test 6");
-				context.Script("for (i = 0; i < 10; i++) { for (j = 0; j < 2; j++) h = 7; } apple = fun(x,y) { return x+y;}; return apple(1,2);", "Test 7");
-				context.Script("y = 0; if (x) y++; else y--;", "Test 8");
-				context.Script("apples = {hi = 2, apple = 3, twenty = 4}; apples.two = 7; apples[\"hello\"] = \"testing\"; apples.a7 = 6; print(apples.a7); return 4;", "Test 9");
+				tcontext.Script("apples = {};", "Test 2");
+				tcontext.Script("while(1) { print(\"this should print\"); break; print(\"this should not print\"); continue; } ", "Test 3");
+				tcontext.Script("test = [5,6,7,6,\"hello\"]; return 1;", "Test 4");
+				tcontext.Script("local apple = {}; gc(); global = apple; global[\"test\"] = 7; return 2;", "Test 5");
+				tcontext.Script("fun hi() { local z = 2; z++; x++; fun test(a,b,x) { return a+b+x;} test(); while (true) { h = 2; } ap = \"test\"; } return 7;", "Test 6");
+				tcontext.Script("for (i = 0; i < 10; i++) { for (j = 0; j < 2; j++) h = 7; } apple = fun(x,y) { return x+y;}; return apple(1,2);", "Test 7");
+				tcontext.Script("y = 0; if (x) y++; else y--;", "Test 8");
+				tcontext.Script("apples = {hi = 2, apple = 3, twenty = 4}; apples.two = 7; apples[\"hello\"] = \"testing\"; apples.a7 = 6; print(apples.a7); return 4;", "Test 9");
 
 				//context.RunGC();
 				//context["hi"]("hi", "apples", 1);

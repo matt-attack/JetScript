@@ -3,7 +3,9 @@
 
 An easy to integrate scripting language written in C++.
 
-[Try Jet!](http://subopti.ml/)
+See the wiki for more detailed info!
+
+[Try Jet!](https://dl.dropboxusercontent.com/u/31914262/jet_testbox/jet_test.html)
 
 ### Example
 ```cpp

@@ -44,7 +44,7 @@ namespace Jet
 			};
 		};
 
-		IntermediateInstruction(InstructionType type, const char* string, double num = 0)
+		IntermediateInstruction(InstructionType type, const char* string, int num = 0)
 		{
 			if (string)
 			{
@@ -70,7 +70,7 @@ namespace Jet
 			this->second = num;
 		}
 
-		IntermediateInstruction(InstructionType type, double num = 0, double num2 = 0)
+		IntermediateInstruction(InstructionType type, int num = 0, double num2 = 0)
 		{
 			this->type = type;
 			this->first = num;
@@ -104,6 +104,7 @@ namespace Jet
 		{
 			std::string Break;
 			std::string Continue;
+			int locals;//local index at which loop starts
 		};
 		std::vector<LoopInfo> loops;
 
@@ -112,7 +113,7 @@ namespace Jet
 			LocalVariable() { this->uploaded = false; }
 			int local;
 			std::string name;
-			int capture;
+			//int capture;
 			bool uploaded;
 		};
 
@@ -203,21 +204,32 @@ namespace Jet
 			LoopInfo i;
 			i.Break = Break;
 			i.Continue = Continue;
+			i.locals = this->localindex;
 			loops.push_back(i);
 		}
 
 		void PopLoop()
 		{
+			//close ALL variables
 			//do a close if necessary
-			/*for (auto& ii : this->scope->localvars)
+			//whoops, need to have this in the blocks, not here
+			/*bool found = false;
+			for (auto& ii : this->scope->localvars)
 			{
-			if (ii.capture >= 0)
-			{
-			out.push_back(IntermediateInstruction(InstructionType::CInit,ii.local, ii.capture));
-			out.push_back(IntermediateInstruction(InstructionType::Close));
-			ii.uploaded = true;
-			}
+				if (ii.capture >= 0)
+				{
+					if (ii.uploaded == false)
+					{
+						out.push_back(IntermediateInstruction(InstructionType::CInit,ii.local, ii.capture));
+						ii.uploaded = true;
+					}
+					found = true;
+				}
 			}*/
+			//close all closures in the loop
+			//if (found)
+			out.push_back(IntermediateInstruction(InstructionType::Close, loops.back().locals));
+
 			loops.pop_back();
 		}
 
@@ -240,11 +252,11 @@ namespace Jet
 			/*int lpos = 0;
 			for (unsigned int i = 0; i < this->scope->localvars.size(); i++)
 			{
-				if (this->scope->localvars[i].name == dest)
-				{
-					lpos = this->scope->localvars[i].local;
-					break;
-				}
+			if (this->scope->localvars[i].name == dest)
+			{
+			lpos = this->scope->localvars[i].local;
+			break;
+			}
 			}
 			IntermediateInstruction inst(InstructionType::ForEach);
 			inst.second = lpos;
@@ -283,7 +295,7 @@ namespace Jet
 		}
 		void Number(double value)
 		{
-			out.push_back(IntermediateInstruction(InstructionType::LdNum, (double)0, value));
+			out.push_back(IntermediateInstruction(InstructionType::LdNum, 0, value));
 		}
 
 		void String(std::string string)
@@ -305,7 +317,7 @@ namespace Jet
 		void JumpFalsePeek(const char* pos)
 		{
 			out.push_back(IntermediateInstruction(InstructionType::JumpFalsePeek, pos));
-		
+
 		}
 
 		void JumpTruePeek(const char* pos)
@@ -323,6 +335,18 @@ namespace Jet
 			out.push_back(IntermediateInstruction(InstructionType::Label, name));
 		}
 
+		struct Capture
+		{
+			int localindex;
+			int level;
+			int captureindex;
+			bool uploaded;
+			Capture() {}
+
+			Capture(int l, int li, int ci) : localindex(li), level(l), captureindex(ci) {uploaded = false;}
+		};
+		std::map<std::string, Capture> captures;
+		//std::vector<std::pair<std::string, int>> captures;
 		void Store(const std::string variable)
 		{
 			//look up if I am a local or global
@@ -341,13 +365,13 @@ namespace Jet
 						return;
 					}
 				}
-				if (ptr)
-					ptr = ptr->previous;
+				ptr = ptr->previous;
 			}
 
-			int level = -1;
+			int level = 0;
 			auto cur = this->parent;
-			while(cur)//if (this->parent)
+			auto prev = this;
+			while(cur)
 			{
 				ptr = cur->scope;
 				while (ptr)
@@ -360,17 +384,22 @@ namespace Jet
 							//printf("We found storing of a captured var: %s at level %d, index %d\n", variable.c_str(), level, ptr->localvars[i].first);
 							//exit the loops we found it
 							//this->output += ".local " + variable + " " + ::std::to_string(i) + ";\n";
-							if (ptr->localvars[i].capture == -1)
-								ptr->localvars[i].capture = cur->closures++;
+							auto cpt = prev->captures.find(ptr->localvars[i].name);
+							if (cpt == prev->captures.end())//ptr->localvars[i].capture == -1)
+							{
+								//ptr->localvars[i].capture = prev->closures++;
+								prev->captures[ptr->localvars[i].name] = Capture(level, ptr->localvars[i].local, prev->closures++);
+								cpt = prev->captures.find(ptr->localvars[i].name);
+							}
 
-							out.push_back(IntermediateInstruction(InstructionType::CStore, ptr->localvars[i].capture, level));//i, ptr->level));
+							out.push_back(IntermediateInstruction(InstructionType::CStore, cpt->second.captureindex /*ptr->localvars[i].capture*/, level));//i, ptr->level));
 							return;
 						}
 					}
-					if (ptr)
-						ptr = ptr->previous;
+					ptr = ptr->previous;
 				}
 				level--;
+				prev = cur;
 				cur = cur->parent;
 			}
 			out.push_back(IntermediateInstruction(InstructionType::Store, variable));
@@ -401,13 +430,13 @@ namespace Jet
 						return;
 					}
 				}
-				if (ptr)
-					ptr = ptr->previous;
+				ptr = ptr->previous;
 			}
 
-			int level = -1;
+			int level = 0;
 			auto cur = this->parent;
-			while(cur)//if (this->parent)
+			auto prev = this;
+			while(cur)
 			{
 				ptr = cur->scope;
 				while (ptr)
@@ -421,17 +450,24 @@ namespace Jet
 							//exit the loops we found it
 							//comment/debug info
 							//this->output += ".local " + variable + " " + ::std::to_string(i) + ";\n";
-							if (ptr->localvars[i].capture == -1)
-								ptr->localvars[i].capture = cur->closures++;
-
-							out.push_back(IntermediateInstruction(InstructionType::CLoad, ptr->localvars[i].capture, level));//i, ptr->level));
+							//if (ptr->localvars[i].capture == -1)
+								//ptr->localvars[i].capture = prev->closures++;
+							auto cpt = prev->captures.find(ptr->localvars[i].name);
+							if (cpt == prev->captures.end())//ptr->localvars[i].capture == -1)
+							{
+								//ptr->localvars[i].capture = prev->closures++;
+								prev->captures[ptr->localvars[i].name] = Capture(level, ptr->localvars[i].local, prev->closures++);
+								cpt = prev->captures.find(ptr->localvars[i].name);
+							}
+							//store these indexes in me, not the origin function
+							out.push_back(IntermediateInstruction(InstructionType::CLoad, cpt->second.captureindex/*ptr->localvars[i].capture*/, level));//i, ptr->level));
 							return;
 						}
 					}
-					if (ptr)
-						ptr = ptr->previous;
+					ptr = ptr->previous;
 				}
 				level--;
+				prev = cur;
 				cur = cur->parent;
 			}
 			out.push_back(IntermediateInstruction(InstructionType::Load, variable));
@@ -522,8 +558,8 @@ namespace Jet
 
 		void Return()
 		{
-			if (this->closures > 0)//close all open closures
-				out.push_back(IntermediateInstruction(InstructionType::Close));
+			//if (this->closures > 0)//close all open closures
+			out.push_back(IntermediateInstruction(InstructionType::Close));
 			out.push_back(IntermediateInstruction(InstructionType::Return));
 		}
 

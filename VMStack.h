@@ -60,7 +60,7 @@ namespace Jet
 			return mem[--_size];
 		}
 
-		void QuickPop(int times = 1)
+		void QuickPop(unsigned int times = 1)
 		{
 			if (this->_size < times)
 				throw RuntimeException("Tried to pop empty stack!");

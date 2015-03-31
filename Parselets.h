@@ -39,6 +39,7 @@ namespace Jet
 	class PrefixParselet
 	{
 	public:
+		virtual ~PrefixParselet() {};
 		virtual Expression* parse(Parser* parser, Token token) = 0;
 	};
 
@@ -115,9 +116,11 @@ namespace Jet
 			return precedence;
 		}
 	};
+
 	class InfixParselet
 	{
 	public:
+		virtual ~InfixParselet() {};
 		virtual Expression* parse(Parser* parser, Expression* left, Token token) = 0;
 
 		virtual int getPrecedence() = 0;
@@ -236,7 +239,8 @@ namespace Jet
 	{
 	public:
 		bool TrailingSemicolon;
-
+		StatementParselet() { TrailingSemicolon = false;}
+		virtual ~StatementParselet() {};
 		virtual Expression* parse(Parser* parser, Token token) = 0;
 	};
 
@@ -349,6 +353,10 @@ namespace Jet
 	class YieldParselet: public StatementParselet
 	{
 	public:
+		YieldParselet()
+		{
+			this->TrailingSemicolon = true;
+		}
 		Expression* parse(Parser* parser, Token token);
 	};
 
