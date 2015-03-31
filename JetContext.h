@@ -8,7 +8,7 @@
 #endif
 
 #define _CRTDBG_MAP_ALLOC
-#define _CRTDBG_MAP_ALLOC_NEW
+//#define _CRTDBG_MAP_ALLOC_NEW
 #include <crtdbg.h>
 #endif
 

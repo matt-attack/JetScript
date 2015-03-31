@@ -82,7 +82,7 @@ void GarbageCollector::Cleanup()
 			break;
 		case ValueType::Array:
 			((JetArray*)ii)->data.~vector();
-			delete[] (char*)ii;// ((JetArray*)ii)->data.~vector;
+			delete[] (char*)ii;
 			break;
 		case ValueType::Userdata:
 			//did in first pass
@@ -178,7 +178,7 @@ void GarbageCollector::Mark()
 	{
 		//StackProfile profile("Mark Globals as Grey");
 		for (unsigned int i = 0; i < context->vars.size(); i++)
-		{//ok so function was here and second generation, this indicates that not all children are getting updated
+		{
 			if (context->vars[i].type > ValueType::NativeFunction)
 			{
 				if (context->vars[i]._object->grey == false)
@@ -319,11 +319,13 @@ void GarbageCollector::Mark()
 
 					break;
 				}
+#ifdef _DEBUG
 			case ValueType::Capture:
 				{
 					throw RuntimeException("There should not be an upvalue in the grey loop");
 					break;
 				}
+#endif
 			case ValueType::Function:
 				{
 					obj._function->mark = true;
@@ -559,9 +561,8 @@ void GarbageCollector::Free(gcval* ii)
 		}
 	case ValueType::Capture:
 		{
-			//perhaps these are holding references to the functions and being a circular issue, run test for a while to debug
 			Capture* uv = (Capture*)ii;
-			delete uv;// we have a capture getting deleted that shouldnt
+			delete uv;
 			//printf("Freeing capture!\n");
 			break;
 		}

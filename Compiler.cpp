@@ -185,7 +185,6 @@ bool CompilerContext::RegisterLocal(const std::string name)
 	LocalVariable var;
 	var.local = this->localindex++;
 	var.name = name;
-	//var.capture = -1;
 	this->scope->localvars.push_back(var);
 
 	out.push_back(IntermediateInstruction(InstructionType::Comment, var.name, 0));
@@ -310,26 +309,5 @@ void CompilerContext::FinalizeFunction(CompilerContext* c)
 				out.push_back(IntermediateInstruction(InstructionType::CInit,i.second.localindex/*ptr->localvars[i].local*/, i.second.captureindex/*ptr->localvars[i].capture*/));
 			}
 		}
-	}
-	return;
-
-	auto ptr = this->scope;
-	while (ptr)
-	{
-		//look for var in locals
-		for (unsigned int i = 0; i < ptr->localvars.size(); i++)
-		{
-			if (false)//ptr->localvars[i].capture >= 0 && ptr->localvars[i].uploaded == false)
-			{
-				//printf("We found use of a captured var: %s at level %d, index %d\n", ptr->localvars[i].second.c_str(), level, ptr->localvars[i].first);
-				//exit the loops we found it
-				ptr->localvars[i].uploaded = true;
-				//this->output += ".local " + variable + " " + ::std::to_string(i) + ";\n";
-				//out.push_back(IntermediateInstruction(InstructionType::CInit,ptr->localvars[i].local, ptr->localvars[i].capture));
-				//push instruction to set closure location
-			}
-		}
-		if (ptr)
-			ptr = ptr->previous;
 	}
 }

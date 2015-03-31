@@ -565,9 +565,16 @@ JetContext::JetContext() : gc(this), stack(500000), callstack(JET_MAX_CALLDEPTH,
 	{
 		if (args >= 1 && v->type == ValueType::Function && v->_function->prototype->generator)
 		{
-			//fix this hack, if the generator was never started, the first value returned by the for each loop is null
 			if (v->_function->generator)
-				return *v;//hack for foreach loops
+			{
+				if (v->_function->generator->lastyielded == Value() && v->_function->generator->state == Generator::GeneratorState::Suspended && v->_function->generator->curiptr == 0)
+					context->Call(v);//run it a first time to get first yielded value if we are in a foreach loop
+
+				if (v->_function->generator->state == Generator::GeneratorState::Dead)
+					return Value();
+				else
+					return *v;//hack for foreach loops
+			}
 
 			Closure* closure = new Closure;
 			closure->refcount = 0;
@@ -1203,6 +1210,7 @@ Value JetContext::Execute(int iptr, Closure* frame)
 					{
 						frame->upvals[in.value]->value = stack.Pop();
 
+						//fix up this write barrier
 						//do a write barrier
 						/*if (frame->upvals[in.value]->value.type > ValueType::NativeFunction && frame->upvals[in.value]->value._object->grey == false)
 						{
@@ -1253,7 +1261,6 @@ Value JetContext::Execute(int iptr, Closure* frame)
 					//allocate and add new upvalue
 					auto frame = lastadded;
 					//first see if we already have this closure open for this variable
-					//fix me later
 					bool found = false;
 					for (auto ii: opencaptures)
 					{
@@ -1261,7 +1268,6 @@ Value JetContext::Execute(int iptr, Closure* frame)
 						{
 							//we found it
 							frame->upvals[in.value2] = ii;
-							ii->usecount++;
 							found = true;
 							//printf("Reused Capture %d %s in %s\n", in.value2, sptr[in.value].ToString().c_str(), curframe->prototype->name.c_str());
 
@@ -1281,12 +1287,14 @@ Value JetContext::Execute(int iptr, Closure* frame)
 						capture->closed = false;
 						capture->grey = capture->mark = false;
 						capture->refcount = 0;
-						capture->usecount = 1;
 						capture->type = ValueType::Capture;
 						capture->v = &sptr[in.value];
+#ifdef _DEBUG
+						capture->usecount = 1;
 						capture->owner = frame;
+#endif
 						frame->upvals[in.value2] = capture;
-						//frame->upvals[in.value2]->v = &sptr[in.value];
+
 						//printf("Initalized Capture %d %s in %s\n", in.value2, sptr[in.value].ToString().c_str(), curframe->prototype->name.c_str());
 						this->opencaptures.push_back(capture);
 
@@ -1300,17 +1308,14 @@ Value JetContext::Execute(int iptr, Closure* frame)
 							this->RunGC();
 					}
 
-
 					break;
 				}
 			case InstructionType::Close:
 				{
-					//auto cur = curframe;
 					//remove from the back
 					while (opencaptures.size() > 0)
 					{
 						auto cur = opencaptures.back();
-						//auto tmp = new Value[cur->numupvals];
 						int index = cur->v-sptr;
 						if (index < in.value)
 							break;
@@ -1321,20 +1326,6 @@ Value JetContext::Execute(int iptr, Closure* frame)
 						//printf("Closed capture with value %s\n", cur->value.ToString().c_str());
 						//printf("Closed capture %d in %d as %s\n", i, cur, cur->upvals[i]->v->ToString().c_str());
 
-						/*for (int i = 0; i < cur->numupvals; i++)
-						{
-						if (cur->upvals[i]->closed)
-						continue;
-
-						cur->upvals[i]->value = *cur->upvals[i]->v;
-						cur->upvals[i]->v = &cur->upvals[i]->value;
-						cur->upvals[i]->closed = true;
-						}
-
-						//delete[] cur->upvals;
-						cur->closed = true;
-						//cur->cupvals = tmp;*/
-						//cur->mark = true;
 						//do a write barrier
 						if (cur->value.type > ValueType::NativeFunction && cur->value._object->grey == false)
 						{
@@ -1343,26 +1334,6 @@ Value JetContext::Execute(int iptr, Closure* frame)
 						}
 						opencaptures.pop_back();
 					}
-					/*if (cur && cur->numupvals && cur->closed == false)
-					{
-					auto tmp = new Value[cur->numupvals];
-					for (int i = in.value; i < cur->numupvals; i++)
-					{
-					printf("Closed capture %d in %d as %s\n", i, cur, cur->upvals[i]->ToString().c_str());
-					tmp[i] = *cur->upvals[i];
-					}
-
-					delete[] cur->upvals;
-					cur->closed = true;
-					cur->cupvals = tmp;
-
-					//do a write barrier
-					if (cur->mark)
-					{
-					cur->mark = false;
-					this->gc.greys.Push(cur);
-					}
-					}*/
 
 					break;
 				}
@@ -1658,9 +1629,9 @@ Value JetContext::Execute(int iptr, Closure* frame)
 			//generate call stack
 			this->StackTrace(iptr, curframe);
 
-			printf("\nLocals:\n");
-			if (curframe)
+			if (curframe && curframe->prototype->locals)
 			{
+				printf("\nLocals:\n");
 				for (unsigned int i = 0; i < curframe->prototype->locals; i++)
 				{
 					Value v = this->sptr[i];
@@ -1669,7 +1640,18 @@ Value JetContext::Execute(int iptr, Closure* frame)
 				}
 			}
 
-			printf("\nVariables:\n");
+			if (curframe && curframe->prototype->upvals)
+			{
+				printf("\nCaptures:\n");
+				for (unsigned int i = 0; i < curframe->prototype->upvals; i++)
+				{
+					Value v = *curframe->upvals[i]->v;
+					if (v.type >= ValueType(0))
+						printf("%s = %s\n", curframe->prototype->debugcapture[i].c_str(), v.ToString().c_str());
+				}
+			}
+
+			printf("\nGlobals:\n");
 			for (auto ii: variables)
 			{
 				if (vars[ii.second].type != ValueType::Null)
@@ -1698,7 +1680,7 @@ Value JetContext::Execute(int iptr, Closure* frame)
 
 		this->StackTrace(iptr, curframe);
 
-		printf("\nVariables:\n");
+		printf("\Globals:\n");
 		for (auto ii: variables)
 		{
 			printf("%s = %s\n", ii.first.c_str(), vars[ii.second].ToString().c_str());
@@ -1711,7 +1693,10 @@ Value JetContext::Execute(int iptr, Closure* frame)
 		//reset the local variable stack
 		this->sptr = startlocalstack;
 
-		//need to rethrow or something
+		//rethrow the exception
+		auto exception = RuntimeException("Unknown Exception Thrown From Native!");
+		exception.processed = true;
+		throw exception;
 	}
 
 
@@ -1745,12 +1730,19 @@ Value JetContext::Execute(int iptr, Closure* frame)
 
 void JetContext::GetCode(int ptr, Closure* closure, std::string& ret, unsigned int& line)
 {
-	int imax = closure->prototype->debuginfo.size()-1;
-	int imin = 0;
+	if (closure->prototype->debuginfo.size() == 0)//make sure we have debug info
+	{
+		ret = "No Debug Line Info";
+		line = 0;
+		return;
+	}
+
+	unsigned int imax = closure->prototype->debuginfo.size()-1;
+	unsigned int imin = 0;
 	while (imax >= imin)
 	{
 		// calculate the midpoint for roughly equal partition
-		int imid = (imin+imax)/2;//midpoint(imin, imax);
+		unsigned int imid = (imin+imax)/2;//midpoint(imin, imax);
 		if(closure->prototype->debuginfo[imid].code == ptr)
 		{
 			// key found at index imid
@@ -1767,15 +1759,7 @@ void JetContext::GetCode(int ptr, Closure* closure, std::string& ret, unsigned i
 			imax = imid - 1;
 	}
 #undef min
-	int index = std::min(imin, imax);
-	if (index < 0)
-		index = 0;
-
-	if (closure->prototype->debuginfo.size() == 0)//make sure we have debug info
-	{
-		line = 1;
-		return;
-	}
+	unsigned int index = std::min(imin, imax);
 
 	ret = closure->prototype->debuginfo[index].file;
 	line = closure->prototype->debuginfo[index].line;
@@ -1819,10 +1803,8 @@ Value JetContext::Assemble(const std::vector<IntermediateInstruction>& code)
 	{
 		switch (inst.type)
 		{
+		case InstructionType::Capture:
 		case InstructionType::Comment:
-			{
-				break;
-			}
 		case InstructionType::DebugLine:
 			{
 				break;
@@ -1883,6 +1865,13 @@ Value JetContext::Assemble(const std::vector<IntermediateInstruction>& code)
 		case InstructionType::Comment:
 			{
 				current->debuglocal.push_back(inst.string);
+
+				delete[] inst.string;
+				break;
+			}
+		case InstructionType::Capture:
+			{
+				current->debugcapture.push_back(inst.string);
 
 				delete[] inst.string;
 				break;

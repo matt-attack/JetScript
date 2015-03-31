@@ -34,20 +34,20 @@ Expression* AssignParselet::parse(Parser* parser, Expression* left, Token token)
 
 Expression* OperatorAssignParselet::parse(Parser* parser, Expression* left, Token token)
 {
-	UniquePtr<Expression*> right = parser->parseExpression(Precedence::ASSIGNMENT-1/*assignment prcedence -1 */);
-
 	if (dynamic_cast<IStorableExpression*>(left) == 0)
 		throw CompilerException(parser->filename, token.line, "OperatorAssignParselet: Left hand side must be a storable location!");
 
-	return new OperatorAssignExpression(token, left, right.Release());
+	Expression* right = parser->parseExpression(Precedence::ASSIGNMENT-1/*assignment prcedence -1 */);
+
+	return new OperatorAssignExpression(token, left, right);
 }
 
 Expression* SwapParselet::parse(Parser* parser, Expression* left, Token token)
 {
-	UniquePtr<Expression*> right = parser->parseExpression(Precedence::ASSIGNMENT-1/*assignment prcedence -1 */);
-
 	if (dynamic_cast<IStorableExpression*>(left) == 0)
 		throw CompilerException(parser->filename, token.line, "SwapParselet: Left hand side must be a storable location!");
+
+	UniquePtr<Expression*> right = parser->parseExpression(Precedence::ASSIGNMENT-1/*assignment prcedence -1 */);
 
 	if (dynamic_cast<IStorableExpression*>((Expression*)right) == 0)
 		throw CompilerException(parser->filename, token.line, "SwapParselet: Right hand side must be a storable location!");
@@ -107,11 +107,11 @@ Expression* ForParselet::parse(Parser* parser, Token token)
 				parser->Consume();
 				auto name = parser->Consume();
 				parser->Consume();
-				auto container = parser->parseExpression();//Consume();
+				UniquePtr<Expression*> container = parser->parseExpression();//Consume();
 				parser->Consume(TokenType::RightParen);
 
 				auto block = new ScopeExpression(parser->parseBlock());
-				return new ForEachExpression(name, container, block);
+				return new ForEachExpression(name, container.Release(), block);
 			}
 		}
 	}
@@ -131,12 +131,12 @@ Expression* IfParselet::parse(Parser* parser, Token token)
 	std::vector<Branch*> branches;
 	//take parens
 	parser->Consume(TokenType::LeftParen);
-	Expression* condition = parser->parseExpression();
+	UniquePtr<Expression*> ifcondition = parser->parseExpression();
 	parser->Consume(TokenType::RightParen);
 
-	BlockExpression* block = parser->parseBlock(true);
+	BlockExpression* ifblock = parser->parseBlock(true);
 
-	branches.push_back(new Branch(block, condition));
+	branches.push_back(new Branch(ifblock, ifcondition.Release()));
 
 	Branch* Else = 0;
 	while(true)
@@ -146,12 +146,12 @@ Expression* IfParselet::parse(Parser* parser, Token token)
 		{
 			//keep going
 			parser->Consume(TokenType::LeftParen);
-			Expression* condition = parser->parseExpression();
+			UniquePtr<Expression*> condition = parser->parseExpression();
 			parser->Consume(TokenType::RightParen);
 
 			BlockExpression* block = parser->parseBlock(true);
 
-			branches.push_back(new Branch(block, condition));
+			branches.push_back(new Branch(block, condition.Release()));
 		}
 		else if (parser->MatchAndConsume(TokenType::Else))
 		{

@@ -134,14 +134,14 @@ namespace Jet
 					delete[] ii.string;
 		}
 
-		//unsigned int ptr;
 		unsigned int args, locals, upvals;
 		bool vararg; bool generator;
-		std::string name;
 		JetContext* context;
 		std::vector<Instruction> instructions;
 
 		//debug info
+		std::string name;
+		
 		struct DebugInfo
 		{
 			unsigned int code;
@@ -149,7 +149,8 @@ namespace Jet
 			unsigned int line;
 		};
 		std::vector<DebugInfo> debuginfo;
-		std::vector<std::string> debuglocal;//add local variable debug info
+		std::vector<std::string> debuglocal;//local variable debug info
+		std::vector<std::string> debugcapture;//capture variable debug info
 	};
 
 	
@@ -189,8 +190,6 @@ namespace Jet
 					JetArray* _array;
 					JetUserdata* _userdata;
 					Closure* _function;//jet function
-					//DO NOT USE ME
-					Capture* _capture;
 				};
 				union
 				{
@@ -206,8 +205,7 @@ namespace Jet
 		Value(JetString* str);
 		Value(JetObject* obj);
 		Value(JetArray* arr);
-		Value(Capture* cpt) { this->_capture = cpt; this->type = ValueType::Capture; }
-
+		
 		Value(double val);
 		Value(int val);
 
@@ -340,8 +338,10 @@ namespace Jet
 		bool closed;
 
 		//debug info
+#ifdef _DEBUG
 		int usecount;
 		Closure* owner;
+#endif
 	};
 
 	struct ObjNode

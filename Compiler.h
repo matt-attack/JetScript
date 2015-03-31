@@ -390,6 +390,8 @@ namespace Jet
 								//ptr->localvars[i].capture = prev->closures++;
 								prev->captures[ptr->localvars[i].name] = Capture(level, ptr->localvars[i].local, prev->closures++);
 								cpt = prev->captures.find(ptr->localvars[i].name);
+								
+								out.push_back(IntermediateInstruction(InstructionType::Capture, ptr->localvars[i].name, 0));
 							}
 
 							out.push_back(IntermediateInstruction(InstructionType::CStore, cpt->second.captureindex /*ptr->localvars[i].capture*/, level));//i, ptr->level));
@@ -458,6 +460,8 @@ namespace Jet
 								//ptr->localvars[i].capture = prev->closures++;
 								prev->captures[ptr->localvars[i].name] = Capture(level, ptr->localvars[i].local, prev->closures++);
 								cpt = prev->captures.find(ptr->localvars[i].name);
+							
+								out.push_back(IntermediateInstruction(InstructionType::Capture, ptr->localvars[i].name, 0));
 							}
 							//store these indexes in me, not the origin function
 							out.push_back(IntermediateInstruction(InstructionType::CLoad, cpt->second.captureindex/*ptr->localvars[i].capture*/, level));//i, ptr->level));

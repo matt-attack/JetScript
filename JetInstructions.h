@@ -69,6 +69,7 @@ namespace Jet
 		//dummy instructions for the assembler/debugging
 		"Label",
 		"Comment",
+		"Capture",
 		"DebugLine",
 		"Function"
 	};
@@ -148,6 +149,7 @@ namespace Jet
 		//dummy instructions for the assembler/debugging
 		Label,
 		Comment,
+		Capture,
 		DebugLine,
 		Function
 	};
