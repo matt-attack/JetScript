@@ -67,7 +67,17 @@ namespace Jet
 
 	class JetObject;
 	typedef std::vector<Value> _JetArrayBacking;
-	typedef GCVal<_JetArrayBacking> JetArray;
+	struct JetArray
+	{
+		bool mark, grey;
+		ValueType type : 8;
+		unsigned char refcount;
+		
+		JetContext* context;
+
+		_JetArrayBacking data;
+	};
+	//typedef GCVal<_JetArrayBacking> JetArray;
 	typedef _JetArrayBacking::iterator _JetArrayIterator;
 
 	struct JetUserdata
@@ -136,11 +146,11 @@ namespace Jet
 
 		unsigned int args, locals, upvals;
 		bool vararg; bool generator;
-		JetContext* context;
-		std::vector<Instruction> instructions;
+		JetContext* context;//context where this function was created
+		std::vector<Instruction> instructions;//list of all instructions in the function
 
 		//debug info
-		std::string name;
+		std::string name;//the name of the function in code
 		
 		struct DebugInfo
 		{
@@ -148,7 +158,7 @@ namespace Jet
 			std::string file;
 			unsigned int line;
 		};
-		std::vector<DebugInfo> debuginfo;
+		std::vector<DebugInfo> debuginfo;//instruction->line number mappings
 		std::vector<std::string> debuglocal;//local variable debug info
 		std::vector<std::string> debugcapture;//capture variable debug info
 	};
@@ -163,14 +173,13 @@ namespace Jet
 		Jet::ValueType type : 8;
 		unsigned char refcount;
 
-		unsigned char numupvals;
-
-		Function* prototype;
+		Function* prototype;//details about the function
 		Generator* generator;
 
-		Capture** upvals;
+		unsigned char numupvals;
+		Capture** upvals;//captured values
 	
-		Closure* prev;//parent closure
+		Closure* prev;//parent closure, used for searching for captures
 	};
 
 	struct _JetObject;
@@ -313,7 +322,6 @@ namespace Jet
 
 		//unary operators
 		Value operator~();
-
 		Value operator-();
 
 	private:

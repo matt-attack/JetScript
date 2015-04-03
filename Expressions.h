@@ -609,11 +609,18 @@ namespace Jet
 			context->Duplicate();
 			context->LoadIndex("iterator");
 			context->ECall(1);
-			context->Duplicate();
+			//context->Duplicate();
 			context->Store("_iter");
-			context->JumpFalse(("_foreachend"+uuid).c_str());
+			//context->JumpFalse(("_foreachend"+uuid).c_str());
 
 			context->Label("_foreachstart"+uuid);
+
+			context->Load("_iter");
+			context->Duplicate();
+			context->LoadIndex("advance");
+			context->ECall(1);
+			context->JumpFalse(("_foreachend"+uuid).c_str());
+
 			context->Load("_iter");
 			context->Duplicate();
 			context->LoadIndex("current");
@@ -628,11 +635,7 @@ namespace Jet
 
 			//context->PostForEach(
 
-			context->Load("_iter");
-			context->Duplicate();
-			context->LoadIndex("advance");
-			context->ECall(1);
-			context->JumpFalse(("_foreachend"+uuid).c_str());
+			
 
 			context->Jump(("_foreachstart"+uuid).c_str());
 			context->Label("_foreachend"+uuid);

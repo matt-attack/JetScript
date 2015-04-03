@@ -124,6 +124,7 @@ Value JetContext::NewArray()
 	a->refcount = 0;
 	a->grey = a->mark = false;
 	a->type = ValueType::Array;
+	a->context = this;
 
 	return Value(a);
 }
@@ -408,27 +409,26 @@ JetContext::JetContext() : gc(this), stack(500000), callstack(JET_MAX_CALLDEPTH,
 		return Value();
 	});
 
+	struct arrayiter
+	{
+		JetArray* container;
+		Value current;
+		std::vector<Value>::iterator iterator;
+	};
+	//ok iterators need to hold a reference to their underlying data structure somehow
 	(*this->Array)["iterator"] = Value([](JetContext* context, Value* v, int args)
 	{
 		if (args == 1)
 		{
-			struct iter
-			{
-				std::vector<Value>* container;
-				std::vector<Value>::iterator iterator;
-			};
-			iter* it = new iter;
-			it->container = &v->_array->data;
+			auto it = new arrayiter;
+			it->container = v->_array;
+			v->AddRef();
 			it->iterator = v->_array->data.begin();
-			if (it->iterator == v->_array->data.end())
-			{
-				delete it;
-				return Value();
-			}
 			return Value(context->NewUserdata(it, context->arrayiter));
 		}
 		throw RuntimeException("Bad call to getIterator");
 	});
+
 	this->object = new JetObject(this);
 	this->object->prototype = 0;
 	(*this->object)["size"] = Value([](JetContext* context, Value* v, int args)
@@ -440,23 +440,20 @@ JetContext::JetContext() : gc(this), stack(500000), callstack(JET_MAX_CALLDEPTH,
 			throw RuntimeException("Invalid size call!!");
 	});
 
+	struct objiter
+	{
+		JetObject* container;
+		Value current;
+		JetObject::Iterator iterator;
+	};
 	(*this->object)["iterator"] = Value([](JetContext* context, Value* v, int args)
 	{
 		if (args == 1)
 		{
-			struct iter2
-			{
-				JetObject* container;
-				JetObject::Iterator iterator;
-			};
-			iter2* it = new iter2;
+			auto it = new objiter;
 			it->container = v->_object;
+			v->AddRef();
 			it->iterator = v->_object->begin();
-			if (it->iterator == v->_object->end())
-			{
-				delete it;
-				return Value();
-			}
 			return (context->NewUserdata(it, context->objectiter));
 		}
 		throw RuntimeException("Bad call to getIterator");
@@ -465,38 +462,25 @@ JetContext::JetContext() : gc(this), stack(500000), callstack(JET_MAX_CALLDEPTH,
 	this->objectiter->prototype = 0;
 	(*this->objectiter)["current"] = Value([](JetContext* context, Value* v, int args)
 	{
-		struct iter2
-		{
-			JetObject* container;
-			JetObject::Iterator iterator;
-		};
-		//still kinda wierd
-		auto iterator = v->GetUserdata<iter2>();
-		if (iterator->iterator != iterator->container->end())
-			return Value((*iterator->iterator).second);
-		return Value();
+		auto iterator = v->GetUserdata<objiter>();
+		return iterator->current;
 	});
 	(*this->objectiter)["advance"] = Value([](JetContext* context, Value* v, int args)
 	{
-		struct iter2
-		{
-			JetObject* container;
-			JetObject::Iterator iterator;
-		};
-		auto iterator = v->GetUserdata<iter2>();
-		if (++iterator->iterator != iterator->container->end())
-			return Value(1);
-		else
+		auto iterator = v->GetUserdata<objiter>();
+		if (iterator->iterator == iterator->container->end())
 			return Value(0);
+
+		iterator->current = iterator->iterator->second;
+		++iterator->iterator;
+			return Value(1);
 	});
 	(*this->objectiter)["_gc"] = Value([](JetContext* context, Value* v, int args)
 	{
-		struct iter2
-		{
-			JetObject* container;
-			JetObject::Iterator iterator;
-		};
-		delete v->GetUserdata<iter2>();
+		
+		auto iter = v->GetUserdata<objiter>();
+		Value(iter->container).Release();
+		delete iter;
 		return Value();
 	});
 
@@ -504,39 +488,25 @@ JetContext::JetContext() : gc(this), stack(500000), callstack(JET_MAX_CALLDEPTH,
 	this->arrayiter->prototype = 0;
 	(*this->arrayiter)["current"] = Value([](JetContext* context, Value* v, int args)
 	{
-		struct iter
-		{
-			_JetArrayBacking* container;
-			_JetArrayIterator iterator;
-		};
-		//still kinda wierd
-		auto iterator = v->GetUserdata<iter>();
-		if (iterator->iterator != iterator->container->end())
-			return Value((*iterator->iterator));
-		return Value();
+		auto iterator = v->GetUserdata<arrayiter>();
+		return iterator->current;
 	});
 
 	(*this->arrayiter)["advance"] = Value([](JetContext* context, Value* v, int args)
 	{
-		struct iter
-		{
-			_JetArrayBacking* container;
-			_JetArrayIterator iterator;
-		};
-		auto iterator = v->GetUserdata<iter>();
-		if (++iterator->iterator != iterator->container->end())
-			return Value(1);
-		else
+		auto iterator = v->GetUserdata<arrayiter>();
+		if (iterator->iterator == iterator->container->data.end())
 			return Value(0);
+
+		iterator->current = *iterator->iterator;
+		++iterator->iterator;
+		return Value(1);
 	});
 	(*this->arrayiter)["_gc"] = Value([](JetContext* context, Value* v, int args)
 	{
-		struct iter
-		{
-			_JetArrayBacking* container;
-			_JetArrayIterator iterator;
-		};
-		delete v->GetUserdata<iter>();
+		auto iter = v->GetUserdata<arrayiter>();
+		Value(iter->container).Release();
+		delete iter;
 		return Value();
 	});
 
@@ -567,8 +537,8 @@ JetContext::JetContext() : gc(this), stack(500000), callstack(JET_MAX_CALLDEPTH,
 		{
 			if (v->_function->generator)
 			{
-				if (v->_function->generator->lastyielded == Value() && v->_function->generator->state == Generator::GeneratorState::Suspended && v->_function->generator->curiptr == 0)
-					context->Call(v);//run it a first time to get first yielded value if we are in a foreach loop
+				//if (v->_function->generator->lastyielded == Value() && v->_function->generator->state == Generator::GeneratorState::Suspended && v->_function->generator->curiptr == 0)
+				//	context->Call(v);//run it a first time to get first yielded value if we are in a foreach loop
 
 				if (v->_function->generator->state == Generator::GeneratorState::Dead)
 					return Value();
@@ -589,7 +559,7 @@ JetContext::JetContext() : gc(this), stack(500000), callstack(JET_MAX_CALLDEPTH,
 
 			//need to execute once to get to first yielded value
 			Value ret = Value(closure);
-			context->Call(&ret);
+			//context->Call(&ret);
 			if (closure->generator->state == Generator::GeneratorState::Dead)
 				return Value();
 			else
@@ -1578,9 +1548,10 @@ Value JetContext::Execute(int iptr, Closure* frame)
 				}
 			case InstructionType::NewArray:
 				{
-					auto arr = new GCVal<std::vector<Value>>();
+					auto arr = new JetArray;//GCVal<std::vector<Value>>();
 					arr->grey = arr->mark = false;
 					arr->refcount = 0;
+					arr->context = this;
 					arr->type = ValueType::Array;
 					this->gc.gen1.push_back((GarbageCollector::gcval*)arr);
 					arr->data.resize(in.value);
@@ -1737,12 +1708,12 @@ void JetContext::GetCode(int ptr, Closure* closure, std::string& ret, unsigned i
 		return;
 	}
 
-	unsigned int imax = closure->prototype->debuginfo.size()-1;
-	unsigned int imin = 0;
+	int imax = closure->prototype->debuginfo.size()-1;
+	int imin = 0;
 	while (imax >= imin)
 	{
 		// calculate the midpoint for roughly equal partition
-		unsigned int imid = (imin+imax)/2;//midpoint(imin, imax);
+		int imid = (imin+imax)/2;//midpoint(imin, imax);
 		if(closure->prototype->debuginfo[imid].code == ptr)
 		{
 			// key found at index imid
@@ -1759,7 +1730,8 @@ void JetContext::GetCode(int ptr, Closure* closure, std::string& ret, unsigned i
 			imax = imid - 1;
 	}
 #undef min
-	unsigned int index = std::min(imin, imax);
+#undef max
+	unsigned int index = std::max(std::min(imin, imax),0);
 
 	ret = closure->prototype->debuginfo[index].file;
 	line = closure->prototype->debuginfo[index].line;

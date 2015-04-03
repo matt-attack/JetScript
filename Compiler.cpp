@@ -69,6 +69,10 @@ void CompilerContext::PrintAssembly()
 		{
 			printf("\nLocal\t%s", ins.string);
 		}
+		else if (ins.type == InstructionType::Capture)
+		{
+			printf("\nCapture\t%s", ins.string);
+		}
 		else if (ins.type == InstructionType::Label)
 		{
 			printf("\nLabel\t%s", ins.string);
@@ -297,8 +301,7 @@ void CompilerContext::FinalizeFunction(CompilerContext* c)
 	this->uuid = c->uuid + 1;
 
 	//move upvalues
-	//check all children
-	for (auto ii: this->functions)
+	for (auto ii: this->functions)//check all children
 	{
 		for (auto& i: ii.second->captures)
 		{
@@ -310,4 +313,114 @@ void CompilerContext::FinalizeFunction(CompilerContext* c)
 			}
 		}
 	}
+}
+
+void CompilerContext::Load(const std::string variable)
+{
+	Scope* ptr = this->scope;
+	while (ptr)
+	{
+		//look for var in locals
+		for (unsigned int i = 0; i < ptr->localvars.size(); i++)
+		{
+			if (ptr->localvars[i].name == variable)
+			{
+				//printf("We found loading of a local var: %s at level %d, index %d\n", variable.c_str(), ptr->level, ptr->localvars[i].first);
+				out.push_back(IntermediateInstruction(InstructionType::LLoad, ptr->localvars[i].local, 0));//i, ptr->level));
+				return;//exit the loops we found it
+			}
+		}
+		ptr = ptr->previous;
+	}
+
+	int level = 0;
+	auto cur = this->parent;
+	auto prev = this;
+	while(cur)
+	{
+		ptr = cur->scope;
+		while (ptr)
+		{
+			//look for var in locals
+			for (unsigned int i = 0; i < ptr->localvars.size(); i++)
+			{
+				if (ptr->localvars[i].name == variable)
+				{
+					//printf("We found loading of a captured var: %s at level %d, index %d\n", variable.c_str(), level, ptr->localvars[i].first);
+					auto cpt = prev->captures.find(ptr->localvars[i].name);
+					if (cpt == prev->captures.end())
+					{
+						prev->captures[ptr->localvars[i].name] = Capture(level, ptr->localvars[i].local, prev->closures++);
+						cpt = prev->captures.find(ptr->localvars[i].name);
+
+						out.push_back(IntermediateInstruction(InstructionType::Capture, ptr->localvars[i].name, 0));
+					}
+
+					out.push_back(IntermediateInstruction(InstructionType::CLoad, cpt->second.captureindex/*ptr->localvars[i].capture*/, level));//i, ptr->level));
+					return;//exit the loops we found it
+				}
+			}
+			ptr = ptr->previous;
+		}
+		level--;
+		prev = cur;
+		cur = cur->parent;
+	}
+	out.push_back(IntermediateInstruction(InstructionType::Load, variable));
+}
+
+void CompilerContext::Store(const std::string variable)
+{
+	//look up if I am a local or global
+	Scope* ptr = this->scope;
+	while (ptr)
+	{
+		//look for var in locals
+		for (unsigned int i = 0; i < ptr->localvars.size(); i++)
+		{
+			if (ptr->localvars[i].name == variable)
+			{
+				//printf("We found storing of a local var: %s at level %d, index %d\n", variable.c_str(), ptr->level, ptr->localvars[i].first);
+				out.push_back(IntermediateInstruction(InstructionType::LStore, ptr->localvars[i].local, 0));//i, ptr->level));
+				return;//exit the loops we found it
+			}
+		}
+		ptr = ptr->previous;
+	}
+
+	int level = 0;
+	auto cur = this->parent;
+	auto prev = this;
+	while(cur)
+	{
+		ptr = cur->scope;
+		while (ptr)
+		{
+			//look for var in locals
+			for (unsigned int i = 0; i < ptr->localvars.size(); i++)
+			{
+				if (ptr->localvars[i].name == variable)
+				{
+					//printf("We found storing of a captured var: %s at level %d, index %d\n", variable.c_str(), level, ptr->localvars[i].first);
+					//exit the loops we found it
+					auto cpt = prev->captures.find(ptr->localvars[i].name);
+					if (cpt == prev->captures.end())
+					{
+						prev->captures[ptr->localvars[i].name] = Capture(level, ptr->localvars[i].local, prev->closures++);
+						cpt = prev->captures.find(ptr->localvars[i].name);
+
+						out.push_back(IntermediateInstruction(InstructionType::Capture, ptr->localvars[i].name, 0));
+					}
+
+					out.push_back(IntermediateInstruction(InstructionType::CStore, cpt->second.captureindex /*ptr->localvars[i].capture*/, level));//i, ptr->level));
+					return;
+				}
+			}
+			ptr = ptr->previous;
+		}
+		level--;
+		prev = cur;
+		cur = cur->parent;
+	}
+	out.push_back(IntermediateInstruction(InstructionType::Store, variable));
 }

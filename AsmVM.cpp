@@ -360,14 +360,17 @@ int main(int argc, char* argv[])
 					auto v = tcontext["z"][0];
 					if (v == Value())
 						throw 7;
+
+					tcontext.Script("for (local i in {}) print(i);");
+					tcontext.Script("for (local i in []) print(i);");
 				}
 				catch(RuntimeException e)
 				{
-					throw CompilerException("", 0, "Loop test failed!\n");
+					throw CompilerException("", 0, "ForEach Loop test failed!\n");
 				}
 				catch(...)
 				{
-					throw CompilerException("", 0, "Loop test failed!\n");
+					throw CompilerException("", 0, "ForEach Loop test failed!\n");
 				}
 
 				//closure test

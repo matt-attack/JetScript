@@ -92,7 +92,6 @@ Expression* WhileParselet::parse(Parser* parser, Token token)
 	return new WhileExpression(token, condition.Release(), block);
 }
 
-
 Expression* ForParselet::parse(Parser* parser, Token token)
 {
 	parser->Consume(TokenType::LeftParen);
@@ -107,7 +106,7 @@ Expression* ForParselet::parse(Parser* parser, Token token)
 				parser->Consume();
 				auto name = parser->Consume();
 				parser->Consume();
-				UniquePtr<Expression*> container = parser->parseExpression();//Consume();
+				UniquePtr<Expression*> container = parser->parseExpression();
 				parser->Consume(TokenType::RightParen);
 
 				auto block = new ScopeExpression(parser->parseBlock());

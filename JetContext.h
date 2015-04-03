@@ -31,7 +31,7 @@
 //#define JET_TIME_EXECUTION
 #endif
 
-#define GC_INTERVAL 2//number of allocations before running the GC
+#define GC_INTERVAL 200//number of allocations before running the GC
 #define GC_STEPS 4//number of g0 collections before a gen1 collection
 
 #define JET_STACK_SIZE 800
@@ -86,7 +86,7 @@ namespace Jet
 
 		//terrible way to implement this, fixme later
 		Closure* lastadded;
-		std::deque<Capture*> opencaptures;
+		std::deque<Capture*> opencaptures;//need to make sure these captures are closed in the correct scope!!!
 
 	public:
 		//these

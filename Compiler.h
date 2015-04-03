@@ -110,11 +110,8 @@ namespace Jet
 
 		struct LocalVariable
 		{
-			LocalVariable() { this->uploaded = false; }
 			int local;
 			std::string name;
-			//int capture;
-			bool uploaded;
 		};
 
 		struct Scope
@@ -124,16 +121,17 @@ namespace Jet
 			int level;
 			std::vector<LocalVariable> localvars;
 		};
-		Scope* scope;
+		Scope* scope;//linked list starting at current scope
 
-		unsigned int localindex;
+		unsigned int localindex;//next open local index
 
 		bool vararg; bool isgenerator;
-		unsigned int closures;
-		unsigned int arguments;
-		CompilerContext* parent;
+		unsigned int closures;//number of closures we have
+		unsigned int arguments;//number of arguments we have
 
-		std::vector<IntermediateInstruction> out;
+		CompilerContext* parent;//parent scoping function
+
+		std::vector<IntermediateInstruction> out;//list of instructions generated
 
 	public:
 
@@ -171,7 +169,7 @@ namespace Jet
 			ins.a = args;
 			ins.b = locals;
 			ins.c = upvals;
-			ins.d = vararg + isgenerator*2;//vararg ? 1 : 0;
+			ins.d = vararg + isgenerator*2;
 			out.push_back(ins);
 		}
 
@@ -317,7 +315,6 @@ namespace Jet
 		void JumpFalsePeek(const char* pos)
 		{
 			out.push_back(IntermediateInstruction(InstructionType::JumpFalsePeek, pos));
-
 		}
 
 		void JumpTruePeek(const char* pos)
@@ -346,66 +343,8 @@ namespace Jet
 			Capture(int l, int li, int ci) : localindex(li), level(l), captureindex(ci) {uploaded = false;}
 		};
 		std::map<std::string, Capture> captures;
-		//std::vector<std::pair<std::string, int>> captures;
-		void Store(const std::string variable)
-		{
-			//look up if I am a local or global
-			Scope* ptr = this->scope;
-			while (ptr)
-			{
-				//look for var in locals
-				for (unsigned int i = 0; i < ptr->localvars.size(); i++)
-				{
-					if (ptr->localvars[i].name == variable)
-					{
-						//printf("We found storing of a local var: %s at level %d, index %d\n", variable.c_str(), ptr->level, ptr->localvars[i].first);
-						//exit the loops we found it
-						//this->output += ".local " + variable + " " + ::std::to_string(i) + ";\n";
-						out.push_back(IntermediateInstruction(InstructionType::LStore, ptr->localvars[i].local, 0));//i, ptr->level));
-						return;
-					}
-				}
-				ptr = ptr->previous;
-			}
 
-			int level = 0;
-			auto cur = this->parent;
-			auto prev = this;
-			while(cur)
-			{
-				ptr = cur->scope;
-				while (ptr)
-				{
-					//look for var in locals
-					for (unsigned int i = 0; i < ptr->localvars.size(); i++)
-					{
-						if (ptr->localvars[i].name == variable)
-						{
-							//printf("We found storing of a captured var: %s at level %d, index %d\n", variable.c_str(), level, ptr->localvars[i].first);
-							//exit the loops we found it
-							//this->output += ".local " + variable + " " + ::std::to_string(i) + ";\n";
-							auto cpt = prev->captures.find(ptr->localvars[i].name);
-							if (cpt == prev->captures.end())//ptr->localvars[i].capture == -1)
-							{
-								//ptr->localvars[i].capture = prev->closures++;
-								prev->captures[ptr->localvars[i].name] = Capture(level, ptr->localvars[i].local, prev->closures++);
-								cpt = prev->captures.find(ptr->localvars[i].name);
-								
-								out.push_back(IntermediateInstruction(InstructionType::Capture, ptr->localvars[i].name, 0));
-							}
-
-							out.push_back(IntermediateInstruction(InstructionType::CStore, cpt->second.captureindex /*ptr->localvars[i].capture*/, level));//i, ptr->level));
-							return;
-						}
-					}
-					ptr = ptr->previous;
-				}
-				level--;
-				prev = cur;
-				cur = cur->parent;
-			}
-			out.push_back(IntermediateInstruction(InstructionType::Store, variable));
-		}
+		void Store(const std::string variable);
 
 		void StoreLocal(const std::string variable)
 		{
@@ -414,68 +353,7 @@ namespace Jet
 		}
 
 		//this loads locals and globals atm
-		void Load(const std::string variable)
-		{
-			Scope* ptr = this->scope;
-			while (ptr)
-			{
-				//look for var in locals
-				for (unsigned int i = 0; i < ptr->localvars.size(); i++)
-				{
-					if (ptr->localvars[i].name == variable)
-					{
-						//printf("We found loading of a local var: %s at level %d, index %d\n", variable.c_str(), ptr->level, ptr->localvars[i].first);
-						//exit the loops we found it
-						//comment/debug info
-						//this->output += ".local " + variable + " " + ::std::to_string(i) + ";\n";
-						out.push_back(IntermediateInstruction(InstructionType::LLoad, ptr->localvars[i].local, 0));//i, ptr->level));
-						return;
-					}
-				}
-				ptr = ptr->previous;
-			}
-
-			int level = 0;
-			auto cur = this->parent;
-			auto prev = this;
-			while(cur)
-			{
-				ptr = cur->scope;
-				while (ptr)
-				{
-					//look for var in locals
-					for (unsigned int i = 0; i < ptr->localvars.size(); i++)
-					{
-						if (ptr->localvars[i].name == variable)
-						{
-							//printf("We found loading of a captured var: %s at level %d, index %d\n", variable.c_str(), level, ptr->localvars[i].first);
-							//exit the loops we found it
-							//comment/debug info
-							//this->output += ".local " + variable + " " + ::std::to_string(i) + ";\n";
-							//if (ptr->localvars[i].capture == -1)
-								//ptr->localvars[i].capture = prev->closures++;
-							auto cpt = prev->captures.find(ptr->localvars[i].name);
-							if (cpt == prev->captures.end())//ptr->localvars[i].capture == -1)
-							{
-								//ptr->localvars[i].capture = prev->closures++;
-								prev->captures[ptr->localvars[i].name] = Capture(level, ptr->localvars[i].local, prev->closures++);
-								cpt = prev->captures.find(ptr->localvars[i].name);
-							
-								out.push_back(IntermediateInstruction(InstructionType::Capture, ptr->localvars[i].name, 0));
-							}
-							//store these indexes in me, not the origin function
-							out.push_back(IntermediateInstruction(InstructionType::CLoad, cpt->second.captureindex/*ptr->localvars[i].capture*/, level));//i, ptr->level));
-							return;
-						}
-					}
-					ptr = ptr->previous;
-				}
-				level--;
-				prev = cur;
-				cur = cur->parent;
-			}
-			out.push_back(IntermediateInstruction(InstructionType::Load, variable));
-		}
+		void Load(const std::string variable);
 
 		bool IsLocal(const std::string variable)
 		{
@@ -488,10 +366,8 @@ namespace Jet
 					if (ptr->localvars[i].name == variable)
 					{
 						//printf("We found loading of a local var: %s at level %d, index %d\n", variable.c_str(), ptr->level, ptr->localvars[i].first);
-						//exit the loops we found it
-						//comment/debug info
 						//this->output += ".local " + variable + " " + ::std::to_string(i) + ";\n";
-						return true;
+						return true;//we found it
 					}
 				}
 				if (ptr)
@@ -499,7 +375,7 @@ namespace Jet
 			}
 
 			auto cur = this->parent;
-			while(cur)//if (this->parent)
+			while(cur)
 			{
 				ptr = cur->scope;
 				while (ptr)
@@ -510,10 +386,7 @@ namespace Jet
 						if (ptr->localvars[i].name == variable)
 						{
 							//printf("We found loading of a captured var: %s at level %d, index %d\n", variable.c_str(), level, ptr->localvars[i].first);
-							//exit the loops we found it
-							//comment/debug info
 							//this->output += ".local " + variable + " " + ::std::to_string(i) + ";\n";
-
 							return true;
 						}
 					}
