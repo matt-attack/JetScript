@@ -158,6 +158,8 @@ Value JetContext::NewString(const char* string, bool copy)
 	return Value(str);
 }
 
+#include "Libraries/File.h"
+#include "Libraries/Math.h"
 JetContext::JetContext() : gc(this), stack(500000), callstack(JET_MAX_CALLDEPTH, "Exceeded Max Call Depth!")
 {
 	this->sptr = this->localstack;//initialize stack pointer
@@ -168,9 +170,53 @@ JetContext::JetContext() : gc(this), stack(500000), callstack(JET_MAX_CALLDEPTH,
 	(*this)["gc"] = ::gc;
 	(*this)["callstack"] = JetContext::Callstack;
 	(*this)["tostring"] = ::tostring;
+	(*this)["pcall"] = [](JetContext* context, Value* args, int argc)
+	{
+		if (argc == 0)
+			throw RuntimeException("Invalid argument count to pcall!");
+		try
+		{
+			if (argc > 1)
+				return context->Call(args, &args[1], argc-1);
+			else if (argc == 1)
+				return context->Call(args);
+		}
+		catch(RuntimeException e)
+		{
+			printf("PCall got exception: %s", e.reason.c_str());
+			return Value(0);
+		}
+	};
+	(*this)["error"] = [](JetContext* context, Value* args, int argc)
+	{
+		if (argc > 0)
+			throw RuntimeException(args->ToString());
+		else
+			throw RuntimeException("User Error Thrown!");
+		return Value();
+	};
+
+	/*this should probably be an instruction ...
+	(*this)["unpack"] = [](JetContext* context, Value* args, int argc)
+	{
+	if (argc < 1 || args->type != ValueType::Array || args->_array->data.size() == 0)
+	throw RuntimeException("Cannot unpack non or empty array!");
+
+	for (int i = 0; i < args[0]._array->data.size()-1; i++)
+	context->stack.Push(args[0]._array->data[i]);
+	return args[0]._array->data[args[0]._array->data.size()-1];
+	};*/
+
+	(*this)["loadstring"] = [](JetContext* context, Value* args, int argc)
+	{
+		if (argc < 1 || args[0].type != ValueType::String)
+			throw RuntimeException("Cannot load non string");
+
+		return context->Assemble(context->Compile(args[0]._string->data, "loadstring"));
+	};
 
 	//tiny test for "async" like functionality
-	(*this)["createServer"] = [](JetContext* context, Value* v, int args)
+	/*(*this)["createServer"] = [](JetContext* context, Value* v, int args)
 	{
 		Value object = context->NewObject();
 		if (v->IsGenerator())
@@ -184,7 +230,7 @@ JetContext::JetContext() : gc(this), stack(500000), callstack(JET_MAX_CALLDEPTH,
 			iterator.Call(&test, 1);
 		}
 		return object;
-	};
+	};*/
 
 	(*this)["setprototype"] = [](JetContext* context, Value* v, int args)
 	{
@@ -211,7 +257,12 @@ JetContext::JetContext() : gc(this), stack(500000), callstack(JET_MAX_CALLDEPTH,
 		auto iter = context->require_cache.find(v->_string->data);
 		if (iter == context->require_cache.end())
 		{
-			//load from file
+			//check from list of libraries
+			auto lib = context->libraries.find(v->_string->data);
+			if (lib != context->libraries.end())
+				return lib->second;
+
+			//else load from file
 			std::ifstream t(v->_string->data, std::ios::in | std::ios::binary);
 			if (t)
 			{
@@ -244,7 +295,7 @@ JetContext::JetContext() : gc(this), stack(500000), callstack(JET_MAX_CALLDEPTH,
 			}
 			else
 			{
-				throw RuntimeException("Require could not find file: '" + (std::string)v->_string->data + "'");
+				throw RuntimeException("Require could not find include: '" + (std::string)v->_string->data + "'");
 			}
 		}
 		else
@@ -262,52 +313,6 @@ JetContext::JetContext() : gc(this), stack(500000), callstack(JET_MAX_CALLDEPTH,
 	};
 
 
-	this->file = new JetObject(this);
-	file->prototype = 0;
-	(*file)["read"] = Value([](JetContext* context, Value* v, int args)
-	{
-		if (args != 2)
-			throw RuntimeException("Invalid number of arguments to read!");
-
-		char* out = new char[((int)v->value)+1];//context->GCAllocate((v)->value);
-		fread(out, 1, (int)(v)->value, v[1].GetUserdata<FILE>());
-		out[(int)(v)->value] = 0;
-		return context->NewString(out, false);
-	});
-	(*file)["write"] = Value([](JetContext* context, Value* v, int args)
-	{
-		if (args != 2)
-			throw RuntimeException("Invalid number of arguments to write!");
-
-		std::string str = v->ToString();
-		fwrite(str.c_str(), 1, str.length(), v[1].GetUserdata<FILE>());
-		return Value();
-	});
-	//this function is called when the value is garbage collected
-	(*file)["_gc"] = Value([](JetContext* context, Value* v, int args)
-	{
-		fclose(v->GetUserdata<FILE>());
-		return Value();
-	});
-
-	(*this)["fopen"] = Value([](JetContext* context, Value* v, int args)
-	{
-		if (args != 2)
-			throw RuntimeException("Invalid number of arguments to fopen!");
-
-		FILE* f = fopen(v->ToString().c_str(), v[1].ToString().c_str());
-		return context->NewUserdata(f, context->file);
-	});
-
-	(*this)["fclose"] = Value([](JetContext* context, Value* v, int args)
-	{
-		if (args != 1)
-			throw RuntimeException("Invalid number of arguments to fclose!");
-		fclose(v->GetUserdata<FILE>());
-		return Value();
-	});
-
-
 	//setup the string and array tables
 	this->string = new JetObject(this);
 	this->string->prototype = 0;
@@ -317,8 +322,8 @@ JetContext::JetContext() : gc(this), stack(500000), callstack(JET_MAX_CALLDEPTH,
 		{
 			size_t len = v[0].length + v[1].length + 1;
 			char* text = new char[len];
-			memcpy(text, v[1]._string->data, v[1].length);
-			memcpy(text+v[1].length, v[0]._string->data, v[0].length);
+			memcpy(text, v[0]._string->data, v[0].length);
+			memcpy(text+v[0].length, v[1]._string->data, v[1].length);
 			text[len-1] = 0;
 			return context->NewString(text, false);
 		}
@@ -364,22 +369,46 @@ JetContext::JetContext() : gc(this), stack(500000), callstack(JET_MAX_CALLDEPTH,
 			return context->NewString(text, false);
 		}
 		else
-			throw RuntimeException("bad append call!");
+			throw RuntimeException("bad string::append() call!");
 	});
 	(*this->string)["length"] = Value([](JetContext* context, Value* v, int args)
 	{
-		if (args == 1)
+		if (args == 1 && v->type == ValueType::String)
 			return Value((double)v->length);
 		else
-			throw RuntimeException("bad length call!");
+			throw RuntimeException("bad string:length() call!");
 	});
+	(*this->string)["sub"] = [](JetContext* context, Value* v, int args)
+	{
+		if (args == 2)
+		{
+			if (v[0].type != ValueType::String)
+				throw RuntimeException("must be a string");
+
+			int len = v[0].length-(int)v[1];
+			if (len < 0)
+				throw RuntimeException("Invalid string index");
+
+			char* str = new char[len+1];
+			strncpy(str, &v[0]._string->data[(int)v[1]], len);
+			str[len] = 0;
+			return context->NewString(str, false);
+		}
+		else if (args == 3)
+		{
+			throw RuntimeException("Not Implemented!");
+		}
+		else
+			throw RuntimeException("bad sub call");
+	};
+
 
 	this->Array = new JetObject(this);
 	this->Array->prototype = 0;
 	(*this->Array)["add"] = Value([](JetContext* context, Value* v, int args)
 	{
 		if (args == 2)
-			v[1]._array->data.push_back(*v);
+			v->_array->data.push_back(v[1]);
 		else
 			throw RuntimeException("Invalid add call!!");
 		return Value();
@@ -394,7 +423,7 @@ JetContext::JetContext() : gc(this), stack(500000), callstack(JET_MAX_CALLDEPTH,
 	(*this->Array)["resize"] = Value([](JetContext* context, Value* v, int args)
 	{
 		if (args == 2)
-			v[1]._array->data.resize((int)*v);
+			v->_array->data.resize((int)v[1]);
 		else
 			throw RuntimeException("Invalid resize call!!");
 		return Value();
@@ -403,7 +432,7 @@ JetContext::JetContext() : gc(this), stack(500000), callstack(JET_MAX_CALLDEPTH,
 	(*this->Array)["remove"] = Value([](JetContext* context, Value* v, int args)
 	{
 		if (args == 2)
-			v[1]._array->data.erase(v[1]._array->data.begin()+(int)v);
+			v->_array->data.erase(v->_array->data.begin()+(int)v[1]);
 		else
 			throw RuntimeException("Invalid remove call!!");
 		return Value();
@@ -473,11 +502,10 @@ JetContext::JetContext() : gc(this), stack(500000), callstack(JET_MAX_CALLDEPTH,
 
 		iterator->current = iterator->iterator->second;
 		++iterator->iterator;
-			return Value(1);
+		return Value(1);
 	});
 	(*this->objectiter)["_gc"] = Value([](JetContext* context, Value* v, int args)
 	{
-		
 		auto iter = v->GetUserdata<objiter>();
 		Value(iter->container).Release();
 		delete iter;
@@ -537,9 +565,6 @@ JetContext::JetContext() : gc(this), stack(500000), callstack(JET_MAX_CALLDEPTH,
 		{
 			if (v->_function->generator)
 			{
-				//if (v->_function->generator->lastyielded == Value() && v->_function->generator->state == Generator::GeneratorState::Suspended && v->_function->generator->curiptr == 0)
-				//	context->Call(v);//run it a first time to get first yielded value if we are in a foreach loop
-
 				if (v->_function->generator->state == Generator::GeneratorState::Dead)
 					return Value();
 				else
@@ -557,13 +582,10 @@ JetContext::JetContext() : gc(this), stack(500000), callstack(JET_MAX_CALLDEPTH,
 			closure->prototype = v->_function->prototype;
 			context->gc.AddObject((GarbageCollector::gcval*)closure);
 
-			//need to execute once to get to first yielded value
-			Value ret = Value(closure);
-			//context->Call(&ret);
 			if (closure->generator->state == Generator::GeneratorState::Dead)
 				return Value();
 			else
-				return ret;
+				return Value(closure);
 		}
 		throw RuntimeException("Cannot index non generator");
 	});
@@ -592,6 +614,10 @@ JetContext::JetContext() : gc(this), stack(500000), callstack(JET_MAX_CALLDEPTH,
 		}
 		throw RuntimeException("");
 	});
+
+	//load default libraries
+	RegisterFileLibrary(this);
+	RegisterMathLibrary(this);
 };
 
 JetContext::~JetContext()
@@ -609,7 +635,6 @@ JetContext::~JetContext()
 
 	delete this->string;
 	delete this->Array;
-	delete this->file;
 	delete this->object;
 	delete this->arrayiter;
 	delete this->objectiter;
@@ -1234,10 +1259,10 @@ Value JetContext::Execute(int iptr, Closure* frame)
 					bool found = false;
 					for (auto ii: opencaptures)
 					{
-						if (ii->v == &sptr[in.value])
+						if (ii.capture->v == &sptr[in.value])
 						{
 							//we found it
-							frame->upvals[in.value2] = ii;
+							frame->upvals[in.value2] = ii.capture;
 							found = true;
 							//printf("Reused Capture %d %s in %s\n", in.value2, sptr[in.value].ToString().c_str(), curframe->prototype->name.c_str());
 
@@ -1265,8 +1290,13 @@ Value JetContext::Execute(int iptr, Closure* frame)
 #endif
 						frame->upvals[in.value2] = capture;
 
+						OpenCapture c;
+						c.capture = capture;
+#ifdef _DEBUG
+						c.creator = frame->prev;
+#endif
 						//printf("Initalized Capture %d %s in %s\n", in.value2, sptr[in.value].ToString().c_str(), curframe->prototype->name.c_str());
-						this->opencaptures.push_back(capture);
+						this->opencaptures.push_back(c);
 
 						if (frame->mark)
 						{
@@ -1286,21 +1316,27 @@ Value JetContext::Execute(int iptr, Closure* frame)
 					while (opencaptures.size() > 0)
 					{
 						auto cur = opencaptures.back();
-						int index = cur->v-sptr;
+						int index = cur.capture->v-sptr;
 						if (index < in.value)
 							break;
 
-						cur->closed = true;
-						cur->value = *cur->v;
-						cur->v = &cur->value;
+#ifdef _DEBUG
+						//this just verifies that the break above works right
+						if (cur.creator != this->curframe)
+							throw RuntimeException("RUNTIME ERROR: Tried to close capture in wrong scope!");
+#endif
+
+						cur.capture->closed = true;
+						cur.capture->value = *cur.capture->v;
+						cur.capture->v = &cur.capture->value;
 						//printf("Closed capture with value %s\n", cur->value.ToString().c_str());
 						//printf("Closed capture %d in %d as %s\n", i, cur, cur->upvals[i]->v->ToString().c_str());
 
 						//do a write barrier
-						if (cur->value.type > ValueType::NativeFunction && cur->value._object->grey == false)
+						if (cur.capture->value.type > ValueType::NativeFunction && cur.capture->value._object->grey == false)
 						{
-							cur->value._object->grey = true;
-							this->gc.greys.Push(cur->value);
+							cur.capture->value._object->grey = true;
+							this->gc.greys.Push(cur.capture->value);
 						}
 						opencaptures.pop_back();
 					}
@@ -1776,7 +1812,7 @@ Value JetContext::Assemble(const std::vector<IntermediateInstruction>& code)
 		switch (inst.type)
 		{
 		case InstructionType::Capture:
-		case InstructionType::Comment:
+		case InstructionType::Local:
 		case InstructionType::DebugLine:
 			{
 				break;
@@ -1834,7 +1870,7 @@ Value JetContext::Assemble(const std::vector<IntermediateInstruction>& code)
 	{
 		switch (inst.type)
 		{
-		case InstructionType::Comment:
+		case InstructionType::Local:
 			{
 				current->debuglocal.push_back(inst.string);
 

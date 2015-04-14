@@ -72,29 +72,41 @@ namespace Jet
 		JetObject* string;
 		JetObject* Array;
 		JetObject* object;
-		JetObject* file;
 		JetObject* arrayiter;
 		JetObject* objectiter;
 		JetObject* function;
 
 		//require cache
 		std::map<std::string, Value> require_cache;
+		std::map<std::string, Value> libraries;
 
 		//manages memory
 		GarbageCollector gc;
 		std::vector<JetObject*> prototypes;
 
-		//terrible way to implement this, fixme later
 		Closure* lastadded;
-		std::deque<Capture*> opencaptures;//need to make sure these captures are closed in the correct scope!!!
+		struct OpenCapture
+		{
+			Capture* capture;
+#ifdef _DEBUG
+			Closure* creator;
+#endif
+		};
+		std::deque<OpenCapture> opencaptures;
 
 	public:
-		//these
+		//use these
 		Value NewObject();
 		Value NewArray();
 		Value NewUserdata(void* data, const Value& proto);
 		Value NewString(const char* string, bool copy = true);//if copy is false, it takes ownership of the char array
 		 
+		void AddLibrary(const std::string& name, Value& library)
+		{
+			library.AddRef();
+			this->libraries[name] = library;
+		}
+
 		//a helper function for registering metatables for userdata, these are never gc'd
 		//and are freed with the context
 		Value NewPrototype(const char* Typename);

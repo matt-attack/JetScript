@@ -65,7 +65,7 @@ void CompilerContext::PrintAssembly()
 			}
 			continue;
 		}
-		else if (ins.type == InstructionType::Comment)
+		else if (ins.type == InstructionType::Local)
 		{
 			printf("\nLocal\t%s", ins.string);
 		}
@@ -191,7 +191,7 @@ bool CompilerContext::RegisterLocal(const std::string name)
 	var.name = name;
 	this->scope->localvars.push_back(var);
 
-	out.push_back(IntermediateInstruction(InstructionType::Comment, var.name, 0));
+	out.push_back(IntermediateInstruction(InstructionType::Local, var.name, 0));
 
 	return true;
 }

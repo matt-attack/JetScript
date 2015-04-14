@@ -505,6 +505,11 @@ namespace Jet
 			return this->Size;
 		}
 
+		inline void SetPrototype(JetObject* obj)
+		{
+			this->prototype = obj;
+		}
+
 		void DebugPrint();
 
 	private:

@@ -437,6 +437,7 @@
     <Text Include="ReadMe.txt" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="Bindings.h" />
     <ClInclude Include="Compiler.h" />
     <ClInclude Include="Expressions.h" />
     <ClInclude Include="GarbageCollector.h" />
@@ -445,6 +446,8 @@
     <ClInclude Include="JetExceptions.h" />
     <ClInclude Include="JetInstructions.h" />
     <ClInclude Include="Lexer.h" />
+    <ClInclude Include="Libraries\File.h" />
+    <ClInclude Include="Libraries\Math.h" />
     <ClInclude Include="Libraries\Net.h" />
     <ClInclude Include="Parselets.h" />
     <ClInclude Include="Parser.h" />
@@ -462,6 +465,7 @@
     <ClCompile Include="GarbageCollector.cpp" />
     <ClCompile Include="JetContext.cpp" />
     <ClCompile Include="Lexer.cpp" />
+    <ClCompile Include="Libraries\File.cpp" />
     <ClCompile Include="Object.cpp" />
     <ClCompile Include="Parselets.cpp" />
     <ClCompile Include="Parser.cpp" />

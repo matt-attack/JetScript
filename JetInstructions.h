@@ -68,40 +68,27 @@ namespace Jet
 
 		//dummy instructions for the assembler/debugging
 		"Label",
-		"Comment",
+		"Local",
 		"Capture",
 		"DebugLine",
 		"Function"
 	};
 	enum class InstructionType
 	{
-		Add,
-		Mul,
-		Div,
-		Sub,
-		Modulus,
-
+		Add, Mul, Div, Sub, Modulus,
 		Negate,
 
-		BAnd,
-		BOr,
-		Xor,
-		BNot,
-		LeftShift,
-		RightShift,
+		BAnd, BOr, Xor, BNot,
+		LeftShift, RightShift,
 
-		Eq,
-		NotEq,
-		Lt,
-		Gt,
-		LtE,
-		GtE,
+		Eq, NotEq,
+		Lt, Gt,
+		LtE, GtE,
 
 		Incr,
 		Decr,
 
-		Dup,
-		Pop,
+		Dup, Pop,//stack operations
 
 		LdNum,
 		LdNull,
@@ -109,22 +96,16 @@ namespace Jet
 		LoadFunction,
 
 		Jump,
-		JumpTrue,
-		JumpTruePeek,
-		JumpFalse,
-		JumpFalsePeek,
+		JumpTrue,  JumpTruePeek,
+		JumpFalse, JumpFalsePeek,
 
 		NewArray,
 		NewObject,
 
-		Store,
-		Load,
-		//local vars
-		LStore,
-		LLoad,
-		//captured vars
-		CStore,
-		CLoad,
+		Store,Load,//globals
+		LStore,LLoad,//local vars
+		CStore,CLoad,//captures
+
 		CInit, //to setup captures
 
 		//loop instruction
@@ -136,7 +117,7 @@ namespace Jet
 
 		//these all work on the last value in the stack
 		ECall,
-
+		
 		Call,
 		Return,
 
@@ -148,7 +129,7 @@ namespace Jet
 
 		//dummy instructions for the assembler/debugging
 		Label,
-		Comment,
+		Local,
 		Capture,
 		DebugLine,
 		Function

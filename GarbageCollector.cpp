@@ -152,7 +152,6 @@ void GarbageCollector::Mark()
 	this->greys.Push(context->object);
 	this->greys.Push(context->objectiter);
 	this->greys.Push(context->string);
-	this->greys.Push(context->file);
 	this->greys.Push(context->function);
 
 	for (unsigned int i = 0; i < this->context->prototypes.size(); i++)
@@ -275,6 +274,7 @@ void GarbageCollector::Mark()
 			{
 			case ValueType::Object:
 				{
+					//obj._object->DebugPrint();
 					if (obj._object->prototype && obj._object->prototype->grey == false)
 					{
 						obj._object->prototype->grey = true;

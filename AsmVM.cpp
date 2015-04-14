@@ -51,7 +51,7 @@ int main(int argc, char* argv[])
 	JetContext context;
 
 	//bind basic math functions
-	JetBind(context, tan);
+	/*JetBind(context, tan);
 	JetBind(context, sin);
 	JetBind(context, cos);
 	JetBind(context, log);
@@ -61,7 +61,7 @@ int main(int argc, char* argv[])
 	JetBind(context, atan);
 	JetBind2(context, atan2, double);
 	JetBind(context, acos);
-	JetBind(context, asin);
+	JetBind(context, asin);*/
 
 	Value args[3];
 	args[0] = Value(3);

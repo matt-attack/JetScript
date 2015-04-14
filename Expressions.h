@@ -218,8 +218,9 @@ namespace Jet
 
 	class IndexExpression: public Expression, public IStorableExpression
 	{
-		Expression* left, *index;
+		Expression*index;
 	public:
+		Expression* left;
 		Token token;
 		IndexExpression(Expression* left, Expression* index, Token t)
 		{
