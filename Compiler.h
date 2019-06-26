@@ -10,6 +10,7 @@
 #include <crtdbg.h>
 #endif
 
+#include <string.h>
 #include <string>
 #include <vector>
 #include <map>

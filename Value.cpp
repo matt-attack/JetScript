@@ -270,15 +270,15 @@ std::string Value::ToString(int depth) const
 	case ValueType::String:
 		return this->_string->data;
 	case ValueType::Function:
-		return "[Function "+this->_function->prototype->name+" " + std::to_string((unsigned int)this->_function)+"]";
+                return "[Function "+this->_function->prototype->name+" " + std::to_string((size_t)this->_function)+"]";
 	case ValueType::NativeFunction:
-		return "[NativeFunction "+std::to_string((unsigned int)this->func)+"]";
+                return "[NativeFunction "+std::to_string((size_t)this->func)+"]";
 	case ValueType::Array:
 		{
 			std::string str = "[\n";
 
 			if (depth++ > 3)
-				return "[Array " + std::to_string((int)this->_array)+"]";
+                                return "[Array " + std::to_string((size_t)this->_array)+"]";
 
 			int i = 0;
 			for (auto ii: this->_array->data)
@@ -296,7 +296,7 @@ std::string Value::ToString(int depth) const
 			std::string str = "{\n";
 
 			if (depth++ > 3)
-				return "[Object " + std::to_string((int)this->_object)+"]";
+                                return "[Object " + std::to_string((size_t)this->_object)+"]";
 
 			for (auto ii: *this->_object)
 			{
@@ -310,7 +310,7 @@ std::string Value::ToString(int depth) const
 		}
 	case ValueType::Userdata:
 		{
-			return "[Userdata "+std::to_string((int)this->_userdata)+"]";
+                        return "[Userdata "+std::to_string((size_t)this->_userdata)+"]";
 		}
 	default:
 		return "";
