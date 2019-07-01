@@ -1384,7 +1384,7 @@ Value JetContext::Execute(int iptr, Closure* frame)
 					{
 #ifdef _DEBUG
 						//this makes sure that the gc doesnt overrun its boundaries
-						for (int i = 0; i < oframe.second->prototype->locals; i++)
+						for (unsigned int i = 0; i < oframe.second->prototype->locals; i++)
 						{
 							//need to mark stack with garbage values for error checking
 							sptr[i].type = ValueType::Object;
@@ -2112,7 +2112,7 @@ Value JetContext::Call(const Value* fun, Value* args, unsigned int numargs)
 	}
 	else
 	{
-		for (int i = numargs-1; i >= 0; i--)
+		for (unsigned int i = numargs-1; i >= 0; i--)
 		{
 			if (i < func->prototype->args)
 				sptr[i] = stack.Pop();

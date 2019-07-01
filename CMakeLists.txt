@@ -3,6 +3,7 @@ project (jetscript)
 
 set(CMAKE_CXX_FLAGS "-std=c++0x ${CMAKE_CXX_FLAGS}")
 
+add_definitions(-D_CRT_SECURE_NO_WARNINGS)
 
 add_library(jetlib 
   Compiler.cpp

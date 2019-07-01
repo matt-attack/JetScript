@@ -29,7 +29,6 @@ typedef wchar_t     _TCHAR;
 #include <math.h>
 #ifdef _WIN32
 #include <io.h>
-#include <tchar.h>
 #include <Windows.h>
 #endif
 #include <functional>
