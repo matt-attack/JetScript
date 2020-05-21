@@ -17,7 +17,7 @@ namespace Jet
 {
 	class JetContext;
 
-	enum class ValueType
+	enum class ValueType: unsigned char
 	{
 		//keep all garbage collectable types towards the end after NativeFunction
 		//this is used for the GC being able to tell what it is quickly

@@ -60,7 +60,7 @@ Value& JetContext::operator[](const std::string& id)
 	if (iter == variables.end())
 	{
 		//add it
-		variables[id] = variables.size();
+		variables[id] = vars.size();
 		vars.push_back(Value());
 		return vars[variables[id]];
 	}
@@ -1687,7 +1687,7 @@ Value JetContext::Execute(int iptr, Closure* frame)
 
 		this->StackTrace(iptr, curframe);
 
-		printf("\Globals:\n");
+		printf("\nGlobals:\n");
 		for (auto ii: variables)
 		{
 			printf("%s = %s\n", ii.first.c_str(), vars[ii.second].ToString().c_str());
