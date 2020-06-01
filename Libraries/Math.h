@@ -3,6 +3,8 @@
 
 #include "../JetContext.h"
 
+#include <cmath>
+
 void RegisterMathLibrary(Jet::JetContext* context)
 {
 	auto lib = context->NewObject();
