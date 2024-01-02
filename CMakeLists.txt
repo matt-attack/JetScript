@@ -17,13 +17,13 @@ add_library(jetlib
 )
 target_include_directories(jetlib PUBLIC include/)
 set_property(TARGET jetlib PROPERTY CXX_STANDARD 11)
+set_target_properties(jetlib PROPERTIES DEBUG_POSTFIX "d")
 
 add_executable(${PROJECT_NAME} AsmVM.cpp)
 add_dependencies(${PROJECT_NAME} jetlib)
 target_include_directories(${PROJECT_NAME} PUBLIC include/)
 target_link_libraries(${PROJECT_NAME} jetlib)
 set_property(TARGET ${PROJECT_NAME} PROPERTY CXX_STANDARD 11)
-set_target_properties(${PROJECT_NAME} PROPERTIES DEBUG_POSTFIX "d")
 
 function(my_export_target _target _include_dir)
     file(
