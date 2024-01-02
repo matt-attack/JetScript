@@ -1,5 +1,5 @@
-#include "Lexer.h"
-#include "Parser.h"
+#include <jetscript/Lexer.h>
+#include <jetscript/Parser.h>
 
 using namespace Jet;
 

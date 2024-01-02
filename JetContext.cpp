@@ -8,8 +8,8 @@
 #include <crtdbg.h>
 #endif
 
-#include "JetContext.h"
-#include "UniquePtr.h"
+#include <jetscript/JetContext.h>
+#include <jetscript/UniquePtr.h>
 
 #include <stack>
 #include <fstream>

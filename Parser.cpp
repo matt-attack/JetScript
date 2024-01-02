@@ -1,10 +1,10 @@
-#include "Parser.h"
-#include "Token.h"
-#include "UniquePtr.h"
+#include <jetscript/Parser.h>
+#include <jetscript/Token.h>
+#include <jetscript/UniquePtr.h>
 
 using namespace Jet;
 
-char* Jet::Operator(TokenType t)
+const char* Jet::Operator(TokenType t)
 {
 	if (t == TokenType::Plus)
 		return "+";

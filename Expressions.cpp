@@ -1,6 +1,6 @@
-#include "Expressions.h"
-#include "Compiler.h"
-#include "Parser.h"
+#include <jetscript/Expressions.h>
+#include <jetscript/Compiler.h>
+#include <jetscript/Parser.h>
 
 using namespace Jet;
 

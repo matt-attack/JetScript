@@ -1,5 +1,5 @@
-#include "Value.h"
-#include "JetContext.h"
+#include <jetscript/Value.h>
+#include <jetscript/JetContext.h>
 
 using namespace Jet;
 #undef Yield

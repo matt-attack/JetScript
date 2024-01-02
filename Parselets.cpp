@@ -1,7 +1,7 @@
-#include "Parselets.h"
-#include "Expressions.h"
-#include "Parser.h"
-#include "UniquePtr.h"
+#include <jetscript/Parselets.h>
+#include <jetscript/Expressions.h>
+#include <jetscript/Parser.h>
+#include <jetscript/UniquePtr.h>
 #include <string>
 
 using namespace Jet;
