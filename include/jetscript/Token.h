@@ -103,7 +103,7 @@ namespace Jet
 		EoF
 	};
 
-	char* Operator(TokenType t);
+	const char* Operator(TokenType t);
 
 	struct Token
 	{

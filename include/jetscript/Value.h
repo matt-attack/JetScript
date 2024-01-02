@@ -411,7 +411,7 @@ namespace Jet
 			this->ptr = 0;
 
 			return *this;
-		};
+		}
 
 		Node*& operator->() const
 		{	// return pointer to class object

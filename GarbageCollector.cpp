@@ -1,5 +1,5 @@
-#include "GarbageCollector.h"
-#include "JetContext.h"
+#include <jetscript/GarbageCollector.h>
+#include <jetscript/JetContext.h>
 
 using namespace Jet;
 

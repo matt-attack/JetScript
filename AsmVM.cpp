@@ -20,7 +20,7 @@ typedef wchar_t     _TCHAR;
 
 #define CODE(code) #code
 
-#include "JetContext.h"
+#include <jetscript/JetContext.h>
 
 #include <iostream>
 #include <string>
@@ -66,7 +66,7 @@ int main(int argc, char* argv[])
 	args[0] = Value(3);
 	args[1] = Value(4);
 	args[2] = Value(5);
-	printf("Sizeof Value: %d, Sizeof Instruction: %d\n\n", sizeof(Value), sizeof(Instruction));
+	printf("Sizeof Value: %d, Sizeof Instruction: %d\n\n", (int)sizeof(Value), (int)sizeof(Instruction));
 
 	if (argc > 1)
 	{

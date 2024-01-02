@@ -9,8 +9,8 @@
 #include <crtdbg.h>
 #endif
 
-#include "Compiler.h"
-#include "Parser.h"
+#include <jetscript/Compiler.h>
+#include <jetscript/Parser.h>
 
 using namespace Jet;
 

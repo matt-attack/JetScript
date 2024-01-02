@@ -1,7 +1,7 @@
 #ifndef _JET_FILE_LIBRARY_HEADER
 #define _JET_FILE_LIBRARY_HEADER
 
-#include "../JetContext.h"
+#include <jetscript/JetContext.h>
 //namespace Jet
 //{
 	//class JetContext;

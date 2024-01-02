@@ -16,7 +16,7 @@
 #include <vector>
 
 #include "Compiler.h"
-#include "Value.h"
+#include <jetscript/Value.h>
 
 namespace Jet
 {

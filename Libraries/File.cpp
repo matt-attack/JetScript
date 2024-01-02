@@ -1,5 +1,5 @@
 #include "File.h"
-#include "../JetContext.h"
+#include <jetscript/JetContext.h>
 
 using namespace Jet;
 
